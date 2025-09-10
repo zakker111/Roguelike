@@ -80,8 +80,8 @@ API
       // Equipment slots
       if (this.els.equipSlotsEl) {
         const slots = [
-          ["weapon", "Weapon"],
-          ["offhand", "Offhand"],
+          ["left", "Left hand"],
+          ["right", "Right hand"],
           ["head", "Head"],
           ["torso", "Torso"],
           ["legs", "Legs"],

@@ -13,9 +13,9 @@ API (window.Items):
 
 Conventions:
 - Tiers: 1 (rusty), 2 (iron), 3 (steel)
-- Equipment kinds: weapon, offhand, head, torso, legs, hands
+- Equipment kinds: hand (left/right), head, torso, legs, hands
 - Item shape:
-  { kind: "equip", slot, name, tier, decay, atk?, def? }
+  { kind: "equip", slot, name, tier, decay, atk?, def?, twoHanded? }
 */
 (function () {
   const round1 = (n) => Math.round(n * 10) / 10;
@@ -44,20 +44,26 @@ Conventions:
   }
 
   const CATEGORY_GENERATORS = {
-    weapon: (tier, rng) => {
+    hand: (tier, rng) => {
       const material = MATERIALS[tier] || "iron";
-      const type = pick(["sword", "axe", "bow"], rng);
-      const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
-      let atk = randFloat(rng, ranges[0], ranges[1], 1);
-      if (type === "axe") atk = Math.min(4.0, round1(atk + randFloat(rng, 0.1, 0.5, 1)));
-      return { kind: "equip", slot: "weapon", name: `${material} ${type}`, atk, tier, decay: initialDecay(tier) };
-    },
+      // Include two-handed axe type with some probability at tier >=2
+      const canTwoHand = tier >= 2 && rng() < 0.15;
+      if (canTwoHand) {
+        const atk = tier === 2 ? randFloat(rng, 2.6, 3.6, 1) : randFloat(rng, 3.2, 4.0, 1);
+        return { kind: "equip", slot: "hand", name: `${material} two-handed axe`, atk, tier, twoHanded: true, decay: initialDecay(tier) };
+      }
 
-    offhand: (tier, rng) => {
-      const material = MATERIALS[tier] || "iron";
-      const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
-      const def = randFloat(rng, ranges[0], ranges[1], 1);
-      return { kind: "equip", slot: "offhand", name: `${material} shield`, def, tier, decay: initialDecay(tier) };
+      const type = pick(["sword", "axe", "bow", "shield"], rng);
+      if (type === "shield") {
+        const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
+        const def = randFloat(rng, ranges[0], ranges[1], 1);
+        return { kind: "equip", slot: "hand", name: `${material} shield`, def, tier, decay: initialDecay(tier) };
+      } else {
+        const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
+        let atk = randFloat(rng, ranges[0], ranges[1], 1);
+        if (type === "axe") atk = Math.min(4.0, round1(atk + randFloat(rng, 0.1, 0.5, 1)));
+        return { kind: "equip", slot: "hand", name: `${material} ${type}`, atk, tier, decay: initialDecay(tier) };
+      }
     },
 
     head: (tier, rng) => {

@@ -177,7 +177,8 @@ Rendering layers (in order)
     }
     let bonus = 0;
     const eq = player.equipment || {};
-    if (eq.weapon && typeof eq.weapon.atk === "number") bonus += eq.weapon.atk;
+    if (eq.left && typeof eq.left.atk === "number") bonus += eq.left.atk;
+    if (eq.right && typeof eq.right.atk === "number") bonus += eq.right.atk;
     if (eq.hands && typeof eq.hands.atk === "number") bonus += eq.hands.atk;
     const levelBonus = Math.floor((player.level - 1) / 2);
     return round1(player.atk + bonus + levelBonus);
@@ -194,7 +195,8 @@ Rendering layers (in order)
     }
     let def = 0;
     const eq = player.equipment || {};
-    if (eq.offhand && typeof eq.offhand.def === "number") def += eq.offhand.def;
+    if (eq.left && typeof eq.left.def === "number") def += eq.left.def;
+    if (eq.right && typeof eq.right.def === "number") def += eq.right.def;
     if (eq.head && typeof eq.head.def === "number") def += eq.head.def;
     if (eq.torso && typeof eq.torso.def === "number") def += eq.torso.def;
     if (eq.legs && typeof eq.legs.def === "number") def += eq.legs.def;
@@ -248,9 +250,11 @@ Rendering layers (in order)
   }
 
   function getPlayerBlockChance(loc) {
-    const off = player.equipment?.offhand;
-    const offDef = (off && typeof off.def === "number") ? off.def : 0;
-    const base = 0.08 + offDef * 0.06; // shield helps a lot
+    const eq = player.equipment || {};
+    const leftDef = (eq.left && typeof eq.left.def === "number") ? eq.left.def : 0;
+    const rightDef = (eq.right && typeof eq.right.def === "number") ? eq.right.def : 0;
+    const handDef = Math.max(leftDef, rightDef);
+    const base = 0.08 + handDef * 0.06; // a shield or defensive hand item helps a lot
     return Math.max(0, Math.min(0.6, base * (loc?.blockMod || 1.0)));
   }
 
@@ -623,7 +627,7 @@ Rendering layers (in order)
       if (rng() < getEnemyBlockChance(enemy, loc)) {
         log(`${capitalize(enemy.type || "enemy")} blocks your attack to the ${loc.part}.`, "block");
         // Still incur a bit of wear on your gear
-        decayEquipped("weapon", randFloat(0.6, 1.6, 1));
+        decayAttackHands(true);
         decayEquipped("hands", randFloat(0.2, 0.7, 1));
         turn();
         return;
@@ -656,8 +660,8 @@ Rendering layers (in order)
         enemies = enemies.filter(e => e !== enemy);
       }
 
-      // Item decay on use (weapon/hands)
-      decayEquipped("weapon", randFloat(1.0, 2.2, 1));
+      // Item decay on use (hands)
+      decayAttackHands();
       decayEquipped("hands", randFloat(0.3, 1.0, 1));
       turn();
       return;
@@ -1015,11 +1019,11 @@ Rendering layers (in order)
       if (Math.abs(dx) + Math.abs(dy) === 1) {
         const loc = rollHitLocation();
 
-        // Player attempts to block with offhand/position
+        // Player attempts to block with hand/position
         if (rng() < getPlayerBlockChance(loc)) {
           log(`You block the ${e.type || "enemy"}'s attack to your ${loc.part}.`, "block");
           // Blocking uses gear
-          decayEquipped("offhand", randFloat(0.6, 1.6, 1));
+          decayBlockingHands();
           decayEquipped("hands", randFloat(0.3, 1.0, 1));
           continue;
         }
@@ -1040,8 +1044,8 @@ Rendering layers (in order)
           log(`${capitalize(e.type || "enemy")} hits your ${loc.part} for ${dmg}.`);
         }
 
-        // Item decay on being hit (armor/offhand/hands)
-        decayEquipped("offhand", randFloat(0.6, 1.6, 1));
+        // Item decay on being hit (armor/hands)
+        decayBlockingHands();
         decayEquipped("torso", randFloat(0.8, 2.0, 1));
         decayEquipped("head", randFloat(0.3, 1.0, 1));
         decayEquipped("legs", randFloat(0.4, 1.3, 1));
@@ -1129,6 +1133,51 @@ Rendering layers (in order)
         onDrink: (idx) => drinkPotionByIndex(idx),
         onRestart: () => restartGame(),
       });
+    }
+  }
+
+  // Hand decay helpers
+  function usingTwoHanded() {
+    const eq = player.equipment || {};
+    return eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded;
+  }
+
+  function decayAttackHands(light = false) {
+    const eq = player.equipment || {};
+    const amtMain = light ? randFloat(0.6, 1.6, 1) : randFloat(1.0, 2.2, 1);
+    if (usingTwoHanded()) {
+      if (eq.left) decayEquipped("left", amtMain);
+      if (eq.right) decayEquipped("right", amtMain);
+      return;
+    }
+    // prefer decaying a hand with attack stat
+    const leftAtk = (eq.left && typeof eq.left.atk === "number") ? eq.left.atk : 0;
+    const rightAtk = (eq.right && typeof eq.right.atk === "number") ? eq.right.atk : 0;
+    if (leftAtk >= rightAtk && leftAtk > 0) {
+      decayEquipped("left", amtMain);
+    } else if (rightAtk > 0) {
+      decayEquipped("right", amtMain);
+    } else if (eq.left) {
+      decayEquipped("left", amtMain);
+    } else if (eq.right) {
+      decayEquipped("right", amtMain);
+    }
+  }
+
+  function decayBlockingHands() {
+    const eq = player.equipment || {};
+    const amt = randFloat(0.6, 1.6, 1);
+    if (usingTwoHanded()) {
+      if (eq.left) decayEquipped("left", amt);
+      if (eq.right) decayEquipped("right", amt);
+      return;
+    }
+    const leftDef = (eq.left && typeof eq.left.def === "number") ? eq.left.def : 0;
+    const rightDef = (eq.right && typeof eq.right.def === "number") ? eq.right.def : 0;
+    if (rightDef >= leftDef && eq.right) {
+      decayEquipped("right", amt);
+    } else if (eq.left) {
+      decayEquipped("left", amt);
     }
   }
 
