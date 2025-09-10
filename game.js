@@ -614,7 +614,7 @@ Rendering layers (in order)
     }
 
     // If inventory panel is open, only allow closing with I/Escape; block other input
-    if (invPanel && !invPanel.hidden) {
+    if ((window.UI && UI.isInventoryOpen && UI.isInventoryOpen()) || (invPanel && !invPanel.hidden)) {
       if (e.key && (e.key.toLowerCase() === "i" || e.key === "Escape")) {
         e.preventDefault();
         hideInventoryPanel();
@@ -657,13 +657,13 @@ Rendering layers (in order)
     }
     if (e.key && e.key.toLowerCase() === "g") {
       e.preventDefault();
-      if (!lootPanel.hidden) hideLootPanel();
+      hideLootPanel();
       lootCorpse();
       return;
     }
     if (e.key && e.key.toLowerCase() === "n") {
       e.preventDefault();
-      if (!lootPanel.hidden) hideLootPanel();
+      hideLootPanel();
       // descend if on door
       if (map[player.y][player.x] === TILES.DOOR) {
         floor += 1;
@@ -675,7 +675,7 @@ Rendering layers (in order)
     }
 
     // close loot panel on any other key
-    if (!lootPanel.hidden) {
+    if ((window.UI && UI.isLootOpen && UI.isLootOpen()) || (lootPanel && !lootPanel.hidden)) {
       hideLootPanel();
     }
   });
@@ -924,6 +924,10 @@ Rendering layers (in order)
   }
 
   function showLootPanel(list) {
+    if (window.UI && typeof UI.showLoot === "function") {
+      UI.showLoot(list);
+      return;
+    }
     if (!lootPanel) return;
     lootList.innerHTML = "";
     list.forEach(name => {
@@ -935,68 +939,37 @@ Rendering layers (in order)
   }
 
   function hideLootPanel() {
+    if (window.UI && typeof UI.hideLoot === "function") {
+      UI.hideLoot();
+      return;
+    }
     if (!lootPanel) return;
     lootPanel.hidden = true;
   }
 
   // Inventory & Equipment panel
   function renderInventoryPanel() {
-    if (!invPanel) return;
-    // Totals header (uses fractional 0.0–4.0 equipment values)
-    if (invStatsEl) {
-      invStatsEl.textContent = `Attack: ${getPlayerAttack().toFixed(1)}   Defense: ${getPlayerDefense().toFixed(1)}`;
-    }
-    // Equipment slots
-    if (equipSlotsEl) {
-      const slots = [
-        ["weapon", "Weapon"],
-        ["offhand", "Offhand"],
-        ["head", "Head"],
-        ["torso", "Torso"],
-        ["legs", "Legs"],
-        ["hands", "Hands"],
-      ];
-      const html = slots.map(([key, label]) => {
-        const it = player.equipment[key];
-        if (it) {
-          const name = describeItem(it);
-          const title = `Decay: ${Number(it.decay || 0).toFixed(0)}%`;
-          return `<div class="slot"><strong>${label}:</strong> <span class="name" title="${title}">${name}</span></div>`;
-        } else {
-          return `<div class="slot"><strong>${label}:</strong> <span class="name"><span class='empty'>(empty)</span></span></div>`;
-        }
-      }).join("");
-      equipSlotsEl.innerHTML = html;
-    }
-    // Inventory list
-    if (invList) {
-      invList.innerHTML = "";
-      player.inventory.forEach((it, idx) => {
-        const li = document.createElement("li");
-        li.dataset.index = String(idx);
-        li.textContent = describeItem(it);
-        if (it.kind === "equip") {
-          li.title = `Decay: ${Number(it.decay || 0).toFixed(0)}%`;
-        } else if (it.kind === "potion") {
-          li.style.cursor = "pointer";
-          li.title = "Click to drink";
-        } else {
-          li.style.opacity = "0.7";
-          li.style.cursor = "default";
-        }
-        invList.appendChild(li);
-      });
+    if (window.UI && typeof UI.renderInventory === "function") {
+      // Keep totals in sync
+      updateUI();
+      UI.renderInventory(player, describeItem);
     }
   }
 
   function showInventoryPanel() {
-    if (!invPanel) return;
-    if (lootPanel && !lootPanel.hidden) hideLootPanel();
     renderInventoryPanel();
-    invPanel.hidden = false;
+    if (window.UI && typeof UI.showInventory === "function") {
+      UI.showInventory();
+    } else if (invPanel) {
+      invPanel.hidden = false;
+    }
   }
 
   function hideInventoryPanel() {
+    if (window.UI && typeof UI.hideInventory === "function") {
+      UI.hideInventory();
+      return;
+    }
     if (!invPanel) return;
     invPanel.hidden = true;
   }
@@ -1025,21 +998,13 @@ Rendering layers (in order)
     renderInventoryPanel();
   }
 
-  invPanel?.addEventListener("click", (ev) => {
-    const li = ev.target.closest("li");
-    if (!li || !li.dataset.index) return;
-    const idx = parseInt(li.dataset.index, 10);
-    if (!Number.isFinite(idx)) return;
-    const item = player.inventory[idx];
-    if (!item) return;
-    if (item.kind === "equip") {
-      equipItemByIndex(idx);
-    } else if (item.kind === "potion") {
-      drinkPotionByIndex(idx);
-    }
-  });
+  
 
   function showGameOver() {
+    if (window.UI && typeof UI.showGameOver === "function") {
+      UI.showGameOver(player, floor);
+      return;
+    }
     if (lootPanel && !lootPanel.hidden) hideLootPanel();
     if (!gameOverPanel) return;
     const gold = (player.inventory.find(i => i.kind === "gold")?.amount) || 0;
@@ -1050,6 +1015,10 @@ Rendering layers (in order)
   }
 
   function hideGameOver() {
+    if (window.UI && typeof UI.hideGameOver === "function") {
+      UI.hideGameOver();
+      return;
+    }
     if (!gameOverPanel) return;
     gameOverPanel.hidden = true;
   }
@@ -1060,8 +1029,6 @@ Rendering layers (in order)
     isDead = false;
     generateLevel(floor);
   }
-
-  restartBtn?.addEventListener("click", restartGame);
 
   /*
    XP and leveling:
@@ -1088,7 +1055,11 @@ Rendering layers (in order)
    - HP and Gold on the left, Floor / Level / XP on the right
   */
   function updateUI() {
-    // compute gold
+    if (window.UI && typeof UI.updateStats === "function") {
+      UI.updateStats(player, floor, getPlayerAttack, getPlayerDefense);
+      return;
+    }
+    // Fallback if UI module not loaded
     const gold = (player.inventory.find(i => i.kind === "gold")?.amount) || 0;
     hpEl.textContent = `HP: ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}  Gold: ${gold}`;
     floorEl.textContent = `Floor: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
@@ -1214,6 +1185,18 @@ Rendering layers (in order)
   function loop() {
     draw();
     requestAnimationFrame(loop);
+  }
+
+  // Initialize modules
+  if (window.UI && typeof UI.init === "function") {
+    UI.init();
+    if (typeof UI.setHandlers === "function") {
+      UI.setHandlers({
+        onEquip: (idx) => equipItemByIndex(idx),
+        onDrink: (idx) => drinkPotionByIndex(idx),
+        onRestart: () => restartGame(),
+      });
+    }
   }
 
   // Start
