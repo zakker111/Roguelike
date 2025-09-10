@@ -4,16 +4,37 @@ Items module for Tiny Roguelike.
 Goal:
 - Clean, data-driven registry similar to enemies.js (clear attributes, weights, ranges)
 - Deterministic RNG (rng passed through everywhere)
+- Simple extension API to add specific named items or new item types
 
 API (window.Items):
 - initialDecay(tier, rng?) -> number (0..100)
 - createEquipment(tier, rng) -> item { kind:"equip", slot, name, tier, decay, atk?, def?, twoHanded? }
+- createEquipmentOfSlot(slot, tier, rng)
+- createByKey(key, tier, rng, overrides?) -> create an item by registry key
+- createNamed(config, rng) -> create from explicit config (slot, name, tier, atk/def/twoHanded/decay?)
+- addType(slot, def) -> void (extend the registry)
 - describe(item) -> string
 - MATERIALS, TYPES (exported for extension)
 
 Conventions:
 - Tiers: 1 (rusty), 2 (iron), 3 (steel)
 - Slots: "hand" (left/right), "head", "torso", "legs", "hands"
+
+Type schema (for addType):
+{
+  key: "unique_key",
+  slot: "hand"|"head"|"torso"|"legs"|"hands",
+  weight: 0.0..1.0,
+  minTier?: 1|2|3,
+  name: (material, tier) => string  OR  string,
+  atkRange?: {1:[min,max],2:[min,max],3:[min,max]},
+  defRange?: {1:[min,max],2:[min,max],3:[min,max]},
+  atkBonus?: {1:[min,max],2:[min,max],3:[min,max]},
+  twoHanded?: boolean,
+  // gloves-specific (optional):
+  handAtkBonus?: {2:[min,max],3:[min,max]},
+  handAtkChance?: 0.0..1.0
+}
 */
 (function () {
   const round1 = (n) => Math.round(n * 10) / 10;
@@ -157,6 +178,13 @@ Conventions:
     return pickWeighted(entries, rng);
   }
 
+  function createEquipmentOfSlot(slot, tier, rng) {
+    const r = rng || Math.random;
+    const def = pickTypeForSlot(slot, tier, r);
+    if (!def) return null;
+    return makeItemFromType(def, tier, r);
+  }
+
   function createEquipment(tier, rng) {
     const r = rng || Math.random;
     const slot = pickSlot(r);
@@ -190,9 +218,67 @@ Conventions:
     return item.name || "item";
   }
 
+  // Extension helpers
+
+  function addType(slot, def) {
+    if (!slot || !TYPES[slot]) return false;
+    const clean = Object.assign({}, def, { slot });
+    if (typeof clean.weight !== "number" || clean.weight <= 0) clean.weight = 1.0;
+    if (!clean.key) clean.key = (clean.name && String(clean.name)) || `custom_${Date.now().toString(36)}`;
+    TYPES[slot].push(clean);
+    return true;
+  }
+
+  function findTypeByKey(key) {
+    for (const slot of Object.keys(TYPES)) {
+      const t = TYPES[slot].find(d => d.key === key);
+      if (t) return t;
+    }
+    return null;
+  }
+
+  function createByKey(key, tier, rng, overrides) {
+    const def = findTypeByKey(key);
+    const r = rng || Math.random;
+    if (!def) return null;
+    const item = makeItemFromType(def, tier, r);
+    if (overrides && typeof overrides === "object") {
+      for (const k of Object.keys(overrides)) {
+        item[k] = overrides[k];
+      }
+    }
+    return item;
+  }
+
+  // Create an item directly from a minimal config (slot, name, tier, atk/def)
+  // Example:
+  //   Items.createNamed({ slot: "hand", tier: 3, name: "Excalibur", atk: 4.0, twoHanded: false }, rng)
+  function createNamed(config, rng) {
+    if (!config || typeof config !== "object") return null;
+    const { slot, tier, name } = config;
+    if (!slot || !TYPES[slot]) return null;
+    const t = Math.max(1, Math.min(3, tier || 1));
+    const r = rng || Math.random;
+    const item = {
+      kind: "equip",
+      slot,
+      name: name || `${MATERIALS[t] || "iron"} item`,
+      tier: t,
+      decay: typeof config.decay === "number" ? config.decay : initialDecay(t, r),
+    };
+    if (typeof config.atk === "number") item.atk = round1(config.atk);
+    if (typeof config.def === "number") item.def = round1(config.def);
+    if (config.twoHanded) item.twoHanded = true;
+    return item;
+  }
+
   window.Items = {
     initialDecay,
     createEquipment,
+    createEquipmentOfSlot,
+    createByKey,
+    createNamed,
+    addType,
     describe,
     MATERIALS,
     TYPES,
