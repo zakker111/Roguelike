@@ -126,6 +126,9 @@ Rendering layers (in order)
 
   // Decay helpers
   function initialDecay(tier) {
+    if (window.Items && typeof Items.initialDecay === "function") {
+      return Items.initialDecay(tier);
+    }
     // Start items with some wear; higher tiers start in better condition
     if (tier <= 1) return randFloat(10, 35, 0);
     if (tier === 2) return randFloat(5, 20, 0);
@@ -202,6 +205,9 @@ Rendering layers (in order)
   function describeItem(item) {
     if (window.Player && typeof Player.describeItem === "function") {
       return Player.describeItem(item);
+    }
+    if (window.Items && typeof Items.describe === "function") {
+      return Items.describe(item);
     }
     if (!item) return "";
     if (item.kind === "equip") {
@@ -714,16 +720,17 @@ Rendering layers (in order)
     }
 
     function pickEquipment(tier) {
+      if (window.Items && typeof Items.createEquipment === "function") {
+        return Items.createEquipment(tier, rng);
+      }
       const material = tier === 1 ? "rusty" : tier === 2 ? "iron" : "steel";
       const categories = ["weapon", "offhand", "head", "torso", "legs", "hands"];
       const cat = categories[randInt(0, categories.length - 1)];
 
       if (cat === "weapon") {
         const w = ["sword", "axe", "bow"][randInt(0, 2)];
-        // 0.0 - 4.0 scale, tier influences the range upwards
         const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
         let atk = randFloat(ranges[0], ranges[1], 1);
-        // axes slightly stronger on average
         if (w === "axe") atk = Math.min(4.0, round1(atk + randFloat(0.1, 0.5, 1)));
         return { kind: "equip", slot: "weapon", name: `${material} ${w}`, atk, tier, decay: initialDecay(tier) };
       }
@@ -759,7 +766,6 @@ Rendering layers (in order)
         const def = randFloat(ranges[0], ranges[1], 1);
         const name = tier >= 2 ? `${material} gauntlets` : `${material} gloves`;
         const drop = { kind: "equip", slot: "hands", name, def, tier, decay: initialDecay(tier) };
-        // Chance for offensive gauntlets
         if (tier >= 2 && chance(0.5)) {
           const atk = tier === 2 ? randFloat(0.1, 0.6, 1) : randFloat(0.2, 1.0, 1);
           drop.atk = atk;
@@ -767,7 +773,6 @@ Rendering layers (in order)
         return drop;
       }
 
-      // fallback
       const atk = randFloat(0.8 + 0.4 * (tier - 1), 2.4 + 0.8 * (tier - 1), 1);
       return { kind: "equip", slot: "weapon", name: `${material} sword`, atk, tier, decay: initialDecay(tier) };
     }
