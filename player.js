@@ -247,8 +247,14 @@ API (window.Player):
         if (prevR && prevR !== item) player.inventory.push(prevR);
       } else if (preferredHand) {
         // respect user's choice
+        const other = preferredHand === "left" ? "right" : "left";
+        // detect two-handed holding BEFORE changing a hand
+        const wasTwoHanded = !!(eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded);
         const prev = eq[preferredHand];
+
+        // equip into chosen hand
         eq[preferredHand] = item;
+
         if (hooks.log) {
           const parts = [];
           if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
@@ -256,10 +262,11 @@ API (window.Player):
           const statStr = parts.join(", ");
           hooks.log(`You equip ${item.name} (${preferredHand}${statStr ? ", " + statStr : ""}).`);
         }
+
         if (prev) player.inventory.push(prev);
-        // if we were holding a two-handed item across both hands, clear the other hand as well
-        if (eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded) {
-          const other = preferredHand === "left" ? "right" : "left";
+
+        // If previously two-handed, free the other hand and return the old two-handed item
+        if (wasTwoHanded) {
           if (eq[other]) player.inventory.push(eq[other]);
           eq[other] = null;
         }
