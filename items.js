@@ -323,28 +323,20 @@ Type schema (for addType):
     return item;
   }
 
-  // --- Example additions (can be removed safely) ---
-  // They demonstrate how to add new types and how they appear in random generation.
-
-  // Example type: a nimble rapier with higher base atk range (hand slot)
-  addType("hand", {
-    key: "rapier",
-    weight: (tier) => tier >= 2 ? 0.14 : 0.09,
-    name: (mat) => `${mat} rapier`,
-    atkRange: { 1: [0.8, 2.6], 2: [1.6, 3.6], 3: [2.6, 4.0] },
-  });
-
-  // Example type: thorn gauntlets that can occasionally deal damage (hands slot)
-  addType("hands", {
-    key: "thorn_gauntlets",
-    weight: 0.08,
-    name: (mat) => `${mat} thorn gauntlets`,
-    defRange: { 2: [0.8, 2.2], 3: [1.2, 2.8] },
-    handAtkBonus: { 2: [0.1, 0.4], 3: [0.2, 0.8] },
-    handAtkChance: 0.45,
-    minTier: 2,
-  });
-  // --- End examples ---
+  // Examples:
+  // - Add a new type (at runtime, after Items loads):
+  //   Items.addType("hand", {
+  //     key: "rapier",
+  //     weight: (tier) => tier >= 2 ? 0.14 : 0.09,
+  //     name: (mat) => `${mat} rapier`,
+  //     atkRange: { 1:[0.8,2.6], 2:[1.6,3.6], 3:[2.6,4.0] }
+  //   });
+  //
+  // - Create a registered item:
+  //   const it = Items.createByKey("rapier", 3, rng, { name: "Master's Rapier" });
+  //
+  // - Create a one-off named item:
+  //   const excalibur = Items.createNamed({ slot:"hand", tier:3, name:"Excalibur", atk:4.0 });
 
   window.Items = {
     // creation
