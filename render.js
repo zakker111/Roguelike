@@ -88,11 +88,14 @@ API:
     }
 
     // staircase glyphs (">") overlay for visible stairs/doors
-    for (let y = 0;  <  ROWS; y++) {
-      for (let x = 0;  <  COLS; x++) {
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
         const t = map[y][x];
         if (visible[y][x] && (t === TILES.STAIRS || t === TILES.DOOR)) {
-          drawGlyph(ctx2d,}
+          drawGlyph(ctx2d, TILE, x, y, ">", "#d7ba7d");
+        }
+      }
+    }
 
     // corpses
     for (const c of corpses) {
