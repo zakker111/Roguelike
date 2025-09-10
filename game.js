@@ -433,6 +433,7 @@ Rendering layers (in order)
       recomputeFOV();
       updateUI();
       log(`You descend to floor ${depth}.`);
+      requestDraw();
       return;
     }
     // Fallback simple level if module missing
@@ -442,6 +443,7 @@ Rendering layers (in order)
     recomputeFOV();
     updateUI();
     log(`You descend to floor ${depth}.`);
+    requestDraw();
   }
 
   function inBounds(x, y) {
@@ -987,19 +989,18 @@ Rendering layers (in order)
 
   function showGameOver() {
     if (window.UI && typeof UI.showGameOver === "function") {
-      UI.showGameOver(player, depth);
+      UI.showGameOver(player, floor);
       requestDraw();
       return;
     }
     const panel = document.getElementById("gameover-panel");
     const summary = document.getElementById("gameover-summary");
-    if (!panel || !summary) return;
-    summary.textContent = `You reached floor ${depth}. Level ${player.level}. XP ${player.xp}/${player.xpNext}.`;
-    panel.hidden = false;
-    requestDraw();
-  }). Gold: ${gold}. XP: ${player.xp}/${player.xpNext}.`;
+    const gold = (player.inventory.find(i => i.kind === "gold")?.amount) || 0;
+    if (summary) {
+      summary.textContent = `You died on floor ${floor} (Lv ${player.level}). Gold: ${gold}. XP: ${player.xp}/${player.xpNext}.`;
     }
     if (panel) panel.hidden = false;
+    requestDraw();
   }
 
   function hideGameOver() {
