@@ -32,7 +32,7 @@ API (window.Player):
     x: 0,
     y: 0,
     hp: 21,
-    maxHp: 20,
+    maxHp: 22,
     atk: 1,
     level: 1,
     xp: 0,
