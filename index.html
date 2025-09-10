@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Tiny Roguelike</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Top UI: title, realtime stats (HP/Gold/Floor/Level/XP), and help text -->
+  <div class="ui">
+    <div class="title">Tiny Roguelike</div>
+    <div class="stats">
+      <span id="health">HP: 10</span>
+      <span id="floor">Floor: 1</span>
+    </div>
+    <div class="help">
+      Numpad to move (7/8/9/4/6/1/2/3, 5 waits). Bump to attack. G to loot corpse. I to open inventory. N to new floor (stand on >).
+    </div>
+  </div>
+  <!-- Main game canvas: 30x20 tiles @ 32px -->
+  <canvas id="game" width="960" height="640"></canvas>
+  <!-- Action log: most recent messages appear on top -->
+  <div class="log" id="log"></div>
+
+  <!-- Loot panel: temporary popup listing items acquired from corpse -->
+  <div id="loot-panel" class="loot-panel" hidden>
+    <div class="loot-title">Loot acquired</div>
+    <ul id="loot-list"></ul>
+    <div class="loot-hint">Press any key or click to close</div>
+  </div>
+
+  <!-- Game Over panel: shows summary and restart affordances -->
+  <div id="gameover-panel" class="gameover-panel" hidden>
+    <div class="loot-title">Game Over</div>
+    <div id="gameover-summary" class="gameover-summary"></div>
+    <button id="restart-btn" class="btn">Restart</button>
+    <div class="loot-hint">Press R or Enter to restart</div>
+  </div>
+
+  <!-- Inventory & Equipment panel: click items to equip; totals shown above -->
+  <div id="inv-panel" class="inv-panel" hidden>
+    <div class="inv-title">Inventory & Equipment</div>
+    <div id="inv-stats" class="inv-stats"></div>
+    <div id="equip-slots" class="equip-grid"></div>
+    <div class="inv-subtitle">Inventory</div>
+    <ul id="inv-list" class="inv-list"></ul>
+    <div class="loot-hint">Click an equippable item to equip. Press I or Esc to close.</div>
+  </div>
+
+  <!-- Main game logic -->
+  <script src="game.js"></script>
+</body>
+</html>
