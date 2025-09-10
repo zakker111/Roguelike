@@ -29,7 +29,7 @@ API (window.Player):
   function createInitial() {
     return {
       x: 0, y: 0,
-      hp: 10, maxHp: 10,
+      hp: 20, maxHp: 10,
       inventory: [],
       atk: 1,
       xp: 0, level: 1, xpNext: 20,
