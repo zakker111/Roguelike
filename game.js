@@ -360,11 +360,15 @@ Rendering layers (in order)
    Types: info (default), crit, block, death, good, warn
   */
   function log(msg, type = "info") {
+    if (window.Logger && typeof Logger.log === "function") {
+      Logger.log(msg, type);
+      return;
+    }
+    // Fallback (in case logger.js isn't loaded)
     const div = document.createElement("div");
     div.className = `entry ${type}`;
     div.textContent = msg;
     logEl?.prepend(div);
-    // cap entries
     const MAX = 60;
     while (logEl && logEl.childNodes.length > MAX) {
       logEl.removeChild(logEl.lastChild);
