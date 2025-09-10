@@ -54,18 +54,6 @@ Rendering layers (in order)
   // DOM
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
-  const logEl = document.getElementById("log");
-  const hpEl = document.getElementById("health");
-  const floorEl = document.getElementById("floor");
-  const lootPanel = document.getElementById("loot-panel");
-  const lootList = document.getElementById("loot-list");
-  const gameOverPanel = document.getElementById("gameover-panel");
-  const restartBtn = document.getElementById("restart-btn");
-  const gameOverSummary = document.getElementById("gameover-summary");
-  const invPanel = document.getElementById("inv-panel");
-  const invList = document.getElementById("inv-list");
-  const equipSlotsEl = document.getElementById("equip-slots");
-  const invStatsEl = document.getElementById("inv-stats");
 
   // State
   let map = [];
@@ -143,7 +131,7 @@ Rendering layers (in order)
   }
 
   function rerenderInventoryIfOpen() {
-    if (invPanel && !invPanel.hidden) {
+    if (window.UI && UI.isInventoryOpen && UI.isInventoryOpen()) {
       renderInventoryPanel();
     }
   }
@@ -411,64 +399,13 @@ Rendering layers (in order)
     log(`You descend to floor ${depth}.`);
   }
 
-  function carveRoom({x, y, w, h}) {
-    for (let j = y; j < y + h; j++) {
-      for (let i = x; i < x + w; i++) {
-        map[j][i] = TILES.FLOOR;
-      }
-    }
-  }
-
-  function hCorridor(x1, x2, y) {
-    for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
-      map[y][x] = TILES.FLOOR;
-    }
-  }
-
-  function vCorridor(y1, y2, x) {
-    for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
-      map[y][x] = TILES.FLOOR;
-    }
-  }
-
-  function intersect(a, b) {
-    return !(
-      a.x + a.w <= b.x ||
-      b.x + b.w <= a.x ||
-      a.y + a.h <= b.y ||
-      b.y + b.h <= a.y
-    );
-  }
-
-  function center(r) {
-    return { x: Math.floor(r.x + r.w / 2), y: Math.floor(r.y + r.h / 2) };
-  }
-
   function inBounds(x, y) {
     return x >= 0 && y >= 0 && x < COLS && y < ROWS;
-  }
-
-  function inRect(x, y, r) {
-    if (!r) return false;
-    return x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
   }
 
   function isWalkable(x, y) {
     if (!inBounds(x, y)) return false;
     return map[y][x] === TILES.FLOOR || map[y][x] === TILES.DOOR;
-  }
-
-  function randomFloor() {
-    let x, y;
-    do {
-      x = randInt(1, COLS - 2);
-      y = randInt(1, ROWS - 2);
-      // Only place on regular floor, not doors, avoid player/enemy cells, and avoid starting room
-    } while (!(inBounds(x, y) && map[y][x] === TILES.FLOOR) ||
-             (x === player.x && y === player.y) ||
-             (startRoomRect && inRect(x, y, startRoomRect)) ||
-             enemies.some(e => e.x === x && e.y === y));
-    return { x, y };
   }
 
   /*
@@ -610,13 +547,10 @@ Rendering layers (in order)
     }
 
     // close loot panel on any other key
-    if ((window.UI && UI.isLootOpen && UI.isLootOpen()) || (lootPanel && !lootPanel.hidden)) {
+    if (window.UI && UI.isLootOpen && UI.isLootOpen()) {
       hideLootPanel();
     }
   });
-
-  // Close loot panel on click
-  lootPanel?.addEventListener("click", hideLootPanel);
 
   /*
    Attempts to move the player by (dx,dy):
