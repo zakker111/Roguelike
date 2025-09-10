@@ -513,103 +513,42 @@ Rendering layers (in order)
   }
 
   /*
-   Input handling:
-   - Movement: Numpad 7/8/9/4/6/1/2/3 (diagonals allowed), 5 to wait
-   - G: loot corpse on the current tile (also closes loot panel if open)
-   - N: descend stairs when on '>' tile
-   - I: open/close inventory (blocks other input while open)
-   - When dead: only R/Enter to restart
+   Input handling (delegated to input.js):
+   We initialize the Input module with callbacks for movement, waiting, looting,
+   descending, inventory toggling, FOV adjustments, and restart. If Input isn't
+   available, we can later add a minimal fallback.
   */
-  const KEY_DIRS = {
-    // Numpad
-    Numpad8: {x:0,y:-1}, Numpad2: {x:0,y:1}, Numpad4: {x:-1,y:0}, Numpad6: {x:1,y:0},
-    Numpad7: {x:-1,y:-1}, Numpad9: {x:1,y:-1}, Numpad1: {x:-1,y:1}, Numpad3: {x:1,y:1},
-    // Arrow keys (no diagonals)
-    ArrowUp: {x:0,y:-1}, ArrowDown: {x:0,y:1}, ArrowLeft: {x:-1,y:0}, ArrowRight: {x:1,y:0},
-    // WASD (no diagonals)
-    KeyW: {x:0,y:-1}, KeyS: {x:0,y:1}, KeyA: {x:-1,y:0}, KeyD: {x:1,y:0},
-    // Vim-style HJKL (no diagonals)
-    KeyK: {x:0,y:-1}, KeyJ: {x:0,y:1}, KeyH: {x:-1,y:0}, KeyL: {x:1,y:0},
-    // Diagonals via Q/E/Z/C (optional)
-    KeyQ: {x:-1,y:-1}, KeyE: {x:1,y:-1}, KeyZ: {x:-1,y:1}, KeyC: {x:1,y:1},
-  };
 
-  window.addEventListener("keydown", (e) => {
-    // When dead, only allow restart
-    if (isDead) {
-      if (e.key && (e.key.toLowerCase() === "r" || e.key === "Enter")) {
-        e.preventDefault();
-        restartGame();
-      }
-      return;
+  function descendIfPossible() {
+    hideLootPanel();
+    if (map[player.y][player.x] === TILES.DOOR) {
+      floor += 1;
+      generateLevel(floor);
+    } else {
+      log("You need to stand on the staircase (brown tile marked with '>') to descend.");
     }
+  }
 
-    // If inventory panel is open, only allow closing with I/Escape; block other input
-    if (window.UI && UI.isInventoryOpen && UI.isInventoryOpen()) {
-      if (e.key && (e.key.toLowerCase() === "i" || e.key === "Escape")) {
-        e.preventDefault();
-        hideInventoryPanel();
-      } else {
-        e.preventDefault();
-      }
-      return;
+  function setupInput() {
+    if (window.Input && typeof Input.init === "function") {
+      Input.init({
+        // state queries
+        isDead: () => isDead,
+        isInventoryOpen: () => !!(window.UI && UI.isInventoryOpen && UI.isInventoryOpen()),
+        isLootOpen: () => !!(window.UI && UI.isLootOpen && UI.isLootOpen()),
+        // actions
+        onRestart: () => restartGame(),
+        onShowInventory: () => showInventoryPanel(),
+        onHideInventory: () => hideInventoryPanel(),
+        onHideLoot: () => hideLootPanel(),
+        onMove: (dx, dy) => tryMovePlayer(dx, dy),
+        onWait: () => turn(),
+        onLoot: () => lootCorpse(),
+        onDescend: () => descendIfPossible(),
+        adjustFov: (delta) => adjustFov(delta),
+      });
     }
-
-    // Toggle inventory with I
-    if (e.key && e.key.toLowerCase() === "i") {
-      e.preventDefault();
-      showInventoryPanel();
-      return;
-    }
-
-    // Adjust FOV with [ and ] (or -/+), including numpad add/subtract
-    if (e.code === "BracketLeft" || e.key === "[" || e.code === "Minus" || e.code === "NumpadSubtract" || e.key === "-") {
-      e.preventDefault();
-      adjustFov(-1);
-      return;
-    }
-    if (e.code === "BracketRight" || e.key === "]" || e.code === "Equal" || e.code === "NumpadAdd" || e.key === "=") {
-      e.preventDefault();
-      adjustFov(1);
-      return;
-    }
-
-    const key = e.code; // use code to detect numpad reliably
-    if (KEY_DIRS[key]) {
-      e.preventDefault();
-      const d = KEY_DIRS[key];
-      tryMovePlayer(d.x, d.y);
-      return;
-    }
-    if (key === "Numpad5") {
-      e.preventDefault();
-      turn(); // wait a turn
-      return;
-    }
-    if (e.key && e.key.toLowerCase() === "g") {
-      e.preventDefault();
-      hideLootPanel();
-      lootCorpse();
-      return;
-    }
-    if (e.key && e.key.toLowerCase() === "n") {
-      e.preventDefault();
-      hideLootPanel();
-      // descend if on door
-      if (map[player.y][player.x] === TILES.DOOR) {
-        floor += 1;
-        generateLevel(floor);
-      } else {
-        log("You need to stand on the staircase (brown tile marked with '>') to descend.");
-      }
-      return;
-    }
-
-    // close loot panel on any other key
-    if (window.UI && UI.isLootOpen && UI.isLootOpen()) {
-      hideLootPanel();
-    }
-  });
+  }
 
   /*
    Attempts to move the player by (dx,dy):
@@ -1243,5 +1182,6 @@ Rendering layers (in order)
 
   // Start
   generateLevel(floor);
+  setupInput();
   loop();
 })();
