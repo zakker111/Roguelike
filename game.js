@@ -382,17 +382,20 @@ Rendering layers (in order)
   */
   function generateLevel(depth = 1) {
     if (window.Dungeon && typeof Dungeon.generateLevel === "function") {
-      // keep ctx fields up to date so module can mutate them
       const ctx = getCtx();
       ctx.startRoomRect = startRoomRect;
       Dungeon.generateLevel(ctx, depth);
-      // pull back any updated refs from ctx
+      // Sync back references mutated by the module
       map = ctx.map;
       seen = ctx.seen;
       visible = ctx.visible;
       enemies = ctx.enemies;
       corpses = ctx.corpses;
       startRoomRect = ctx.startRoomRect;
+      // Now run post-gen steps in this orchestrator
+      recomputeFOV();
+      updateUI();
+      log(`You descend to floor ${depth}.`);
       return;
     }
     // Fallback simple level if module missing
@@ -401,6 +404,7 @@ Rendering layers (in order)
     corpses = [];
     recomputeFOV();
     updateUI();
+    log(`You descend to floor ${depth}.`);
   }
 
   function carveRoom({x, y, w, h}) {

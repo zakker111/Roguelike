@@ -12,7 +12,9 @@ API:
     player, enemies, corpses
     randInt(min,max), chance(p), rng()
     enemyFactory(x,y,depth) -> enemy (defaults to Enemies.createEnemyAt)
-    log(), updateUI()
+
+Note: This module only mutates state. The caller (game.js) is responsible for
+recomputing FOV, updating UI, and logging after generation.
 */
 (function () {
   function generateLevel(ctx, depth) {
@@ -84,10 +86,6 @@ API:
       const p = randomFloor(ctx, rooms);
       ctx.enemies.push(makeEnemy(p.x, p.y, depth, ctx.rng));
     }
-
-    if (ctx.recomputeFOV) ctx.recomputeFOV();
-    if (ctx.updateUI) ctx.updateUI();
-    if (ctx.log) ctx.log(`You descend to floor ${depth}.`);
   }
 
   function carveRoom(map, TILES, { x, y, w, h }) {
