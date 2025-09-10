@@ -1,17 +1,12 @@
 /*
-UI module for Tiny Roguelike
+UI: updates HUD, inventory/equipment panel, loot panel, and game over panel.
 
-Caches DOM elements and provides functions to update UI, panels and bindings.
-
-API
-- UI.init()
-- UI.setHandlers({ onEquip, onDrink, onRestart })
-+ UI.setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart })
-- UI.updateStats(player, floor, getAtk, getDef)
-- UI.renderInventory(player, describeItem)
-- UI.showInventory(), UI.hideInventory(), UI.isInventoryOpen()
-- UI.showLoot(list), UI.hideLoot(), UI.isLootOpen()
-- UI.showGameOver(player, floor), UI.hideGameOver()
+Exports (window.UI):
+- init(), setHandlers({...}), updateStats(player, floor, getAtk, getDef),
+  renderInventory(player, describeItem),
+  showInventory()/hideInventory()/isInventoryOpen(),
+  showLoot(list)/hideLoot()/isLootOpen(),
+  showGameOver(player, floor)/hideGameOver()
 */
 (function () {
   const UI = {

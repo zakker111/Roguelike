@@ -1,23 +1,5 @@
 /*
-Tiny Roguelike - main game logic
-
-Overview
-- Procedural dungeon: rooms + corridors, stairs, enemies (goblins, trolls, ogres)
-- Turn-based: your actions advance enemies
-- FOV: simple ray cast with memory of explored tiles
-- Looting: gold, potions, and randomized equipment (0.0–4.0 atk/def scale)
-- Equipment decay: each equippable item has a decay %, reaching 100% destroys the item.
-  Equipped items gain decay when used (weapon/hands on attack) or when you are hit (armor/offhand).
-  Hover an inventory item to see its current decay value.
-- Inventory: I to open; click items to equip; auto-equip if strictly better on loot
-- Movement: Numpad (7/8/9/4/6/1/2/3), wait: Numpad5, G: loot, N: descend when on '>'
-
-Rendering layers (in order)
-1) Tiles
-2) Stair glyphs
-3) Corpses
-4) Enemies
-5) Player
+Main game orchestrator: state, turns, combat, loot, UI hooks, level generation and rendering.
 */
 
 (() => {

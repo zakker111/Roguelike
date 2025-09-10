@@ -1,19 +1,8 @@
 /*
-FOV module: recompute line-of-sight and explored memory.
+FOV: symmetrical shadowcasting with explored memory.
 
-API:
-- FOV.recomputeFOV(ctx)
-  ctx needs:
-    ROWS, COLS, fovRadius
-    player {x,y}
-    map (2D of TILES)
-    visible (2D boolean) [will be overwritten]
-    seen (2D boolean)    [will be updated]
-    inBounds(x,y)
-    TILES enum
-    enemies []
-    enemyThreatLabel(e) -> {label, tone}
-    log(msg, tone)
+Exports (window.FOV):
+- recomputeFOV(ctx) mutates ctx.visible and ctx.seen and announces newly seen enemies.
 */
 (function () {
   function recomputeFOV(ctx) {

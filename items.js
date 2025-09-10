@@ -1,56 +1,14 @@
 /*
-Items module for Tiny Roguelike.
+Items: data-driven equipment registry with deterministic RNG.
 
-Goal:
-- Clean, data-driven registry (enemy-like) with clear attributes
-- Deterministic RNG (rng passed through everywhere)
-- Simple extension API to add specific named items or new item types
+Exports (window.Items):
+- createEquipment(tier, rng), createEquipmentOfSlot(slot, tier, rng)
+- createByKey(key, tier, rng, overrides?), createNamed(config, rng)
+- addType(slot, def), describe(item), initialDecay(tier, rng?), MATERIALS, TYPES
 
-API (window.Items):
-- initialDecay(tier, rng?) -> number (0..100)
-- createEquipment(tier, rng) -> item { kind:"equip", slot, name, tier, decay, atk?, def?, twoHanded? }
-- createEquipmentOfSlot(slot, tier, rng)
-- createByKey(key, tier, rng, overrides?) -> create an item by registry key
-- createNamed(config, rng) -> create from explicit config (slot, name, tier, atk/def/twoHanded/decay?)
-- addType(slot, def) -> void (extend the registry)
-- describe(item) -> string
-- MATERIALS, TYPES (exported for extension)
-
-Conventions:
-- Tiers: 1 (rusty), 2 (iron), 3 (steel)
-- Slots: "hand" (left/right), "head", "torso", "legs", "hands"
-
-Quick guide (examples):
-- Add a new randomizable type to the registry:
-  // Items.addType("hand", {
-  //   key: "rapier",
-  //   weight: 0.18, // or weight: (tier) => tier >= 2 ? 0.2 : 0.1
-  //   name: (mat) => `${mat} rapier`,
-  //   atkRange: { 1:[0.8,2.6], 2:[1.6,3.6], 3:[2.6,4.0] }
-  // });
-
-- Create a specific item by key (from the registry):
-  // const it = Items.createByKey("rapier", 3, rng, { name: "Master's Rapier" });
-
-- Create a one-off named item (no registry entry):
-  // const excalibur = Items.createNamed({ slot:"hand", tier:3, name:"Excalibur", atk:4.0 });
-
-Type schema (for addType):
-{
-  key: "unique_key",
-  slot: "hand"|"head"|"torso"|"legs"|"hands",
-  // weight can be a number or a function of tier: (tier) => number
-  weight: number | (tier:number) => number,
-  minTier?: 1|2|3,
-  name: (material, tier) => string  OR  string,
-  atkRange?: {1:[min,max],2:[min,max],3:[min,max]},
-  defRange?: {1:[min,max],2:[min,max],3:[min,max]},
-  atkBonus?: {1:[min,max],2:[min,max],3:[min,max]},
-  twoHanded?: boolean,
-  // gloves-specific (optional):
-  handAtkBonus?: {2:[min,max],3:[min,max]},
-  handAtkChance?: 0.0..1.0
-}
+Notes:
+- TYPES is a flat registry keyed by item key (similar to Enemies).
+- weight can be a number or a function of tier.
 */
 (function () {
   const round1 = (n) => Math.round(n * 10) / 10;

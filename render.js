@@ -1,18 +1,8 @@
 /*
-Render module for Tiny Roguelike.
+Render: draws tiles, glyph overlays, corpses, enemies, and player.
 
-API:
-- Render.draw(ctx)
-  ctx must provide:
-    ctx2d: CanvasRenderingContext2D
-    TILE, ROWS, COLS
-    COLORS { wall, wallDark, floor, floorLit, player, corpse, corpseEmpty }
-    TILES enum
-    map, seen, visible
-    player {x,y}
-    enemies [{x,y,type,glyph}]
-    corpses [{x,y,looted}]
-    enemyColor(type) -> color (optional; fallback provided)
+Exports (window.Render):
+- draw(ctx) where ctx contains ctx2d, TILE/ROWS/COLS/COLORS/TILES, map/seen/visible, player/enemies/corpses.
 */
 (function () {
   function enemyColorFromModule(type, COLORS) {

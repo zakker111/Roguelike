@@ -1,27 +1,12 @@
 /*
-Player module for Tiny Roguelike.
+Player: creation, stats, inventory/equipment, decay, potions, XP/leveling.
 
-Responsibilities:
-- Create initial player state
-- Compute attack/defense totals
-- Inventory helpers (describe items, add potions, drink, equip)
-- Equipment decay handling
-- XP and leveling
-
-All functions are pure over the player object where possible; side-effects like UI/logging
-are done through hooks passed as parameters.
-
-API (window.Player):
-- createInitial() -> player
-- getAttack(player) -> number
-- getDefense(player) -> number
-- describeItem(item) -> string
-- addPotion(player, heal, name?)
-- drinkPotionByIndex(player, idx, { log, updateUI, renderInventory })
-- equipIfBetter(player, item, { log, updateUI }) -> boolean
-- equipItemByIndex(player, idx, { log, updateUI, renderInventory, describeItem })
-- decayEquipped(player, slot, amount, { log, updateUI, onInventoryChange })
-- gainXP(player, amount, { log, updateUI })
+Exports (window.Player):
+- createInitial, getAttack, getDefense, describeItem
+- addPotion, drinkPotionByIndex
+- equipIfBetter, equipItemByIndex, unequipSlot
+- decayEquipped, gainXP
+- defaults/setDefaults, normalize, resetFromDefaults, forceUpdate
 */
 (function () {
   const round1 = (n) => Math.round(n * 10) / 10;

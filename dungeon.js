@@ -1,20 +1,8 @@
 /*
-Dungeon generation: rooms, corridors, player/exit placement, and enemy spawns.
+Dungeon: rooms, corridors, player/exit placement, enemy spawns.
 
-API:
-- Dungeon.generateLevel(ctx, depth)
-  Mutates ctx fields:
-   - map, seen, visible, enemies, corpses, isDead, startRoomRect
-   - player position and (on depth===1) resets player stats/equipment/inventory
-   - places a staircase 'STAIRS' tile (fallback to DOOR if not present) in the last room
-  ctx needs:
-    ROWS, COLS, TILES
-    player, enemies, corpses
-    randInt(min,max), chance(p), rng()
-    enemyFactory(x,y,depth) -> enemy (defaults to Enemies.createEnemyAt)
-
-Note: This module only mutates state. The caller (game.js) is responsible for
-recomputing FOV, updating UI, and logging after generation.
+Exports (window.Dungeon):
+- generateLevel(ctx, depth): mutates ctx.map/seen/visible/enemies/corpses/startRoomRect and positions player.
 */
 (function () {
   function generateLevel(ctx, depth) {

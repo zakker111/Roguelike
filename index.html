@@ -9,7 +9,6 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Top UI: title, realtime stats (HP/Gold/Floor/Level/XP), and help text -->
   <div class="ui">
     <div class="title">Tiny Roguelike</div>
     <div class="stats">
@@ -20,19 +19,15 @@
       Move: Numpad (7/8/9/4/6/1/2/3) or arrows/WASD. Wait: Numpad5/Space. Bump to attack. G to loot. I to inventory. N/Enter to descend (stand on >). Adjust FOV: [ ] or +/-.
     </div>
   </div>
-  <!-- Main game canvas: 30x20 tiles @ 32px -->
   <canvas id="game" width="960" height="640"></canvas>
-  <!-- Action log: most recent messages appear on top -->
   <div class="log" id="log"></div>
 
-  <!-- Loot panel: temporary popup listing items acquired from corpse -->
   <div id="loot-panel" class="loot-panel" hidden>
     <div class="loot-title">Loot acquired</div>
     <ul id="loot-list"></ul>
     <div class="loot-hint">Press any key or click to close</div>
   </div>
 
-  <!-- Game Over panel: shows summary and restart affordances -->
   <div id="gameover-panel" class="gameover-panel" hidden>
     <div class="loot-title">Game Over</div>
     <div id="gameover-summary" class="gameover-summary"></div>
@@ -40,7 +35,6 @@
     <div class="loot-hint">Press R or Enter to restart</div>
   </div>
 
-  <!-- Inventory & Equipment panel: click items to equip; totals shown above -->
   <div id="inv-panel" class="inv-panel" hidden>
     <div class="inv-title">Inventory & Equipment</div>
     <div id="inv-stats" class="inv-stats"></div>
@@ -50,14 +44,11 @@
     <div class="loot-hint">Click an equippable item to equip. Press I or Esc to close.</div>
   </div>
 
-  <!-- Enemy registry -->
   <script src="enemies.js"></script>
-  <!-- Modules -->
   <script src="fov.js"></script>
   <script src="dungeon.js"></script>
   <script src="logger.js"></script>
   <script>
-    // Configure logger (increase scrollback)
     if (window.Logger && typeof Logger.init === "function") {
       try { Logger.init(undefined, 80); } catch (e) {}
     }
@@ -67,7 +58,6 @@
   <script src="player.js"></script>
   <script src="items.js"></script>
   <script src="input.js"></script>
-  <!-- Main game logic -->
   <script src="game.js"></script>
 </body>
 </html>
