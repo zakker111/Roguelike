@@ -944,6 +944,35 @@ Rendering layers (in order)
     equipItemByIndex(idx);
   }
 
+  function unequipSlot(slot) {
+    if (window.Player && typeof Player.unequipSlot === "function") {
+      Player.unequipSlot(player, slot, {
+        log,
+        updateUI,
+        renderInventory: () => renderInventoryPanel(),
+      });
+      return;
+    }
+    // fallback
+    const eq = player.equipment || {};
+    const valid = ["left","right","head","torso","legs","hands"];
+    if (!valid.includes(slot)) return;
+    if ((slot === "left" || slot === "right") && eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded) {
+      const item = eq.left;
+      eq.left = null; eq.right = null;
+      player.inventory.push(item);
+      log(`You unequip ${describeItem(item)} (two-handed).`);
+      updateUI(); renderInventoryPanel();
+      return;
+    }
+    const it = eq[slot];
+    if (!it) return;
+    eq[slot] = null;
+    player.inventory.push(it);
+    log(`You unequip ${describeItem(it)} from ${slot}.`);
+    updateUI(); renderInventoryPanel();
+  }
+
   
 
   function showGameOver() {
@@ -1146,6 +1175,7 @@ Rendering layers (in order)
       UI.setHandlers({
         onEquip: (idx) => equipItemByIndex(idx),
         onEquipHand: (idx, hand) => equipItemByIndexHand(idx, hand),
+        onUnequip: (slot) => unequipSlot(slot),
         onDrink: (idx) => drinkPotionByIndex(idx),
         onRestart: () => restartGame(),
       });

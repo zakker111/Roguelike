@@ -316,6 +316,32 @@ API (window.Player):
     if (hooks.updateUI) hooks.updateUI();
   }
 
+  function unequipSlot(player, slot, hooks = {}) {
+    if (!player || !player.equipment) return;
+    const eq = player.equipment;
+    const valid = ["left","right","head","torso","legs","hands"];
+    if (!valid.includes(slot)) return;
+
+    // Handle two-handed case if unequipping either hand and both reference same item
+    if ((slot === "left" || slot === "right") && eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded) {
+      const item = eq.left;
+      eq.left = null; eq.right = null;
+      player.inventory.push(item);
+      if (hooks.log) hooks.log(`You unequip ${describeItem(item)} (two-handed).`);
+      if (hooks.updateUI) hooks.updateUI();
+      if (hooks.renderInventory) hooks.renderInventory();
+      return;
+    }
+
+    const it = eq[slot];
+    if (!it) return;
+    eq[slot] = null;
+    player.inventory.push(it);
+    if (hooks.log) hooks.log(`You unequip ${describeItem(it)} from ${slot}.`);
+    if (hooks.updateUI) hooks.updateUI();
+    if (hooks.renderInventory) hooks.renderInventory();
+  }
+
   window.Player = {
     createInitial,
     getAttack,
@@ -327,5 +353,6 @@ API (window.Player):
     equipItemByIndex,
     decayEquipped,
     gainXP,
+    unequipSlot,
   };
 })();

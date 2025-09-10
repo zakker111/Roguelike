@@ -6,7 +6,7 @@ Caches DOM elements and provides functions to update UI, panels and bindings.
 API
 - UI.init()
 - UI.setHandlers({ onEquip, onDrink, onRestart })
-+ UI.setHandlers({ onEquip, onEquipHand, onDrink, onRestart })
++ UI.setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart })
 - UI.updateStats(player, floor, getAtk, getDef)
 - UI.renderInventory(player, describeItem)
 - UI.showInventory(), UI.hideInventory(), UI.isInventoryOpen()
@@ -19,6 +19,7 @@ API
     handlers: {
       onEquip: null,
       onEquipHand: null,
+      onUnequip: null,
       onDrink: null,
       onRestart: null,
     },
@@ -61,6 +62,15 @@ API
       this.els.lootPanel?.addEventListener("click", () => this.hideLoot());
       this.els.restartBtn?.addEventListener("click", () => {
         if (typeof this.handlers.onRestart === "function") this.handlers.onRestart();
+      });
+      // Delegate equip slot clicks (unequip)
+      this.els.equipSlotsEl?.addEventListener("click", (ev) => {
+        const span = ev.target.closest("span.name[data-slot]");
+        if (!span) return;
+        const slot = span.dataset.slot;
+        if (slot && typeof this.handlers.onUnequip === "function") {
+          this.handlers.onUnequip(slot);
+        }
       });
       // Delegate inventory clicks
       this.els.invPanel?.addEventListener("click", (ev) => {
@@ -113,9 +123,10 @@ API
       return true;
     },
 
-    setHandlers({ onEquip, onEquipHand, onDrink, onRestart } = {}) {
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
+      if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
       if (typeof onDrink === "function") this.handlers.onDrink = onDrink;
       if (typeof onRestart === "function") this.handlers.onRestart = onRestart;
     },
@@ -149,7 +160,7 @@ API
           if (it) {
             const name = describeItem(it);
             const title = `Decay: ${Number(it.decay || 0).toFixed(0)}%`;
-            return `<div class="slot"><strong>${label}:</strong> <span class="name" title="${title}">${name}</span></div>`;
+            return `<div class="slot"><strong>${label}:</strong> <span class="name" data-slot="${key}" title="${title}" style="cursor:pointer; text-decoration:underline dotted;">${name}</span></div>`;
           } else {
             return `<div class="slot"><strong>${label}:</strong> <span class="name"><span class='empty'>(empty)</span></span></div>`;
           }
