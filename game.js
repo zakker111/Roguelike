@@ -61,7 +61,7 @@ Rendering layers (in order)
   let visible = []; // currently visible
   let player = (window.Player && typeof Player.createInitial === "function")
     ? Player.createInitial()
-    : { x: 0, y: 0, hp: 10, maxHp: 10, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { weapon: null, offhand: null, head: null, torso: null, legs: null, hands: null } };
+    : { x: 0, y: 0, hp: 10, maxHp: 10, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null } };
   let enemies = [];
   let corpses = [];
   let floor = 1;
@@ -87,8 +87,6 @@ Rendering layers (in order)
       // module callbacks
       recomputeFOV: () => recomputeFOV(),
       updateUI: () => updateUI(),
-      // expose tile enum for fov transparency checks
-      TILES,
       // enemy factory
       enemyFactory: (x, y, depth) => {
         if (window.Enemies && Enemies.createEnemyAt) {

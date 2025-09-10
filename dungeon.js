@@ -42,6 +42,16 @@ recomputing FOV, updating UI, and logging after generation.
         carveRoom(ctx.map, TILES, rect);
       }
     }
+    // Fallback: ensure at least one room exists
+    if (rooms.length === 0) {
+      const w = Math.min(9, Math.max(4, Math.floor(COLS / 5) || 6));
+      const h = Math.min(7, Math.max(3, Math.floor(ROWS / 5) || 4));
+      const x = Math.max(1, Math.min(COLS - w - 2, Math.floor(COLS / 2 - w / 2)));
+      const y = Math.max(1, Math.min(ROWS - h - 2, Math.floor(ROWS / 2 - h / 2)));
+      const rect = { x, y, w, h };
+      rooms.push(rect);
+      carveRoom(ctx.map, TILES, rect);
+    }
     rooms.sort((a, b) => a.x - b.x);
 
     // Connect with corridors
@@ -136,9 +146,26 @@ recomputing FOV, updating UI, and logging after generation.
   function randomFloor(ctx, rooms) {
     const { COLS, ROWS, TILES, player } = ctx;
     let x, y;
+    let tries = 0;
     do {
       x = ctx.randInt(1, COLS - 2);
       y = ctx.randInt(1, ROWS - 2);
+      tries++;
+      if (tries > 500) {
+        // Scan for any suitable floor tile as a safe fallback
+        for (let yy = 1; yy < ROWS - 1; yy++) {
+          for (let xx = 1; xx < COLS - 1; xx++) {
+            if (!ctx.inBounds(xx, yy)) continue;
+            if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
+            if ((xx === player.x && yy === player.y)) continue;
+            if (ctx.startRoomRect && inRect(xx, yy, ctx.startRoomRect)) continue;
+            if (ctx.enemies.some(e => e.x === xx && e.y === yy)) continue;
+            return { x: xx, y: yy };
+          }
+        }
+        // Last resort: place near player (same tile avoided by checks)
+        return { x: Math.max(1, Math.min(COLS - 2, player.x)), y: Math.max(1, Math.min(ROWS - 2, player.y)) };
+      }
     } while (!(ctx.inBounds(x, y) && ctx.map[y][x] === TILES.FLOOR) ||
              (x === player.x && y === player.y) ||
              (ctx.startRoomRect && inRect(x, y, ctx.startRoomRect)) ||

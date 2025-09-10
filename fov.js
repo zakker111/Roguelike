@@ -32,15 +32,18 @@ API:
       let err = dx + dy, e2;
 
       while (true) {
+        // If we've reached the target tile, allow it to be seen even if opaque
+        if (x0 === x1 && y0 === y1) return true;
+
+        // Check transparency for intermediate tiles (excluding the player's own tile)
         if (!(x0 === player.x && y0 === player.y)) {
           if (!isTransparent(x0, y0)) return false;
         }
-        if (x0 === x1 && y0 === y1) break;
+
         e2 = 2 * err;
         if (e2 >= dy) { err += dy; x0 += sx; }
         if (e2 <= dx) { err += dx; y0 += sy; }
       }
-      return true;
     }
 
     for (let y = Math.max(0, player.y - fovRadius); y <= Math.min(ROWS - 1, player.y + fovRadius); y++) {

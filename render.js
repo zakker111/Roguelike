@@ -55,8 +55,18 @@ API:
         const screenY = y * TILE;
         const vis = visible[y][x];
         const everSeen = seen[y][x];
-        const type = map[y][x];
 
+        // If tile has never been seen, render as unknown to avoid revealing layout
+        if (!everSeen) {
+          ctx2d.fillStyle = COLORS.wallDark;
+          ctx2d.fillRect(screenX, screenY, TILE, TILE);
+          // subtle grid
+          ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
+          ctx2d.strokeRect(screenX, screenY, TILE, TILE);
+          continue;
+        }
+
+        const type = map[y][x];
         let fill;
         if (type === TILES.WALL) fill = vis ? COLORS.wall : COLORS.wallDark;
         else if (type === TILES.DOOR) fill = vis ? "#3a2f1b" : "#241e14";

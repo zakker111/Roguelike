@@ -86,7 +86,7 @@
       }
 
       // descend
-      if (e.key && e.key.toLowerCase() === "n" || e.key === "Enter") {
+      if ((e.key && e.key.toLowerCase() === "n") || e.key === "Enter") {
         e.preventDefault();
         _handlers.onHideLoot && _handlers.onHideLoot();
         _handlers.onDescend && _handlers.onDescend();

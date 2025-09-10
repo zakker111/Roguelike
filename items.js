@@ -7,7 +7,7 @@ Goals:
 - Provide helpers used by the game for creation and display
 
 API (window.Items):
-- initialDecay(tier) -> number (0..100)
+- initialDecay(tier, rng?) -> number (0..100)
 - createEquipment(tier, rng) -> item
 - describe(item) -> string
 
@@ -27,10 +27,10 @@ Conventions:
   };
 
   // Decay: lower tiers start with more wear
-  function initialDecay(tier) {
-    if (tier <= 1) return randFloat(Math.random, 10, 35, 0);
-    if (tier === 2) return randFloat(Math.random, 5, 20, 0);
-    return randFloat(Math.random, 0, 10, 0);
+  function initialDecay(tier, rng = Math.random) {
+    if (tier <= 1) return randFloat(rng, 10, 35, 0);
+    if (tier === 2) return randFloat(rng, 5, 20, 0);
+    return randFloat(rng, 0, 10, 0);
   }
 
   function randFloat(rng, min, max, decimals = 1) {
@@ -50,19 +50,19 @@ Conventions:
       const canTwoHand = tier >= 2 && rng() < 0.15;
       if (canTwoHand) {
         const atk = tier === 2 ? randFloat(rng, 2.6, 3.6, 1) : randFloat(rng, 3.2, 4.0, 1);
-        return { kind: "equip", slot: "hand", name: `${material} two-handed axe`, atk, tier, twoHanded: true, decay: initialDecay(tier) };
+        return { kind: "equip", slot: "hand", name: `${material} two-handed axe`, atk, tier, twoHanded: true, decay: initialDecay(tier, rng) };
       }
 
       const type = pick(["sword", "axe", "bow", "shield"], rng);
       if (type === "shield") {
         const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
         const def = randFloat(rng, ranges[0], ranges[1], 1);
-        return { kind: "equip", slot: "hand", name: `${material} shield`, def, tier, decay: initialDecay(tier) };
+        return { kind: "equip", slot: "hand", name: `${material} shield`, def, tier, decay: initialDecay(tier, rng) };
       } else {
         const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
         let atk = randFloat(rng, ranges[0], ranges[1], 1);
         if (type === "axe") atk = Math.min(4.0, round1(atk + randFloat(rng, 0.1, 0.5, 1)));
-        return { kind: "equip", slot: "hand", name: `${material} ${type}`, atk, tier, decay: initialDecay(tier) };
+        return { kind: "equip", slot: "hand", name: `${material} ${type}`, atk, tier, decay: initialDecay(tier, rng) };
       }
     },
 
@@ -71,7 +71,7 @@ Conventions:
       const ranges = tier === 1 ? [0.2, 1.6] : tier === 2 ? [0.8, 2.8] : [1.6, 3.6];
       const def = randFloat(rng, ranges[0], ranges[1], 1);
       const name = tier >= 3 ? `${material} great helm` : `${material} helmet`;
-      return { kind: "equip", slot: "head", name, def, tier, decay: initialDecay(tier) };
+      return { kind: "equip", slot: "head", name, def, tier, decay: initialDecay(tier, rng) };
     },
 
     torso: (tier, rng) => {
@@ -79,14 +79,14 @@ Conventions:
       const ranges = tier === 1 ? [0.6, 2.6] : tier === 2 ? [1.6, 3.6] : [2.4, 4.0];
       const def = randFloat(rng, ranges[0], ranges[1], 1);
       const name = tier >= 3 ? `${material} plate armor` : (tier === 2 ? `${material} chainmail` : `${material} leather armor`);
-      return { kind: "equip", slot: "torso", name, def, tier, decay: initialDecay(tier) };
+      return { kind: "equip", slot: "torso", name, def, tier, decay: initialDecay(tier, rng) };
     },
 
     legs: (tier, rng) => {
       const material = MATERIALS[tier] || "iron";
       const ranges = tier === 1 ? [0.3, 1.8] : tier === 2 ? [1.0, 3.0] : [1.8, 3.8];
       const def = randFloat(rng, ranges[0], ranges[1], 1);
-      return { kind: "equip", slot: "legs", name: `${material} leg armor`, def, tier, decay: initialDecay(tier) };
+      return { kind: "equip", slot: "legs", name: `${material} leg armor`, def, tier, decay: initialDecay(tier, rng) };
     },
 
     hands: (tier, rng) => {
@@ -94,9 +94,9 @@ Conventions:
       const ranges = tier === 1 ? [0.2, 1.2] : tier === 2 ? [0.8, 2.4] : [1.2, 3.0];
       const def = randFloat(rng, ranges[0], ranges[1], 1);
       const name = tier >= 2 ? `${material} gauntlets` : `${material} gloves`;
-      const drop = { kind: "equip", slot: "hands", name, def, tier, decay: initialDecay(tier) };
-      if (tier >= 2 && Math.random() < 0.5) {
-        const atk = tier === 2 ? randFloat(Math.random, 0.1, 0.6, 1) : randFloat(Math.random, 0.2, 1.0, 1);
+      const drop = { kind: "equip", slot: "hands", name, def, tier, decay: initialDecay(tier, rng) };
+      if (tier >= 2 && rng() < 0.5) {
+        const atk = tier === 2 ? randFloat(rng, 0.1, 0.6, 1) : randFloat(rng, 0.2, 1.0, 1);
         drop.atk = atk;
       }
       return drop;
@@ -110,8 +110,9 @@ Conventions:
   }
 
   function createEquipment(tier, rng) {
-    const cat = rollCategory(rng || Math.random);
-    return CATEGORY_GENERATORS[cat](tier, rng || Math.random);
+    const r = rng || Math.random;
+    const cat = rollCategory(r);
+    return CATEGORY_GENERATORS[cat](tier, r);
   }
 
   function describe(item) {
