@@ -26,30 +26,63 @@ API (window.Player):
 (function () {
   const round1 = (n) => Math.round(n * 10) / 10;
 
-  function createInitial() {
-    // You can freely edit these defaults; normalization below will keep values sane.
-    const p = {
-      x: 0, y: 0,
-      hp: 40, maxHp: 10,
-      inventory: [],
-      atk: 1,
-      xp: 0, level: 1, xpNext: 20,
-      // left/right hands, plus armor slots
-      equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null },
-    };
+  // Editable starting attributes. Change these to configure the new-game player.
+  // Notes:
+  // - hp can exceed maxHp; it will raise maxHp to match.
+  // - inventory accepts items (e.g., potions, gold, equipment). Keep objects consistent with game item shape.
+  // - equipment supports slots: left, right, head, torso, legs, hands. Use null when empty.
+  const defaults = {
+    x: 0,
+    y: 0,
+    hp: 20,
+    maxHp: 10,
+    atk: 1,
+    level: 1,
+    xp: 0,
+    xpNext: 20,
+    inventory: [],
+    equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null },
+  };
 
-    // Normalize user-edited values so the game starts in a valid state:
-    // - If hp > maxHp, raise maxHp (so you can start e.g. hp: 20, maxHp: 10)
-    // - If hp < 0, clamp to 0
-    // - If maxHp invalid, default to 10
-    // - If level < 1, raise to 1
+  // Utility shallow-deep clone for JSON-like structures (items are plain objects in this game)
+  function clone(obj) {
+    return obj ? JSON.parse(JSON.stringify(obj)) : obj;
+  }
+
+  // Normalize user-provided/default values to a valid starting state
+  function normalize(p) {
     if (typeof p.maxHp !== "number" || p.maxHp <= 0) p.maxHp = 10;
     if (typeof p.hp !== "number") p.hp = p.maxHp;
     if (p.hp > p.maxHp) p.maxHp = p.hp;
     if (p.hp < 0) p.hp = 0;
     if (typeof p.level !== "number" || p.level < 1) p.level = 1;
+    if (typeof p.atk !== "number") p.atk = 1;
+    if (typeof p.xp !== "number") p.xp = 0;
+    if (typeof p.xpNext !== "number" || p.xpNext <= 0) p.xpNext = 20;
+    if (!p.inventory) p.inventory = [];
     if (!p.equipment) p.equipment = { left: null, right: null, head: null, torso: null, legs: null, hands: null };
+    return p;
+  }
 
+  // Public: change defaults at runtime (e.g., from console: Player.defaults.hp = 50; then restart)
+  function getDefaults() {
+    return defaults;
+  }
+
+  function createInitial() {
+    // Build from defaults, clone to avoid accidental mutations leaking into defaults
+    const p = normalize({
+      x: defaults.x,
+      y: defaults.y,
+      hp: defaults.hp,
+      maxHp: defaults.maxHp,
+      atk: defaults.atk,
+      level: defaults.level,
+      xp: defaults.xp,
+      xpNext: defaults.xpNext,
+      inventory: clone(defaults.inventory),
+      equipment: clone(defaults.equipment) || { left: null, right: null, head: null, torso: null, legs: null, hands: null },
+    });
     return p;
   }
 
