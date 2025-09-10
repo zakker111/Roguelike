@@ -106,19 +106,20 @@ API
       this.els.handChooser.addEventListener("click", (e) => {
         const btn = e.target.closest("button");
         if (!btn) return;
+        e.stopPropagation(); // prevent outside click handler from firing first
         const hand = btn.dataset.hand;
         const cb = this._handChooserCb;
         this.hideHandChooser();
         if (typeof cb === "function") cb(hand);
       });
 
-      // Hide chooser on any outside click
+      // Hide chooser on any outside click (not in capture phase)
       document.addEventListener("click", (e) => {
         if (!this.els.handChooser) return;
         if (this.els.handChooser.style.display === "none") return;
-        if (e.target.closest && e.target.closest("div") === this.els.handChooser) return;
+        if (this.els.handChooser.contains(e.target)) return;
         this.hideHandChooser();
-      }, true);
+      });
 
       return true;
     },
