@@ -59,7 +59,9 @@ Rendering layers (in order)
   let map = [];
   let seen = []; // explored tiles
   let visible = []; // currently visible
-  let player = { x: 0, y: 0, hp: 10, maxHp: 10, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { weapon: null, offhand: null, head: null, torso: null, legs: null, hands: null } };
+  let player = (window.Player && typeof Player.createInitial === "function")
+    ? Player.createInitial()
+    : { x: 0, y: 0, hp: 10, maxHp: 10, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { weapon: null, offhand: null, head: null, torso: null, legs: null, hands: null } };
   let enemies = [];
   let corpses = [];
   let floor = 1;
@@ -137,6 +139,15 @@ Rendering layers (in order)
   }
 
   function decayEquipped(slot, amount) {
+    if (window.Player && typeof Player.decayEquipped === "function") {
+      Player.decayEquipped(player, slot, amount, {
+        log,
+        updateUI,
+        onInventoryChange: () => rerenderInventoryIfOpen(),
+      });
+      return;
+    }
+    // fallback minimal behavior
     const it = player.equipment?.[slot];
     if (!it) return;
     const before = it.decay || 0;
@@ -147,7 +158,6 @@ Rendering layers (in order)
       updateUI();
       rerenderInventoryIfOpen();
     } else if (Math.floor(before) !== Math.floor(it.decay)) {
-      // Optional: could log small updates; keeping quiet to avoid spam
       rerenderInventoryIfOpen();
     }
   }
@@ -159,6 +169,9 @@ Rendering layers (in order)
    - Uses fractional values (0.0–4.0 scale per item); rounded to 1 decimal for display/consistency
   */
   function getPlayerAttack() {
+    if (window.Player && typeof Player.getAttack === "function") {
+      return Player.getAttack(player);
+    }
     let bonus = 0;
     const eq = player.equipment || {};
     if (eq.weapon && typeof eq.weapon.atk === "number") bonus += eq.weapon.atk;
@@ -173,6 +186,9 @@ Rendering layers (in order)
    - Fractional values (0.0–4.0 scale per item), rounded to 1 decimal
   */
   function getPlayerDefense() {
+    if (window.Player && typeof Player.getDefense === "function") {
+      return Player.getDefense(player);
+    }
     let def = 0;
     const eq = player.equipment || {};
     if (eq.offhand && typeof eq.offhand.def === "number") def += eq.offhand.def;
@@ -184,6 +200,9 @@ Rendering layers (in order)
   }
 
   function describeItem(item) {
+    if (window.Player && typeof Player.describeItem === "function") {
+      return Player.describeItem(item);
+    }
     if (!item) return "";
     if (item.kind === "equip") {
       const parts = [];
@@ -284,6 +303,10 @@ Rendering layers (in order)
 
   // Potion helpers (stacking + consumption)
   function addPotionToInventory(heal = 3, name = `potion (+${heal} HP)`) {
+    if (window.Player && typeof Player.addPotion === "function") {
+      Player.addPotion(player, heal, name);
+      return;
+    }
     const existing = player.inventory.find(i => i.kind === "potion" && (i.heal ?? 3) === heal);
     if (existing) {
       existing.count = (existing.count || 1) + 1;
@@ -293,6 +316,14 @@ Rendering layers (in order)
   }
 
   function drinkPotionByIndex(idx) {
+    if (window.Player && typeof Player.drinkPotionByIndex === "function") {
+      Player.drinkPotionByIndex(player, idx, {
+        log,
+        updateUI,
+        renderInventory: () => renderInventoryPanel(),
+      });
+      return;
+    }
     if (!player.inventory || idx < 0 || idx >= player.inventory.length) return;
     const it = player.inventory[idx];
     if (!it || it.kind !== "potion") return;
@@ -310,7 +341,6 @@ Rendering layers (in order)
     if (it.count && it.count > 1) {
       it.count -= 1;
     } else {
-      // remove from inventory
       player.inventory.splice(idx, 1);
     }
     updateUI();
@@ -323,6 +353,9 @@ Rendering layers (in order)
    - Equips if strictly better; logs the change
   */
   function equipIfBetter(item) {
+    if (window.Player && typeof Player.equipIfBetter === "function") {
+      return Player.equipIfBetter(player, item, { log, updateUI });
+    }
     if (!item || item.kind !== "equip") return false;
     const slot = item.slot;
     const current = player.equipment[slot];
@@ -858,6 +891,15 @@ Rendering layers (in order)
   }
 
   function equipItemByIndex(idx) {
+    if (window.Player && typeof Player.equipItemByIndex === "function") {
+      Player.equipItemByIndex(player, idx, {
+        log,
+        updateUI,
+        renderInventory: () => renderInventoryPanel(),
+        describeItem: (it) => describeItem(it),
+      });
+      return;
+    }
     if (!player.inventory || idx < 0 || idx >= player.inventory.length) return;
     const item = player.inventory[idx];
     if (!item || item.kind !== "equip") {
@@ -866,13 +908,10 @@ Rendering layers (in order)
     }
     const slot = item.slot;
     const prev = player.equipment[slot];
-    // remove from inventory
     player.inventory.splice(idx, 1);
-    // equip
     player.equipment[slot] = item;
     const statStr = ("atk" in item) ? `+${item.atk} atk` : ("def" in item) ? `+${item.def} def` : "";
     log(`You equip ${item.name} (${slot}${statStr ? ", " + statStr : ""}).`);
-    // return previous to inventory
     if (prev) {
       player.inventory.push(prev);
       log(`You stow ${describeItem(prev)} into your inventory.`);
@@ -919,6 +958,10 @@ Rendering layers (in order)
    - Level up: +Max HP, full heal, +Atk every other level, next threshold increases
   */
   function gainXP(amount) {
+    if (window.Player && typeof Player.gainXP === "function") {
+      Player.gainXP(player, amount, { log, updateUI });
+      return;
+    }
     player.xp += amount;
     log(`You gain ${amount} XP.`);
     while (player.xp >= player.xpNext) {
