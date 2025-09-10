@@ -77,42 +77,7 @@ API (window.Player):
     return p;
   }
 
-  // Normalize user-provided/default values to a valid starting state
-  function normalize(p) {
-    if (typeof p.maxHp !== "number" || p.maxHp <= 0) p.maxHp = 10;
-    if (typeof p.hp !== "number") p.hp = p.maxHp;
-    if (p.hp > p.maxHp) p.maxHp = p.hp;
-    if (p.hp < 0) p.hp = 0;
-    if (typeof p.level !== "number" || p.level < 1) p.level = 1;
-    if (typeof p.atk !== "number") p.atk = 1;
-    if (typeof p.xp !== "number") p.xp = 0;
-    if (typeof p.xpNext !== "number" || p.xpNext <= 0) p.xpNext = 20;
-    if (!p.inventory) p.inventory = [];
-    if (!p.equipment) p.equipment = { left: null, right: null, head: null, torso: null, legs: null, hands: null };
-    return p;
-  }
-
-  // Public: change defaults at runtime (e.g., from console: Player.defaults.hp = 50; then restart)
-  function getDefaults() {
-    return defaults;
-  }
-
-  function createInitial() {
-    // Build from defaults, clone to avoid accidental mutations leaking into defaults
-    const p = normalize({
-      x: defaults.x,
-      y: defaults.y,
-      hp: defaults.hp,
-      maxHp: defaults.maxHp,
-      atk: defaults.atk,
-      level: defaults.level,
-      xp: defaults.xp,
-      xpNext: defaults.xpNext,
-      inventory: clone(defaults.inventory),
-      equipment: clone(defaults.equipment) || { left: null, right: null, head: null, torso: null, legs: null, hands: null },
-    });
-    return p;
-  }
+  
 
   function getAttack(player) {
     let bonus = 0;
@@ -440,9 +405,21 @@ API (window.Player):
     window.dispatchEvent(new CustomEvent("player:changed", { detail: { player } }));
   }
 
+  // Update defaults at runtime (e.g., Player.setDefaults({ hp: 30, maxHp: 30 }))
+  function setDefaults(partial) {
+    if (!partial || typeof partial !== "object") return defaults;
+    // shallow merge then normalize
+    Object.assign(defaults, partial);
+    const norm = normalize(clone(defaults));
+    // write back normalized values so future createInitial/resetFromDefaults use them
+    Object.assign(defaults, norm);
+    return defaults;
+  }
+
   window.Player = {
     // configuration
     defaults,
+    setDefaults,
     normalize,
     resetFromDefaults,
     forceUpdate,
