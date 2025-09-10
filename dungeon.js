@@ -6,7 +6,7 @@ API:
   Mutates ctx fields:
    - map, seen, visible, enemies, corpses, isDead, startRoomRect
    - player position and (on depth===1) resets player stats/equipment/inventory
-   - places a staircase 'DOOR' tile in the last room
+   - places a staircase 'STAIRS' tile (fallback to DOOR if not present) in the last room
   ctx needs:
     ROWS, COLS, TILES
     player, enemies, corpses
@@ -42,12 +42,39 @@ recomputing FOV, updating UI, and logging after generation.
         carveRoom(ctx.map, TILES, rect);
       }
     }
+    // Fallback: ensure at least one room exists
+    if (rooms.length === 0) {
+      const w = Math.min(9, Math.max(4, Math.floor(COLS / 5) || 6));
+      const h = Math.min(7, Math.max(3, Math.floor(ROWS / 5) || 4));
+      const x = Math.max(1, Math.min(COLS - w - 2, Math.floor(COLS / 2 - w / 2)));
+      const y = Math.max(1, Math.min(ROWS - h - 2, Math.floor(ROWS / 2 - h / 2)));
+      const rect = { x, y, w, h };
+      rooms.push(rect);
+      carveRoom(ctx.map, TILES, rect);
+    }
     rooms.sort((a, b) => a.x - b.x);
 
-    // Connect with corridors
+    // Connect with corridors in a primary chain
     for (let i = 1; i < rooms.length; i++) {
       const a = center(rooms[i - 1]);
       const b = center(rooms[i]);
+      if (ctx.chance(0.5)) {
+        hCorridor(ctx.map, TILES, a.x, b.x, a.y);
+        vCorridor(ctx.map, TILES, a.y, b.y, b.x);
+      } else {
+        vCorridor(ctx.map, TILES, a.y, b.y, a.x);
+        hCorridor(ctx.map, TILES, a.x, b.x, b.y);
+      }
+    }
+
+    // Add a few extra connections to create loops/spurs
+    const extra = Math.max(0, Math.floor(rooms.length * 0.3));
+    for (let n = 0; n < extra; n++) {
+      const i = ctx.randInt(0, rooms.length - 1);
+      const j = ctx.randInt(0, rooms.length - 1);
+      if (i === j) continue;
+      const a = center(rooms[i]);
+      const b = center(rooms[j]);
       if (ctx.chance(0.5)) {
         hCorridor(ctx.map, TILES, a.x, b.x, a.y);
         vCorridor(ctx.map, TILES, a.y, b.y, b.x);
@@ -82,9 +109,10 @@ recomputing FOV, updating UI, and logging after generation.
       player.y = start.y;
     }
 
-    // Place staircase (as DOOR) in last room
+    // Place staircase (prefer STAIRS tile if available)
     const end = center(rooms[rooms.length - 1] || { x: COLS - 3, y: ROWS - 3, w: 1, h: 1 });
-    ctx.map[end.y][end.x] = TILES.DOOR;
+    const STAIRS = typeof TILES.STAIRS === "number" ? TILES.STAIRS : TILES.DOOR;
+    ctx.map[end.y][end.x] = STAIRS;
 
     // Spawn enemies
     const enemyCount = 8 + Math.floor(depth * 1.5);
@@ -136,9 +164,26 @@ recomputing FOV, updating UI, and logging after generation.
   function randomFloor(ctx, rooms) {
     const { COLS, ROWS, TILES, player } = ctx;
     let x, y;
+    let tries = 0;
     do {
       x = ctx.randInt(1, COLS - 2);
       y = ctx.randInt(1, ROWS - 2);
+      tries++;
+      if (tries > 500) {
+        // Scan for any suitable floor tile as a safe fallback
+        for (let yy = 1; yy < ROWS - 1; yy++) {
+          for (let xx = 1; xx < COLS - 1; xx++) {
+            if (!ctx.inBounds(xx, yy)) continue;
+            if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
+            if ((xx === player.x && yy === player.y)) continue;
+            if (ctx.startRoomRect && inRect(xx, yy, ctx.startRoomRect)) continue;
+            if (ctx.enemies.some(e => e.x === xx && e.y === yy)) continue;
+            return { x: xx, y: yy };
+          }
+        }
+        // Last resort: place near player (same tile avoided by checks)
+        return { x: Math.max(1, Math.min(COLS - 2, player.x)), y: Math.max(1, Math.min(ROWS - 2, player.y)) };
+      }
     } while (!(ctx.inBounds(x, y) && ctx.map[y][x] === TILES.FLOOR) ||
              (x === player.x && y === player.y) ||
              (ctx.startRoomRect && inRect(x, y, ctx.startRoomRect)) ||

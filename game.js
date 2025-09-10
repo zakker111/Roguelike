@@ -33,6 +33,7 @@ Rendering layers (in order)
     WALL: 0,
     FLOOR: 1,
     DOOR: 2,
+    STAIRS: 3,
   };
 
   const COLORS = {
@@ -61,10 +62,11 @@ Rendering layers (in order)
   let visible = []; // currently visible
   let player = (window.Player && typeof Player.createInitial === "function")
     ? Player.createInitial()
-    : { x: 0, y: 0, hp: 10, maxHp: 10, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { weapon: null, offhand: null, head: null, torso: null, legs: null, hands: null } };
+    : { x: 0, y: 0, hp: 10, maxHp: 10, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null } };
   let enemies = [];
   let corpses = [];
   let floor = 1;
+  window.floor = floor;
   let rng = mulberry32(Date.now() % 0xffffffff);
   let isDead = false;
   let startRoomRect = null;
@@ -87,8 +89,6 @@ Rendering layers (in order)
       // module callbacks
       recomputeFOV: () => recomputeFOV(),
       updateUI: () => updateUI(),
-      // expose tile enum for fov transparency checks
-      TILES,
       // enemy factory
       enemyFactory: (x, y, depth) => {
         if (window.Enemies && Enemies.createEnemyAt) {
@@ -452,7 +452,8 @@ Rendering layers (in order)
 
   function isWalkable(x, y) {
     if (!inBounds(x, y)) return false;
-    return map[y][x] === TILES.FLOOR || map[y][x] === TILES.DOOR;
+    const t = map[y][x];
+    return t === TILES.FLOOR || t === TILES.DOOR || t === TILES.STAIRS;
   }
 
   /*
@@ -521,8 +522,10 @@ Rendering layers (in order)
 
   function descendIfPossible() {
     hideLootPanel();
-    if (map[player.y][player.x] === TILES.DOOR) {
+    const here = map[player.y][player.x];
+    if (here === TILES.STAIRS || here === TILES.DOOR) {
       floor += 1;
+      window.floor = floor;
       generateLevel(floor);
     } else {
       log("You need to stand on the staircase (brown tile marked with '>') to descend.");
@@ -954,6 +957,7 @@ Rendering layers (in order)
   function restartGame() {
     hideGameOver();
     floor = 1;
+    window.floor = floor;
     isDead = false;
     generateLevel(floor);
   }
