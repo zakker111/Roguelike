@@ -69,6 +69,31 @@ Notes:
       defRange: { 1: [0.2, 1.2], 2: [0.8, 2.4], 3: [1.2, 3.0] },
       handAtkBonus: { 2: [0.1, 0.6], 3: [0.2, 1.0] },
       handAtkChance: 0.5 },
+
+    // Example item template (for reference only; weight=0 prevents random spawns)
+    example_item: {
+      key: "example_item",        // Unique registry key used to look up this type (string)
+      slot: "hand",               // Equipment slot ("hand" | "head" | "torso" | "legs" | "hands")
+      weight: 0,                  // Spawn weight in random generation; 0 disables it. Can also be a function (tier) => number
+      minTier: 1,                 // Minimum tier at which this item can appear (1..3)
+      name: (mat, tier) => `${mat} spear`, // Display name builder; receives material ("rusty/iron/steel") and tier
+      twoHanded: false,           // If true, item occupies both hands and equips to left+right together
+
+      // Primary stat roll ranges per tier (inclusive). Omit if not applicable.
+      atkRange: {                 // Attack stat range by tier; result is rounded to 1 decimal
+        1: [0.7, 2.2],
+        2: [1.4, 3.2],
+        3: [2.2, 4.0]
+      },
+      // defRange: { 1:[min,max], 2:[min,max], 3:[min,max] }, // Optional defense ranges by tier
+
+      // Optional additive bonus to attack after base roll; useful to bias certain types (e.g., axes).
+      // atkBonus: { 2:[0.1,0.3], 3:[0.2,0.5] },
+
+      // For "hands" slot only (gloves): optional small attack bonus and chance to apply.
+      // handAtkBonus: { 2:[0.1,0.4], 3:[0.2,0.8] },
+      // handAtkChance: 0.5,
+    },
   };
 
   // Slot distribution weights when rolling a random equipment piece
