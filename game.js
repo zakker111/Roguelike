@@ -304,7 +304,7 @@ Rendering layers (in order)
       fovRadius = clamped;
       log(`FOV radius set to ${fovRadius}.`);
       recomputeFOV();
-      draw();
+      requestDraw();
     }
   }
   function adjustFov(delta) {
@@ -499,12 +499,15 @@ Rendering layers (in order)
     };
   }
 
+  // Draw-on-demand
+  let needsDraw = true;
+  function requestDraw() { needsDraw = true; }
   function draw() {
+    if (!needsDraw) return;
     if (window.Render && typeof Render.draw === "function") {
       Render.draw(getRenderCtx());
-      return;
     }
-    // Fallback: no-op if renderer missing
+    needsDraw = false;
   }
 
   /*
@@ -848,6 +851,7 @@ Rendering layers (in order)
   function showLootPanel(list) {
     if (window.UI && typeof UI.showLoot === "function") {
       UI.showLoot(list);
+      requestDraw();
       return;
     }
     const panel = document.getElementById("loot-panel");
@@ -860,16 +864,19 @@ Rendering layers (in order)
       ul.appendChild(li);
     });
     panel.hidden = false;
+    requestDraw();
   }
 
   function hideLootPanel() {
     if (window.UI && typeof UI.hideLoot === "function") {
       UI.hideLoot();
+      requestDraw();
       return;
     }
     const panel = document.getElementById("loot-panel");
     if (!panel) return;
     panel.hidden = true;
+    requestDraw();
   }
 
   // Inventory & Equipment panel
@@ -888,15 +895,18 @@ Rendering layers (in order)
     } else if (invPanel) {
       invPanel.hidden = false;
     }
+    requestDraw();
   }
 
   function hideInventoryPanel() {
     if (window.UI && typeof UI.hideInventory === "function") {
       UI.hideInventory();
+      requestDraw();
       return;
     }
     if (!invPanel) return;
     invPanel.hidden = true;
+    requestDraw();
   }
 
   function equipItemByIndex(idx) {
@@ -977,14 +987,17 @@ Rendering layers (in order)
 
   function showGameOver() {
     if (window.UI && typeof UI.showGameOver === "function") {
-      UI.showGameOver(player, floor);
+      UI.showGameOver(player, depth);
+      requestDraw();
       return;
     }
     const panel = document.getElementById("gameover-panel");
     const summary = document.getElementById("gameover-summary");
-    const gold = (player.inventory.find(i => i.kind === "gold")?.amount) || 0;
-    if (summary) {
-      summary.textContent = `You died on floor ${floor} (Lv ${player.level}). Gold: ${gold}. XP: ${player.xp}/${player.xpNext}.`;
+    if (!panel || !summary) return;
+    summary.textContent = `You reached floor ${depth}. Level ${player.level}. XP ${player.xp}/${player.xpNext}.`;
+    panel.hidden = false;
+    requestDraw();
+  }). Gold: ${gold}. XP: ${player.xp}/${player.xpNext}.`;
     }
     if (panel) panel.hidden = false;
   }
@@ -1154,7 +1167,7 @@ Rendering layers (in order)
     enemiesAct();
     recomputeFOV();
     updateUI();
-    draw();
+    requestDraw();
   }
 
   // Game loop (only needed for animations; we redraw on each turn anyway)
