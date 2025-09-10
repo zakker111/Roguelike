@@ -42,8 +42,8 @@ API
       this.els.handChooser = document.createElement("div");
       this.els.handChooser.style.position = "fixed";
       this.els.handChooser.style.display = "none";
-      this.els.handChooser.style.zIndex = "1001";
-      this.els.handChooser.style.background = "rgba(20,24,33,0.95)";
+      this.els.handChooser.style.zIndex = "50000";
+      this.els.handChooser.style.background = "rgba(20,24,33,0.98)";
       this.els.handChooser.style.border = "1px solid rgba(80,90,120,0.6)";
       this.els.handChooser.style.borderRadius = "6px";
       this.els.handChooser.style.padding = "8px";
@@ -83,10 +83,13 @@ API
           const slot = li.dataset.slot || "";
           const twoH = li.dataset.twohanded === "true";
           if (twoH) {
+            ev.preventDefault();
             if (typeof this.handlers.onEquip === "function") this.handlers.onEquip(idx);
             return;
           }
           if (slot === "hand") {
+            ev.preventDefault();
+            ev.stopPropagation();
             // Show hand chooser near the clicked element
             const rect = li.getBoundingClientRect();
             this.showHandChooser(rect.left, rect.bottom + 6, (hand) => {
@@ -95,9 +98,11 @@ API
               }
             });
           } else {
+            ev.preventDefault();
             if (typeof this.handlers.onEquip === "function") this.handlers.onEquip(idx);
           }
         } else if (kind === "potion") {
+          ev.preventDefault();
           if (typeof this.handlers.onDrink === "function") this.handlers.onDrink(idx);
         }
       });
@@ -177,13 +182,17 @@ API
           li.dataset.kind = it.kind || "misc";
           if (it.kind === "equip" && (it.slot === "hand" || it.slot === "weapon" || it.slot === "offhand")) {
             li.dataset.slot = "hand";
-            if (it.twoHanded) li.dataset.twohanded = "true";
+            if (it.twoHanded) {
+              li.dataset.twohanded = "true";
+              li.title = `Two-handed • Decay: ${Number(it.decay || 0).toFixed(0)}%`;
+            } else {
+              li.title = `Click to equip (choose hand) • Decay: ${Number(it.decay || 0).toFixed(0)}%`;
+            }
+            li.style.cursor = "pointer";
           } else if (it.kind === "equip") {
             li.dataset.slot = it.slot || "";
-          }
-          li.textContent = typeof describeItem === "function" ? describeItem(it) : (it.name || "item");
-          if (it.kind === "equip") {
-            li.title = `Decay: ${Number(it.decay || 0).toFixed(0)}%`;
+            li.title = `Click to equip • Decay: ${Number(it.decay || 0).toFixed(0)}%`;
+            li.style.cursor = "pointer";
           } else if (it.kind === "potion") {
             li.style.cursor = "pointer";
             li.title = "Click to drink";
@@ -191,6 +200,7 @@ API
             li.style.opacity = "0.7";
             li.style.cursor = "default";
           }
+          li.textContent = typeof describeItem === "function" ? describeItem(it) : (it.name || "item");
           this.els.invList.appendChild(li);
         });
       }
