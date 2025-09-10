@@ -92,9 +92,9 @@ Rendering layers (in order)
   const chance = p => rng() < p;
   const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   const enemyColor = (type) => {
-    if (type === "goblin") return COLORS.enemyGoblin;
-    if (type === "troll") return COLORS.enemyTroll;
-    if (type === "ogre") return COLORS.enemyOgre;
+    if (window.Enemies && typeof Enemies.colorFor === "function") {
+      return Enemies.colorFor(type);
+    }
     return COLORS.enemy;
   };
   const randFloat = (min, max, decimals = 1) => {
@@ -197,6 +197,9 @@ Rendering layers (in order)
   }
 
   function getEnemyBlockChance(enemy, loc) {
+    if (window.Enemies && typeof Enemies.enemyBlockChance === "function") {
+      return Enemies.enemyBlockChance(enemy, loc);
+    }
     const base = enemy.type === "ogre" ? 0.10 : enemy.type === "troll" ? 0.08 : 0.06;
     return Math.max(0, Math.min(0.35, base * (loc?.blockMod || 1.0)));
   }
@@ -219,14 +222,18 @@ Rendering layers (in order)
 
   // Enemy level and danger helpers
   function enemyLevelFor(type, depth) {
+    if (window.Enemies && typeof Enemies.levelFor === "function") {
+      return Enemies.levelFor(type, depth, rng);
+    }
     const tier = type === "ogre" ? 2 : (type === "troll" ? 1 : 0);
-    // Slight randomness so some are above/below the floor baseline
     const jitter = rng() < 0.35 ? 1 : 0;
     return Math.max(1, depth + tier + jitter);
   }
 
   function enemyDamageMultiplier(level) {
-    // Each level adds 15% damage
+    if (window.Enemies && typeof Enemies.damageMultiplier === "function") {
+      return Enemies.damageMultiplier(level);
+    }
     return 1 + 0.15 * Math.max(0, (level || 1) - 1);
   }
 
@@ -480,41 +487,13 @@ Rendering layers (in order)
    - Sets glyph, hp/atk and XP reward
   */
   function createEnemyAt(x, y, depth) {
-    let roll = rng();
-    let type;
-    if (depth <= 2) {
-      type = roll < 0.7 ? "goblin" : (roll < 0.95 ? "troll" : "ogre");
-    } else {
-      type = roll < 0.5 ? "goblin" : (roll < 0.85 ? "troll" : "ogre");
+    if (window.Enemies && typeof Enemies.createEnemyAt === "function") {
+      return Enemies.createEnemyAt(x, y, depth, rng);
     }
-    let glyph, hp, atk, xp;
-    switch (type) {
-      case "goblin":
-        glyph = "g";
-        hp = 3 + Math.floor(depth / 2);
-        atk = 1 + Math.floor(depth / 4);
-        xp = 5 + Math.floor(depth / 2);
-        break;
-      case "troll":
-        glyph = "T";
-        hp = 6 + Math.floor(depth * 0.8);
-        atk = 2 + Math.floor(depth / 3);
-        xp = 12 + depth;
-        break;
-      case "ogre":
-        glyph = "O";
-        hp = 10 + Math.floor(depth * 1.2);
-        atk = 3 + Math.floor(depth / 2);
-        xp = 20 + 2 * depth;
-        break;
-      default:
-        glyph = "e";
-        hp = 4 + Math.floor(depth / 2);
-        atk = 1 + Math.floor(depth / 3);
-        xp = 5 + depth;
-    }
+    // Fallback (shouldn't happen if enemies.js is loaded)
+    const type = "goblin";
     const level = enemyLevelFor(type, depth);
-    return { x, y, type, glyph, hp, atk, xp, level, announced: false };
+    return { x, y, type, glyph: "g", hp: 3, atk: 1, xp: 5, level, announced: false };
   }
 
   // Field of view using simple ray casting within radius
@@ -839,8 +818,8 @@ Rendering layers (in order)
 
     // chance to drop equipment (higher for stronger enemies)
     const type = source?.type || "goblin";
-    const tier = type === "ogre" ? 3 : (type === "troll" ? 2 : 1);
-    const equipChance = type === "ogre" ? 0.75 : (type === "troll" ? 0.55 : 0.35);
+    const tier = (window.Enemies && Enemies.equipTierFor) ? Enemies.equipTierFor(type) : (type === "ogre" ? 3 : (type === "troll" ? 2 : 1));
+    const equipChance = (window.Enemies && Enemies.equipChanceFor) ? Enemies.equipChanceFor(type) : (type === "ogre" ? 0.75 : (type === "troll" ? 0.55 : 0.35));
     if (chance(equipChance)) {
       drops.push(pickEquipment(tier));
     }
@@ -848,10 +827,16 @@ Rendering layers (in order)
 
     function pickPotion(source) {
       const t = source?.type || "goblin";
-      // Base weights; tougher enemies bias toward stronger potions slightly
       let wL = 0.6, wA = 0.3, wS = 0.1;
-      if (t === "troll") { wL = 0.5; wA = 0.35; wS = 0.15; }
-      if (t === "ogre") { wL = 0.4; wA = 0.35; wS = 0.25; }
+      if (window.Enemies && Enemies.potionWeightsFor) {
+        const w = Enemies.potionWeightsFor(t) || {};
+        wL = typeof w.lesser === "number" ? w.lesser : wL;
+        wA = typeof w.average === "number" ? w.average : wA;
+        wS = typeof w.strong === "number" ? w.strong : wS;
+      } else {
+        if (t === "troll") { wL = 0.5; wA = 0.35; wS = 0.15; }
+        if (t === "ogre") { wL = 0.4; wA = 0.35; wS = 0.25; }
+      }
       const r = rng();
       if (r < wL) return { name: "lesser potion (+3 HP)", kind: "potion", heal: 3 };
       if (r < wL + wA) return { name: "average potion (+6 HP)", kind: "potion", heal: 6 };
