@@ -507,87 +507,22 @@ Rendering layers (in order)
   }
 
   // Rendering
-  /*
-   Draw order:
-   - Tiles (with dim overlay for explored but not visible)
-   - Stairs (as '>' glyph) if visible
-   - Corpses (persist after death/looting)
-   - Enemies (colored by type)
-   - Player
-  */
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // tiles
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        const screenX = x * TILE;
-        const screenY = y * TILE;
-        const vis = visible[y][x];
-        const everSeen = seen[y][x];
-        const type = map[y][x];
-
-        let fill;
-        if (type === TILES.WALL) fill = vis ? COLORS.wall : COLORS.wallDark;
-        else if (type === TILES.DOOR) fill = vis ? "#3a2f1b" : "#241e14";
-        else fill = vis ? COLORS.floorLit : COLORS.floor;
-
-        ctx.fillStyle = fill;
-        ctx.fillRect(screenX, screenY, TILE, TILE);
-
-        // subtle grid
-        ctx.strokeStyle = "rgba(122,162,247,0.05)";
-        ctx.strokeRect(screenX, screenY, TILE, TILE);
-
-        if (!vis && everSeen) {
-          ctx.fillStyle = COLORS.dim;
-          ctx.fillRect(screenX, screenY, TILE, TILE);
-        }
-      }
-    }
-
-    // staircase glyphs (">") overlay for visible doors
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        if (visible[y][x] && map[y][x] === TILES.DOOR) {
-          drawGlyph(x, y, ">", "#d7ba7d");
-        }
-      }
-    }
-
-    // corpses
-    for (const c of corpses) {
-      if (!visible[c.y][c.x]) continue;
-      drawGlyph(c.x, c.y, "%", c.looted ? COLORS.corpseEmpty : COLORS.corpse);
-    }
-
-    // enemies
-    for (const e of enemies) {
-      if (!visible[e.y][e.x]) continue;
-      drawGlyph(e.x, e.y, e.glyph || "e", enemyColor(e.type));
-    }
-
-    // player
-    drawGlyph(player.x, player.y, "@", COLORS.player);
+  function getRenderCtx() {
+    return {
+      ctx2d: ctx,
+      TILE, ROWS, COLS, COLORS, TILES,
+      map, seen, visible,
+      player, enemies, corpses,
+      enemyColor: (t) => enemyColor(t),
+    };
   }
 
-  /*
-   Draws a single glyph centered in its tile, with a subtle tile highlight.
-   Used for stairs, corpses, enemies and the player.
-  */
-  function drawGlyph(x, y, ch, color) {
-    const cx = x * TILE + TILE / 2;
-    const cy = y * TILE + TILE / 2;
-
-    // subtle tile highlight
-    ctx.fillStyle = "rgba(122,162,247,0.06)";
-    ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
-
-    ctx.fillStyle = color;
-    ctx.font = "bold 20px JetBrains Mono, monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(ch, cx, cy + 1);
+  function draw() {
+    if (window.Render && typeof Render.draw === "function") {
+      Render.draw(getRenderCtx());
+      return;
+    }
+    // Fallback: no-op if renderer missing
   }
 
   /*

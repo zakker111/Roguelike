@@ -1,0 +1,105 @@
+/*
+Render module for Tiny Roguelike.
+
+API:
+- Render.draw(ctx)
+  ctx must provide:
+    ctx2d: CanvasRenderingContext2D
+    TILE, ROWS, COLS
+    COLORS { wall, wallDark, floor, floorLit, player, corpse, corpseEmpty }
+    TILES enum
+    map, seen, visible
+    player {x,y}
+    enemies [{x,y,type,glyph}]
+    corpses [{x,y,looted}]
+    enemyColor(type) -> color (optional; fallback provided)
+*/
+(function () {
+  function enemyColorFromModule(type, COLORS) {
+    if (window.Enemies && typeof Enemies.colorFor === "function") {
+      return Enemies.colorFor(type);
+    }
+    // fallback to generic enemy color
+    return COLORS.enemy || "#f7768e";
+  }
+
+  function drawGlyph(ctx2d, TILE, x, y, ch, color) {
+    const cx = x * TILE + TILE / 2;
+    const cy = y * TILE + TILE / 2;
+
+    // subtle tile highlight
+    ctx2d.fillStyle = "rgba(122,162,247,0.06)";
+    ctx2d.fillRect(x * TILE, y * TILE, TILE, TILE);
+
+    ctx2d.fillStyle = color;
+    ctx2d.font = "bold 20px JetBrains Mono, monospace";
+    ctx2d.textAlign = "center";
+    ctx2d.textBaseline = "middle";
+    ctx2d.fillText(ch, cx, cy + 1);
+  }
+
+  function draw(ctx) {
+    const {
+      ctx2d, TILE, ROWS, COLS, COLORS, TILES,
+      map, seen, visible, player, enemies, corpses
+    } = ctx;
+
+    const enemyColor = (t) => (ctx.enemyColor ? ctx.enemyColor(t) : enemyColorFromModule(t, COLORS));
+
+    ctx2d.clearRect(0, 0, COLS * TILE, ROWS * TILE);
+
+    // tiles
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const screenX = x * TILE;
+        const screenY = y * TILE;
+        const vis = visible[y][x];
+        const everSeen = seen[y][x];
+        const type = map[y][x];
+
+        let fill;
+        if (type === TILES.WALL) fill = vis ? COLORS.wall : COLORS.wallDark;
+        else if (type === TILES.DOOR) fill = vis ? "#3a2f1b" : "#241e14";
+        else fill = vis ? COLORS.floorLit : COLORS.floor;
+
+        ctx2d.fillStyle = fill;
+        ctx2d.fillRect(screenX, screenY, TILE, TILE);
+
+        // subtle grid
+        ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
+        ctx2d.strokeRect(screenX, screenY, TILE, TILE);
+
+        if (!vis && everSeen) {
+          ctx2d.fillStyle = COLORS.dim;
+          ctx2d.fillRect(screenX, screenY, TILE, TILE);
+        }
+      }
+    }
+
+    // staircase glyphs (">") overlay for visible doors
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (visible[y][x] && map[y][x] === TILES.DOOR) {
+          drawGlyph(ctx2d, TILE, x, y, ">", "#d7ba7d");
+        }
+      }
+    }
+
+    // corpses
+    for (const c of corpses) {
+      if (!visible[c.y][c.x]) continue;
+      drawGlyph(ctx2d, TILE, c.x, c.y, "%", c.looted ? COLORS.corpseEmpty : COLORS.corpse);
+    }
+
+    // enemies
+    for (const e of enemies) {
+      if (!visible[e.y][e.x]) continue;
+      drawGlyph(ctx2d, TILE, e.x, e.y, e.glyph || "e", enemyColor(e.type));
+    }
+
+    // player
+    drawGlyph(ctx2d, TILE, player.x, player.y, "@", COLORS.player);
+  }
+
+  window.Render = { draw };
+})();
