@@ -20,6 +20,22 @@ Conventions:
 - Tiers: 1 (rusty), 2 (iron), 3 (steel)
 - Slots: "hand" (left/right), "head", "torso", "legs", "hands"
 
+Quick guide (examples):
+- Add a new randomizable type to the registry:
+  // At runtime (anywhere after items.js is loaded):
+  // Items.addType("hand", {
+  //   key: "rapier",
+  //   weight: 0.18,
+  //   name: (mat) => `${mat} rapier`,
+  //   atkRange: { 1:[0.8,2.6], 2:[1.6,3.6], 3:[2.6,4.0] }
+  // });
+
+- Create a specific item by key (from the registry):
+  // const it = Items.createByKey("rapier", 3, rng, { name: "Master's Rapier" });
+
+- Create a one-off named item (no registry entry):
+  // const excalibur = Items.createNamed({ slot:"hand", tier:3, name:"Excalibur", atk:4.0 });
+
 Type schema (for addType):
 {
   key: "unique_key",
@@ -271,6 +287,29 @@ Type schema (for addType):
     if (config.twoHanded) item.twoHanded = true;
     return item;
   }
+
+  // --- Example additions (can be removed safely) ---
+  // They demonstrate how to add new types and how they appear in random generation.
+
+  // Example type: a nimble rapier with higher base atk range (hand slot)
+  addType("hand", {
+    key: "rapier",
+    weight: 0.12,
+    name: (mat) => `${mat} rapier`,
+    atkRange: { 1: [0.8, 2.6], 2: [1.6, 3.6], 3: [2.6, 4.0] },
+  });
+
+  // Example type: thorn gauntlets that can occasionally deal damage (hands slot)
+  addType("hands", {
+    key: "thorn_gauntlets",
+    weight: 0.08,
+    name: (mat) => `${mat} thorn gauntlets`,
+    defRange: { 2: [0.8, 2.2], 3: [1.2, 2.8] },
+    handAtkBonus: { 2: [0.1, 0.4], 3: [0.2, 0.8] },
+    handAtkChance: 0.45,
+    minTier: 2,
+  });
+  // --- End examples ---
 
   window.Items = {
     initialDecay,
