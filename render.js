@@ -32,9 +32,6 @@ API:
     ctx2d.fillRect(x * TILE, y * TILE, TILE, TILE);
 
     ctx2d.fillStyle = color;
-    ctx2d.font = "bold 20px JetBrains Mono, monospace";
-    ctx2d.textAlign = "center";
-    ctx2d.textBaseline = "middle";
     ctx2d.fillText(ch, cx, cy + 1);
   }
 
@@ -48,6 +45,11 @@ API:
 
     ctx2d.clearRect(0, 0, COLS * TILE, ROWS * TILE);
 
+    // Set text properties once per frame
+    ctx2d.font = "bold 20px JetBrains Mono, monospace";
+    ctx2d.textAlign = "center";
+    ctx2d.textBaseline = "middle";
+
     // tiles
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
@@ -60,9 +62,7 @@ API:
         if (!everSeen) {
           ctx2d.fillStyle = COLORS.wallDark;
           ctx2d.fillRect(screenX, screenY, TILE, TILE);
-          // subtle grid
-          ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
-          ctx2d.strokeRect(screenX, screenY, TILE, TILE);
+          // Skip grid lines on unseen tiles for a tiny perf win
           continue;
         }
 

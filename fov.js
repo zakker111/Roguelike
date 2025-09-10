@@ -93,13 +93,26 @@ API:
 
     ctx.visible = visible;
 
-    // Announce newly visible enemies with a simple danger rating
+    // Announce newly visible enemies with a simple danger rating (rate-limited)
+    const newly = [];
     for (const e of ctx.enemies) {
       if (ctx.inBounds(e.x, e.y) && ctx.visible[e.y][e.x] && !e.announced) {
+        newly.push(e);
+      }
+    }
+    if (newly.length > 0) {
+      const maxSolo = 2;
+      const toSolo = newly.slice(0, maxSolo);
+      for (const e of toSolo) {
         const { label, tone } = ctx.enemyThreatLabel(e);
         ctx.log(`You spot a ${capitalize(e.type || "enemy")} Lv ${e.level || 1} (${label}).`, tone);
-        e.announced = true;
       }
+      const rest = newly.length - toSolo.length;
+      if (rest > 0) {
+        ctx.log(`You also spot ${rest} more ${rest === 1 ? "enemy" : "enemies"}.`, "info");
+      }
+      // Mark all newly seen enemies as announced
+      for (const e of newly) e.announced = true;
     }
   }
 

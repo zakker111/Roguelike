@@ -109,8 +109,25 @@ recomputing FOV, updating UI, and logging after generation.
       player.y = start.y;
     }
 
-    // Place staircase (prefer STAIRS tile if available)
-    const end = center(rooms[rooms.length - 1] || { x: COLS - 3, y: ROWS - 3, w: 1, h: 1 });
+    // Place staircase (prefer STAIRS tile if available), ensure not in the start room when possible
+    let endRoomIndex = rooms.length - 1;
+    if (rooms.length > 1 && ctx.startRoomRect) {
+      const sc = center(ctx.startRoomRect);
+      const endC = center(rooms[endRoomIndex]);
+      if (inRect(endC.x, endC.y, ctx.startRoomRect)) {
+        // pick farthest room from start that isn't the start room itself
+        let best = endRoomIndex;
+        let bestD = -1;
+        for (let k = 0; k < rooms.length; k++) {
+          const c = center(rooms[k]);
+          if (inRect(c.x, c.y, ctx.startRoomRect)) continue;
+          const d = Math.abs(c.x - sc.x) + Math.abs(c.y - sc.y);
+          if (d > bestD) { bestD = d; best = k; }
+        }
+        endRoomIndex = best;
+      }
+    }
+    const end = center(rooms[endRoomIndex] || { x: COLS - 3, y: ROWS - 3, w: 1, h: 1 });
     const STAIRS = typeof TILES.STAIRS === "number" ? TILES.STAIRS : TILES.DOOR;
     ctx.map[end.y][end.x] = STAIRS;
 
@@ -181,8 +198,27 @@ recomputing FOV, updating UI, and logging after generation.
             return { x: xx, y: yy };
           }
         }
-        // Last resort: place near player (same tile avoided by checks)
-        return { x: Math.max(1, Math.min(COLS - 2, player.x)), y: Math.max(1, Math.min(ROWS - 2, player.y)) };
+        // Last resort: try neighbors around the player (avoid player's tile)
+        const neigh = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1},{x:1,y:1},{x:1,y:-1},{x:-1,y:1},{x:-1,y:-1}];
+        for (const d of neigh) {
+          const xx = player.x + d.x, yy = player.y + d.y;
+          if (!ctx.inBounds(xx, yy)) continue;
+          if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
+          if (ctx.startRoomRect && inRect(xx, yy, ctx.startRoomRect)) continue;
+          if (ctx.enemies.some(e => e.x === xx && e.y === yy)) continue;
+          return { x: xx, y: yy };
+        }
+        // Final fallback: any floor tile that's not the player's tile
+        for (let yy = 1; yy < ROWS - 1; yy++) {
+          for (let xx = 1; xx < COLS - 1; xx++) {
+            if (!ctx.inBounds(xx, yy)) continue;
+            if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
+            if ((xx === player.x && yy === player.y)) continue;
+            return { x: xx, y: yy };
+          }
+        }
+        // Give up: place one step to the right if in bounds
+        return { x: Math.min(COLS - 2, Math.max(1, player.x + 1)), y: Math.min(ROWS - 2, Math.max(1, player.y)) };
       }
     } while (!(ctx.inBounds(x, y) && ctx.map[y][x] === TILES.FLOOR) ||
              (x === player.x && y === player.y) ||
