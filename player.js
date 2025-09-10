@@ -30,7 +30,7 @@ API (window.Player):
     // You can freely edit these defaults; normalization below will keep values sane.
     const p = {
       x: 0, y: 0,
-      hp: 10, maxHp: 10,
+      hp: 40, maxHp: 10,
       inventory: [],
       atk: 1,
       xp: 0, level: 1, xpNext: 20,

@@ -59,20 +59,38 @@ recomputing FOV, updating UI, and logging after generation.
 
     // Place player at first room center
     const start = center(rooms[0] || { x: 2, y: 2, w: 1, h: 1 });
-    player.x = start.x;
-    player.y = start.y;
     ctx.startRoomRect = rooms[0] || { x: start.x, y: start.y, w: 1, h: 1 };
 
-    // Reset player at floor 1
+    // Reset player at floor 1 using Player.createInitial if available
     if (depth === 1) {
-      player.maxHp = 15;
-      player.hp = player.maxHp;
-      player.inventory = [];
-      player.atk = 1;
-      player.xp = 0;
-      player.level = 1;
-      player.xpNext = 20;
-      player.equipment = { weapon: null, offhand: null, head: null, torso: null, legs: null, hands: null };
+      let init;
+      if (window.Player && typeof Player.createInitial === "function") {
+        init = Player.createInitial();
+      } else {
+        init = {
+          x: 0, y: 0,
+          hp: 10, maxHp: 10,
+          inventory: [],
+          atk: 1,
+          xp: 0, level: 1, xpNext: 20,
+          equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null },
+        };
+      }
+      // overwrite fields on the existing player object
+      ctx.player.x = start.x;
+      ctx.player.y = start.y;
+      ctx.player.hp = init.hp;
+      ctx.player.maxHp = init.maxHp;
+      ctx.player.inventory = Array.isArray(init.inventory) ? init.inventory.slice() : [];
+      ctx.player.atk = init.atk;
+      ctx.player.xp = init.xp;
+      ctx.player.level = init.level;
+      ctx.player.xpNext = init.xpNext;
+      ctx.player.equipment = init.equipment || { left: null, right: null, head: null, torso: null, legs: null, hands: null };
+    } else {
+      // For subsequent floors, keep current stats, just move player to start
+      player.x = start.x;
+      player.y = start.y;
     }
 
     // Place staircase (as DOOR) in last room
