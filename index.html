@@ -17,7 +17,7 @@
       <span id="floor">Floor: 1</span>
     </div>
     <div class="help">
-      Numpad to move (7/8/9/4/6/1/2/3, 5 waits). Bump to attack. G to loot corpse. I to open inventory. N to new floor (stand on >).
+      Move: Numpad (7/8/9/4/6/1/2/3) or arrows/WASD. Wait: Numpad5/Space. Bump to attack. G to loot. I to inventory. N/Enter to descend (stand on >). Adjust FOV: [ ] or +/-.
     </div>
   </div>
   <!-- Main game canvas: 30x20 tiles @ 32px -->
@@ -56,6 +56,12 @@
   <script src="fov.js"></script>
   <script src="dungeon.js"></script>
   <script src="logger.js"></script>
+  <script>
+    // Configure logger (increase scrollback)
+    if (window.Logger && typeof Logger.init === "function") {
+      try { Logger.init(undefined, 80); } catch (e) {}
+    }
+  </script>
   <script src="ui.js"></script>
   <script src="render.js"></script>
   <script src="player.js"></script>

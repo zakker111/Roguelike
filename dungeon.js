@@ -6,7 +6,7 @@ API:
   Mutates ctx fields:
    - map, seen, visible, enemies, corpses, isDead, startRoomRect
    - player position and (on depth===1) resets player stats/equipment/inventory
-   - places a staircase 'DOOR' tile in the last room
+   - places a staircase 'STAIRS' tile (fallback to DOOR if not present) in the last room
   ctx needs:
     ROWS, COLS, TILES
     player, enemies, corpses
@@ -54,10 +54,27 @@ recomputing FOV, updating UI, and logging after generation.
     }
     rooms.sort((a, b) => a.x - b.x);
 
-    // Connect with corridors
+    // Connect with corridors in a primary chain
     for (let i = 1; i < rooms.length; i++) {
       const a = center(rooms[i - 1]);
       const b = center(rooms[i]);
+      if (ctx.chance(0.5)) {
+        hCorridor(ctx.map, TILES, a.x, b.x, a.y);
+        vCorridor(ctx.map, TILES, a.y, b.y, b.x);
+      } else {
+        vCorridor(ctx.map, TILES, a.y, b.y, a.x);
+        hCorridor(ctx.map, TILES, a.x, b.x, b.y);
+      }
+    }
+
+    // Add a few extra connections to create loops/spurs
+    const extra = Math.max(0, Math.floor(rooms.length * 0.3));
+    for (let n = 0; n < extra; n++) {
+      const i = ctx.randInt(0, rooms.length - 1);
+      const j = ctx.randInt(0, rooms.length - 1);
+      if (i === j) continue;
+      const a = center(rooms[i]);
+      const b = center(rooms[j]);
       if (ctx.chance(0.5)) {
         hCorridor(ctx.map, TILES, a.x, b.x, a.y);
         vCorridor(ctx.map, TILES, a.y, b.y, b.x);
@@ -92,9 +109,10 @@ recomputing FOV, updating UI, and logging after generation.
       player.y = start.y;
     }
 
-    // Place staircase (as DOOR) in last room
+    // Place staircase (prefer STAIRS tile if available)
     const end = center(rooms[rooms.length - 1] || { x: COLS - 3, y: ROWS - 3, w: 1, h: 1 });
-    ctx.map[end.y][end.x] = TILES.DOOR;
+    const STAIRS = typeof TILES.STAIRS === "number" ? TILES.STAIRS : TILES.DOOR;
+    ctx.map[end.y][end.x] = STAIRS;
 
     // Spawn enemies
     const enemyCount = 8 + Math.floor(depth * 1.5);
