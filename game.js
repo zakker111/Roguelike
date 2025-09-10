@@ -353,13 +353,15 @@ Rendering layers (in order)
       return;
     }
     // Fallback (in case logger.js isn't loaded)
+    const el = document.getElementById("log");
+    if (!el) return;
     const div = document.createElement("div");
     div.className = `entry ${type}`;
     div.textContent = msg;
-    logEl?.prepend(div);
+    el.prepend(div);
     const MAX = 60;
-    while (logEl && logEl.childNodes.length > MAX) {
-      logEl.removeChild(logEl.lastChild);
+    while (el.childNodes.length > MAX) {
+      el.removeChild(el.lastChild);
     }
   }
 
@@ -471,8 +473,17 @@ Rendering layers (in order)
    - When dead: only R/Enter to restart
   */
   const KEY_DIRS = {
+    // Numpad
     Numpad8: {x:0,y:-1}, Numpad2: {x:0,y:1}, Numpad4: {x:-1,y:0}, Numpad6: {x:1,y:0},
     Numpad7: {x:-1,y:-1}, Numpad9: {x:1,y:-1}, Numpad1: {x:-1,y:1}, Numpad3: {x:1,y:1},
+    // Arrow keys (no diagonals)
+    ArrowUp: {x:0,y:-1}, ArrowDown: {x:0,y:1}, ArrowLeft: {x:-1,y:0}, ArrowRight: {x:1,y:0},
+    // WASD (no diagonals)
+    KeyW: {x:0,y:-1}, KeyS: {x:0,y:1}, KeyA: {x:-1,y:0}, KeyD: {x:1,y:0},
+    // Vim-style HJKL (no diagonals)
+    KeyK: {x:0,y:-1}, KeyJ: {x:0,y:1}, KeyH: {x:-1,y:0}, KeyL: {x:1,y:0},
+    // Diagonals via Q/E/Z/C (optional)
+    KeyQ: {x:-1,y:-1}, KeyE: {x:1,y:-1}, KeyZ: {x:-1,y:1}, KeyC: {x:1,y:1},
   };
 
   window.addEventListener("keydown", (e) => {
@@ -486,7 +497,7 @@ Rendering layers (in order)
     }
 
     // If inventory panel is open, only allow closing with I/Escape; block other input
-    if ((window.UI && UI.isInventoryOpen && UI.isInventoryOpen()) || (invPanel && !invPanel.hidden)) {
+    if (window.UI && UI.isInventoryOpen && UI.isInventoryOpen()) {
       if (e.key && (e.key.toLowerCase() === "i" || e.key === "Escape")) {
         e.preventDefault();
         hideInventoryPanel();
@@ -797,14 +808,16 @@ Rendering layers (in order)
       UI.showLoot(list);
       return;
     }
-    if (!lootPanel) return;
-    lootList.innerHTML = "";
+    const panel = document.getElementById("loot-panel");
+    const ul = document.getElementById("loot-list");
+    if (!panel || !ul) return;
+    ul.innerHTML = "";
     list.forEach(name => {
       const li = document.createElement("li");
       li.textContent = name;
-      lootList.appendChild(li);
+      ul.appendChild(li);
     });
-    lootPanel.hidden = false;
+    panel.hidden = false;
   }
 
   function hideLootPanel() {
@@ -812,8 +825,9 @@ Rendering layers (in order)
       UI.hideLoot();
       return;
     }
-    if (!lootPanel) return;
-    lootPanel.hidden = true;
+    const panel = document.getElementById("loot-panel");
+    if (!panel) return;
+    panel.hidden = true;
   }
 
   // Inventory & Equipment panel
@@ -874,13 +888,13 @@ Rendering layers (in order)
       UI.showGameOver(player, floor);
       return;
     }
-    if (lootPanel && !lootPanel.hidden) hideLootPanel();
-    if (!gameOverPanel) return;
+    const panel = document.getElementById("gameover-panel");
+    const summary = document.getElementById("gameover-summary");
     const gold = (player.inventory.find(i => i.kind === "gold")?.amount) || 0;
-    if (gameOverSummary) {
-      gameOverSummary.textContent = `You died on floor ${floor} (Lv ${player.level}). Gold: ${gold}. XP: ${player.xp}/${player.xpNext}.`;
+    if (summary) {
+      summary.textContent = `You died on floor ${floor} (Lv ${player.level}). Gold: ${gold}. XP: ${player.xp}/${player.xpNext}.`;
     }
-    gameOverPanel.hidden = false;
+    if (panel) panel.hidden = false;
   }
 
   function hideGameOver() {
@@ -888,8 +902,8 @@ Rendering layers (in order)
       UI.hideGameOver();
       return;
     }
-    if (!gameOverPanel) return;
-    gameOverPanel.hidden = true;
+    const panel = document.getElementById("gameover-panel");
+    if (panel) panel.hidden = true;
   }
 
   function restartGame() {
@@ -929,9 +943,11 @@ Rendering layers (in order)
       return;
     }
     // Fallback if UI module not loaded
+    const hpEl = document.getElementById("health");
+    const floorEl = document.getElementById("floor");
     const gold = (player.inventory.find(i => i.kind === "gold")?.amount) || 0;
-    hpEl.textContent = `HP: ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}  Gold: ${gold}`;
-    floorEl.textContent = `Floor: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
+    if (hpEl) hpEl.textContent = `HP: ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}  Gold: ${gold}`;
+    if (floorEl) floorEl.textContent = `Floor: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
   }
 
   /*
