@@ -27,15 +27,30 @@ API (window.Player):
   const round1 = (n) => Math.round(n * 10) / 10;
 
   function createInitial() {
-    return {
+    // You can freely edit these defaults; normalization below will keep values sane.
+    const p = {
       x: 0, y: 0,
-      hp: 20, maxHp: 10,
+      hp: 10, maxHp: 10,
       inventory: [],
       atk: 1,
       xp: 0, level: 1, xpNext: 20,
       // left/right hands, plus armor slots
       equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null },
     };
+
+    // Normalize user-edited values so the game starts in a valid state:
+    // - If hp > maxHp, raise maxHp (so you can start e.g. hp: 20, maxHp: 10)
+    // - If hp < 0, clamp to 0
+    // - If maxHp invalid, default to 10
+    // - If level < 1, raise to 1
+    if (typeof p.maxHp !== "number" || p.maxHp <= 0) p.maxHp = 10;
+    if (typeof p.hp !== "number") p.hp = p.maxHp;
+    if (p.hp > p.maxHp) p.maxHp = p.hp;
+    if (p.hp < 0) p.hp = 0;
+    if (typeof p.level !== "number" || p.level < 1) p.level = 1;
+    if (!p.equipment) p.equipment = { left: null, right: null, head: null, torso: null, legs: null, hands: null };
+
+    return p;
   }
 
   function getAttack(player) {
