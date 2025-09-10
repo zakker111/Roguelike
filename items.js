@@ -2,7 +2,7 @@
 Items module for Tiny Roguelike.
 
 Goal:
-- Clean, data-driven registry similar to enemies.js (clear attributes, weights, ranges)
+- Clean, data-driven registry (enemy-like) with clear attributes
 - Deterministic RNG (rng passed through everywhere)
 - Simple extension API to add specific named items or new item types
 
@@ -22,10 +22,9 @@ Conventions:
 
 Quick guide (examples):
 - Add a new randomizable type to the registry:
-  // At runtime (anywhere after items.js is loaded):
   // Items.addType("hand", {
   //   key: "rapier",
-  //   weight: 0.18,
+  //   weight: 0.18, // or weight: (tier) => tier >= 2 ? 0.2 : 0.1
   //   name: (mat) => `${mat} rapier`,
   //   atkRange: { 1:[0.8,2.6], 2:[1.6,3.6], 3:[2.6,4.0] }
   // });
@@ -40,7 +39,8 @@ Type schema (for addType):
 {
   key: "unique_key",
   slot: "hand"|"head"|"torso"|"legs"|"hands",
-  weight: 0.0..1.0,
+  // weight can be a number or a function of tier: (tier) => number
+  weight: number | (tier:number) => number,
   minTier?: 1|2|3,
   name: (material, tier) => string  OR  string,
   atkRange?: {1:[min,max],2:[min,max],3:[min,max]},
@@ -61,51 +61,57 @@ Type schema (for addType):
     3: "steel",
   };
 
-  // Registry for item types with stat ranges and spawn weights per slot
-  // atkRange/defRange per tier expressed as [min,max]
+  // Registry for item types: enemy-like flat map keyed by item key
+  // Each entry includes its slot and stat ranges
   const TYPES = {
-    hand: [
-      { key: "sword", name: (mat) => `${mat} sword`, slot: "hand", twoHanded: false,
-        weight: 0.35,
-        atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] } },
-      { key: "axe", name: (mat) => `${mat} axe`, slot: "hand", twoHanded: false,
-        weight: 0.25,
-        atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] },
-        atkBonus: { 1: [0.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] } },
-      { key: "bow", name: (mat) => `${mat} bow`, slot: "hand", twoHanded: false,
-        weight: 0.20,
-        atkRange: { 1: [0.6, 2.2], 2: [1.0, 3.0], 3: [2.0, 3.6] } },
-      { key: "shield", name: (mat) => `${mat} shield`, slot: "hand", twoHanded: false,
-        weight: 0.15,
-        defRange: { 1: [0.4, 2.0], 2: [1.2, 3.2], 3: [2.0, 4.0] } },
-      { key: "two_handed_axe", name: (mat) => `${mat} two-handed axe`, slot: "hand", twoHanded: true,
-        weight: 0.05,
-        minTier: 2,
-        atkRange: { 2: [2.6, 3.6], 3: [3.2, 4.0] } },
-    ],
-    head: [
-      { key: "helmet", slot: "head", weight: 1.0,
-        name: (mat, tier) => tier >= 3 ? `${mat} great helm` : `${mat} helmet`,
-        defRange: { 1: [0.2, 1.6], 2: [0.8, 2.8], 3: [1.6, 3.6] } },
-    ],
-    torso: [
-      { key: "torso_armor", slot: "torso", weight: 1.0,
-        name: (mat, tier) => tier >= 3 ? `${mat} plate armor` : (tier === 2 ? `${mat} chainmail` : `${mat} leather armor`),
-        defRange: { 1: [0.6, 2.6], 2: [1.6, 3.6], 3: [2.4, 4.0] } },
-    ],
-    legs: [
-      { key: "leg_armor", slot: "legs", weight: 1.0,
-        name: (mat) => `${mat} leg armor`,
-        defRange: { 1: [0.3, 1.8], 2: [1.0, 3.0], 3: [1.8, 3.8] } },
-    ],
-    hands: [
-      { key: "gloves", slot: "hands", weight: 1.0,
-        name: (mat, tier) => tier >= 2 ? `${mat} gauntlets` : `${mat} gloves`,
-        defRange: { 1: [0.2, 1.2], 2: [0.8, 2.4], 3: [1.2, 3.0] },
-        // chance to also carry small atk on higher tiers
-        handAtkBonus: { 2: [0.1, 0.6], 3: [0.2, 1.0] },
-        handAtkChance: 0.5 },
-    ],
+    sword: { key: "sword", slot: "hand", twoHanded: false,
+      weight: 0.35,
+      name: (mat) => `${mat} sword`,
+      atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] } },
+
+    axe: { key: "axe", slot: "hand", twoHanded: false,
+      weight: 0.25,
+      name: (mat) => `${mat} axe`,
+      atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] },
+      atkBonus: { 1: [0.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] } },
+
+    bow: { key: "bow", slot: "hand", twoHanded: false,
+      weight: 0.20,
+      name: (mat) => `${mat} bow`,
+      atkRange: { 1: [0.6, 2.2], 2: [1.0, 3.0], 3: [2.0, 3.6] } },
+
+    shield: { key: "shield", slot: "hand", twoHanded: false,
+      weight: 0.15,
+      name: (mat) => `${mat} shield`,
+      defRange: { 1: [0.4, 2.0], 2: [1.2, 3.2], 3: [2.0, 4.0] } },
+
+    two_handed_axe: { key: "two_handed_axe", slot: "hand", twoHanded: true,
+      weight: 0.05,
+      minTier: 2,
+      name: (mat) => `${mat} two-handed axe`,
+      atkRange: { 2: [2.6, 3.6], 3: [3.2, 4.0] } },
+
+    helmet: { key: "helmet", slot: "head",
+      weight: 1.0,
+      name: (mat, tier) => tier >= 3 ? `${mat} great helm` : `${mat} helmet`,
+      defRange: { 1: [0.2, 1.6], 2: [0.8, 2.8], 3: [1.6, 3.6] } },
+
+    torso_armor: { key: "torso_armor", slot: "torso",
+      weight: 1.0,
+      name: (mat, tier) => tier >= 3 ? `${mat} plate armor` : (tier === 2 ? `${mat} chainmail` : `${mat} leather armor`),
+      defRange: { 1: [0.6, 2.6], 2: [1.6, 3.6], 3: [2.4, 4.0] } },
+
+    leg_armor: { key: "leg_armor", slot: "legs",
+      weight: 1.0,
+      name: (mat) => `${mat} leg armor`,
+      defRange: { 1: [0.3, 1.8], 2: [1.0, 3.0], 3: [1.8, 3.8] } },
+
+    gloves: { key: "gloves", slot: "hands",
+      weight: 1.0,
+      name: (mat, tier) => tier >= 2 ? `${mat} gauntlets` : `${mat} gloves`,
+      defRange: { 1: [0.2, 1.2], 2: [0.8, 2.4], 3: [1.2, 3.0] },
+      handAtkBonus: { 2: [0.1, 0.6], 3: [0.2, 1.0] },
+      handAtkChance: 0.5 },
   };
 
   // Slot distribution weights when rolling a random equipment piece
@@ -124,6 +130,7 @@ Type schema (for addType):
   }
   function pickWeighted(entries, rng) {
     const total = entries.reduce((s, e) => s + (e.w || e.weight || 0), 0);
+    if (total <= 0) return entries[0]?.value ?? entries[0] ?? null;
     let r = rng() * total;
     for (const e of entries) {
       const w = e.w || e.weight || 0;
@@ -188,9 +195,12 @@ Type schema (for addType):
   }
 
   function pickTypeForSlot(slot, tier, rng) {
-    const defs = (TYPES[slot] || []).filter(d => (d.minTier || 1) <= tier);
+    const defs = Object.values(TYPES).filter(d => d.slot === slot && (d.minTier || 1) <= tier);
     if (defs.length === 0) return null;
-    const entries = defs.map(d => ({ value: d, w: d.weight || 1 }));
+    const entries = defs.map(d => {
+      const w = typeof d.weight === "function" ? d.weight(tier) : (d.weight || 1);
+      return { value: d, w: Math.max(0, w) };
+    });
     return pickWeighted(entries, rng);
   }
 
@@ -206,10 +216,15 @@ Type schema (for addType):
     const slot = pickSlot(r);
     const def = pickTypeForSlot(slot, tier, r);
     if (!def) {
-      // Fallback: pick any available slot/type
-      for (const s of Object.keys(TYPES)) {
-        const d = pickTypeForSlot(s, tier, r);
-        if (d) return makeItemFromType(d, tier, r);
+      // Fallback: pick any available type
+      const any = Object.values(TYPES).filter(d => (d.minTier || 1) <= tier);
+      if (any.length) {
+        const entries = any.map(d => {
+          const w = typeof d.weight === "function" ? d.weight(tier) : (d.weight || 1);
+          return { value: d, w: Math.max(0, w) };
+        });
+        const chosen = pickWeighted(entries, r);
+        if (chosen) return makeItemFromType(chosen, tier, r);
       }
       // Ultimate fallback: a simple iron sword
       return { kind: "equip", slot: "hand", name: "iron sword", tier: 2, atk: 1.5, decay: initialDecay(2, r) };
@@ -237,20 +252,16 @@ Type schema (for addType):
   // Extension helpers
 
   function addType(slot, def) {
-    if (!slot || !TYPES[slot]) return false;
+    if (!slot) return false;
     const clean = Object.assign({}, def, { slot });
-    if (typeof clean.weight !== "number" || clean.weight <= 0) clean.weight = 1.0;
+    if (typeof clean.weight !== "number" && typeof clean.weight !== "function") clean.weight = 1.0;
     if (!clean.key) clean.key = (clean.name && String(clean.name)) || `custom_${Date.now().toString(36)}`;
-    TYPES[slot].push(clean);
+    TYPES[clean.key] = clean;
     return true;
   }
 
   function findTypeByKey(key) {
-    for (const slot of Object.keys(TYPES)) {
-      const t = TYPES[slot].find(d => d.key === key);
-      if (t) return t;
-    }
-    return null;
+    return TYPES[key] || null;
   }
 
   function createByKey(key, tier, rng, overrides) {
@@ -294,7 +305,7 @@ Type schema (for addType):
   // Example type: a nimble rapier with higher base atk range (hand slot)
   addType("hand", {
     key: "rapier",
-    weight: 0.12,
+    weight: (tier) => tier >= 2 ? 0.14 : 0.09,
     name: (mat) => `${mat} rapier`,
     atkRange: { 1: [0.8, 2.6], 2: [1.6, 3.6], 3: [2.6, 4.0] },
   });
