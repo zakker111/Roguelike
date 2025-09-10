@@ -26,27 +26,55 @@ API (window.Player):
 (function () {
   const round1 = (n) => Math.round(n * 10) / 10;
 
-  // Editable starting attributes. Change these to configure the new-game player.
-  // Notes:
-  // - hp can exceed maxHp; it will raise maxHp to match.
-  // - inventory accepts items (e.g., potions, gold, equipment). Keep objects consistent with game item shape.
-  // - equipment supports slots: left, right, head, torso, legs, hands. Use null when empty.
+  // Editable defaults for new game. Change these to customize starting attributes.
+  const DEFAULT_EQUIPMENT = { left: null, right: null, head: null, torso: null, legs: null, hands: null };
   const defaults = {
     x: 0,
     y: 0,
     hp: 20,
-    maxHp: 10,
+    maxHp: 20,
     atk: 1,
     level: 1,
     xp: 0,
     xpNext: 20,
     inventory: [],
-    equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null },
+    equipment: { ...DEFAULT_EQUIPMENT },
   };
 
-  // Utility shallow-deep clone for JSON-like structures (items are plain objects in this game)
   function clone(obj) {
     return obj ? JSON.parse(JSON.stringify(obj)) : obj;
+  }
+
+  function normalize(p) {
+    if (typeof p.maxHp !== "number" || p.maxHp <= 0) p.maxHp = 10;
+    if (typeof p.hp !== "number") p.hp = p.maxHp;
+    if (p.hp > p.maxHp) p.maxHp = p.hp;
+    if (p.hp < 0) p.hp = 0;
+    if (typeof p.level !== "number" || p.level < 1) p.level = 1;
+    if (typeof p.atk !== "number") p.atk = 1;
+    if (typeof p.xp !== "number") p.xp = 0;
+    if (typeof p.xpNext !== "number" || p.xpNext <= 0) p.xpNext = 20;
+    if (!Array.isArray(p.inventory)) p.inventory = [];
+    const eq = p.equipment && typeof p.equipment === "object" ? p.equipment : {};
+    p.equipment = Object.assign({ ...DEFAULT_EQUIPMENT }, eq);
+    return p;
+  }
+
+  function createInitial() {
+    // Build from defaults with deep clones to avoid sharing references
+    const p = normalize({
+      x: defaults.x,
+      y: defaults.y,
+      hp: defaults.hp,
+      maxHp: defaults.maxHp,
+      atk: defaults.atk,
+      level: defaults.level,
+      xp: defaults.xp,
+      xpNext: defaults.xpNext,
+      inventory: clone(defaults.inventory) || [],
+      equipment: clone(defaults.equipment) || { ...DEFAULT_EQUIPMENT },
+    });
+    return p;
   }
 
   // Normalize user-provided/default values to a valid starting state
@@ -382,7 +410,43 @@ API (window.Player):
     if (hooks.renderInventory) hooks.renderInventory();
   }
 
+  // Apply current defaults to an existing player (used when starting a new game)
+  function resetFromDefaults(player) {
+    const fresh = normalize({
+      x: defaults.x,
+      y: defaults.y,
+      hp: defaults.hp,
+      maxHp: defaults.maxHp,
+      atk: defaults.atk,
+      level: defaults.level,
+      xp: defaults.xp,
+      xpNext: defaults.xpNext,
+      inventory: clone(defaults.inventory) || [],
+      equipment: clone(defaults.equipment) || {},
+    });
+    for (const k of Object.keys(fresh)) {
+      player[k] = Array.isArray(fresh[k]) ? fresh[k].slice() :
+                  (fresh[k] && typeof fresh[k] === "object" ? JSON.parse(JSON.stringify(fresh[k])) : fresh[k]);
+    }
+    forceUpdate(player);
+    return player;
+  }
+
+  // Force HUD refresh and broadcast a change event
+  function forceUpdate(player) {
+    if (window.UI && typeof UI.updateStats === "function") {
+      UI.updateStats(player, window.floor || 1, getAttack.bind(null, player), getDefense.bind(null, player));
+    }
+    window.dispatchEvent(new CustomEvent("player:changed", { detail: { player } }));
+  }
+
   window.Player = {
+    // configuration
+    defaults,
+    normalize,
+    resetFromDefaults,
+    forceUpdate,
+    // core API
     createInitial,
     getAttack,
     getDefense,
