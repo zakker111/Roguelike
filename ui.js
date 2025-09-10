@@ -90,7 +90,16 @@ API
           if (slot === "hand") {
             ev.preventDefault();
             ev.stopPropagation();
-            // Show hand chooser near the clicked element
+            // If exactly one hand is empty, equip to that hand immediately
+            const st = this._equipState || {};
+            const leftEmpty = !!st.leftEmpty;
+            const rightEmpty = !!st.rightEmpty;
+            if (leftEmpty !== rightEmpty) {
+              const hand = leftEmpty ? "left" : "right";
+              if (typeof this.handlers.onEquipHand === "function") this.handlers.onEquipHand(idx, hand);
+              return;
+            }
+            // Otherwise show hand chooser near the clicked element
             const rect = li.getBoundingClientRect();
             this.showHandChooser(rect.left, rect.bottom + 6, (hand) => {
               if (hand && (hand === "left" || hand === "right")) {
@@ -151,6 +160,12 @@ API
     },
 
     renderInventory(player, describeItem) {
+      // remember current equip occupancy for quick decisions
+      this._equipState = {
+        leftEmpty: !(player.equipment && player.equipment.left),
+        rightEmpty: !(player.equipment && player.equipment.right),
+      };
+
       // Equipment slots
       if (this.els.equipSlotsEl) {
         const slots = [
@@ -186,7 +201,13 @@ API
               li.dataset.twohanded = "true";
               li.title = `Two-handed • Decay: ${Number(it.decay || 0).toFixed(0)}%`;
             } else {
-              li.title = `Click to equip (choose hand) • Decay: ${Number(it.decay || 0).toFixed(0)}%`;
+              // If exactly one hand is empty, hint which one will be used automatically
+              let autoHint = "";
+              if (this._equipState) {
+                if (this._equipState.leftEmpty && !this._equipState.rightEmpty) autoHint = " (Left is empty)";
+                else if (this._equipState.rightEmpty && !this._equipState.leftEmpty) autoHint = " (Right is empty)";
+              }
+              li.title = `Click to equip${autoHint ? autoHint : " (choose hand)"} • Decay: ${Number(it.decay || 0).toFixed(0)}%`;
             }
             li.style.cursor = "pointer";
           } else if (it.kind === "equip") {
