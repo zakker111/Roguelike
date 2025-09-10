@@ -915,7 +915,7 @@ Rendering layers (in order)
       log("That item cannot be equipped.");
       return;
     }
-    const slot = item.slot;
+    const slot = item.slot || "hand";
     const prev = player.equipment[slot];
     player.inventory.splice(idx, 1);
     player.equipment[slot] = item;
@@ -927,6 +927,21 @@ Rendering layers (in order)
     }
     updateUI();
     renderInventoryPanel();
+  }
+
+  function equipItemByIndexHand(idx, hand) {
+    if (window.Player && typeof Player.equipItemByIndex === "function") {
+      Player.equipItemByIndex(player, idx, {
+        log,
+        updateUI,
+        renderInventory: () => renderInventoryPanel(),
+        describeItem: (it) => describeItem(it),
+        preferredHand: hand,
+      });
+      return;
+    }
+    // fallback to generic equip if Player module missing
+    equipItemByIndex(idx);
   }
 
   
@@ -1130,6 +1145,7 @@ Rendering layers (in order)
     if (typeof UI.setHandlers === "function") {
       UI.setHandlers({
         onEquip: (idx) => equipItemByIndex(idx),
+        onEquipHand: (idx, hand) => equipItemByIndexHand(idx, hand),
         onDrink: (idx) => drinkPotionByIndex(idx),
         onRestart: () => restartGame(),
       });

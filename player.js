@@ -213,8 +213,59 @@ API (window.Player):
     // remove from inventory first
     player.inventory.splice(idx, 1);
 
-    // Delegate to equipIfBetter for placement and logging
-    equipIfBetter(player, item, hooks);
+    const eq = player.equipment;
+    const twoH = !!item.twoHanded;
+    const preferredHand = hooks.preferredHand === "left" || hooks.preferredHand === "right" ? hooks.preferredHand : null;
+
+    if ((item.slot === "hand" || item.slot === "weapon" || item.slot === "offhand" || item.slot === "left" || item.slot === "right")) {
+      if (twoH) {
+        const prevL = eq.left, prevR = eq.right;
+        eq.left = item; eq.right = item;
+        if (hooks.log) {
+          const parts = [];
+          if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
+          if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
+          const statStr = parts.join(", ");
+          hooks.log(`You equip ${item.name} (two-handed${statStr ? ", " + statStr : ""}).`);
+        }
+        if (prevL && prevL !== item) player.inventory.push(prevL);
+        if (prevR && prevR !== item) player.inventory.push(prevR);
+      } else if (preferredHand) {
+        // respect user's choice
+        const prev = eq[preferredHand];
+        eq[preferredHand] = item;
+        if (hooks.log) {
+          const parts = [];
+          if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
+          if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
+          const statStr = parts.join(", ");
+          hooks.log(`You equip ${item.name} (${preferredHand}${statStr ? ", " + statStr : ""}).`);
+        }
+        if (prev) player.inventory.push(prev);
+        // if we were holding a two-handed item across both hands, clear the other hand as well
+        if (eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded) {
+          const other = preferredHand === "left" ? "right" : "left";
+          if (eq[other]) player.inventory.push(eq[other]);
+          eq[other] = null;
+        }
+      } else {
+        // no preference -> use auto-placement/better logic
+        equipIfBetter(player, item, hooks);
+      }
+    } else {
+      // Non-hand items -> simple replacement logic
+      const slot = item.slot;
+      const prev = eq[slot];
+      eq[slot] = item;
+      if (hooks.log) {
+        const parts = [];
+        if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
+        if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
+        const statStr = parts.join(", ");
+        hooks.log(`You equip ${item.name} (${slot}${statStr ? ", " + statStr : ""}).`);
+      }
+      if (prev) player.inventory.push(prev);
+    }
 
     if (hooks.updateUI) hooks.updateUI();
     if (hooks.renderInventory) hooks.renderInventory();

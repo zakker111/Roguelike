@@ -6,6 +6,7 @@ Caches DOM elements and provides functions to update UI, panels and bindings.
 API
 - UI.init()
 - UI.setHandlers({ onEquip, onDrink, onRestart })
++ UI.setHandlers({ onEquip, onEquipHand, onDrink, onRestart })
 - UI.updateStats(player, floor, getAtk, getDef)
 - UI.renderInventory(player, describeItem)
 - UI.showInventory(), UI.hideInventory(), UI.isInventoryOpen()
@@ -17,6 +18,7 @@ API
     els: {},
     handlers: {
       onEquip: null,
+      onEquipHand: null,
       onDrink: null,
       onRestart: null,
     },
@@ -35,6 +37,26 @@ API
       this.els.equipSlotsEl = document.getElementById("equip-slots");
       this.els.invStatsEl = document.getElementById("inv-stats");
 
+      // transient hand-chooser element
+      this.els.handChooser = document.createElement("div");
+      this.els.handChooser.style.position = "fixed";
+      this.els.handChooser.style.display = "none";
+      this.els.handChooser.style.zIndex = "1001";
+      this.els.handChooser.style.background = "rgba(20,24,33,0.95)";
+      this.els.handChooser.style.border = "1px solid rgba(80,90,120,0.6)";
+      this.els.handChooser.style.borderRadius = "6px";
+      this.els.handChooser.style.padding = "8px";
+      this.els.handChooser.style.boxShadow = "0 8px 28px rgba(0,0,0,0.4)";
+      this.els.handChooser.innerHTML = `
+        <div style="color:#cbd5e1; font-size:12px; margin-bottom:6px;">Equip to:</div>
+        <div style="display:flex; gap:6px;">
+          <button data-hand="left" style="padding:6px 10px; background:#1f2937; color:#e5e7eb; border:1px solid #334155; border-radius:4px; cursor:pointer;">Left</button>
+          <button data-hand="right" style="padding:6px 10px; background:#1f2937; color:#e5e7eb; border:1px solid #334155; border-radius:4px; cursor:pointer;">Right</button>
+          <button data-hand="cancel" style="padding:6px 10px; background:#111827; color:#9ca3af; border:1px solid #374151; border-radius:4px; cursor:pointer;">Cancel</button>
+        </div>
+      `;
+      document.body.appendChild(this.els.handChooser);
+
       // Bind static events
       this.els.lootPanel?.addEventListener("click", () => this.hideLoot());
       this.els.restartBtn?.addEventListener("click", () => {
@@ -48,17 +70,52 @@ API
         if (!Number.isFinite(idx)) return;
         const kind = li.dataset.kind;
         if (kind === "equip") {
-          if (typeof this.handlers.onEquip === "function") this.handlers.onEquip(idx);
+          const slot = li.dataset.slot || "";
+          const twoH = li.dataset.twohanded === "true";
+          if (twoH) {
+            if (typeof this.handlers.onEquip === "function") this.handlers.onEquip(idx);
+            return;
+          }
+          if (slot === "hand") {
+            // Show hand chooser near the clicked element
+            const rect = li.getBoundingClientRect();
+            this.showHandChooser(rect.left, rect.bottom + 6, (hand) => {
+              if (hand && (hand === "left" || hand === "right")) {
+                if (typeof this.handlers.onEquipHand === "function") this.handlers.onEquipHand(idx, hand);
+              }
+            });
+          } else {
+            if (typeof this.handlers.onEquip === "function") this.handlers.onEquip(idx);
+          }
         } else if (kind === "potion") {
           if (typeof this.handlers.onDrink === "function") this.handlers.onDrink(idx);
         }
       });
 
+      // Hand chooser click
+      this.els.handChooser.addEventListener("click", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        const hand = btn.dataset.hand;
+        const cb = this._handChooserCb;
+        this.hideHandChooser();
+        if (typeof cb === "function") cb(hand);
+      });
+
+      // Hide chooser on any outside click
+      document.addEventListener("click", (e) => {
+        if (!this.els.handChooser) return;
+        if (this.els.handChooser.style.display === "none") return;
+        if (e.target.closest && e.target.closest("div") === this.els.handChooser) return;
+        this.hideHandChooser();
+      }, true);
+
       return true;
     },
 
-    setHandlers({ onEquip, onDrink, onRestart } = {}) {
+    setHandlers({ onEquip, onEquipHand, onDrink, onRestart } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
+      if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onDrink === "function") this.handlers.onDrink = onDrink;
       if (typeof onRestart === "function") this.handlers.onRestart = onRestart;
     },
@@ -106,6 +163,12 @@ API
           const li = document.createElement("li");
           li.dataset.index = String(idx);
           li.dataset.kind = it.kind || "misc";
+          if (it.kind === "equip" && (it.slot === "hand" || it.slot === "weapon" || it.slot === "offhand")) {
+            li.dataset.slot = "hand";
+            if (it.twoHanded) li.dataset.twohanded = "true";
+          } else if (it.kind === "equip") {
+            li.dataset.slot = it.slot || "";
+          }
           li.textContent = typeof describeItem === "function" ? describeItem(it) : (it.name || "item");
           if (it.kind === "equip") {
             li.title = `Decay: ${Number(it.decay || 0).toFixed(0)}%`;
@@ -132,6 +195,20 @@ API
 
     isInventoryOpen() {
       return !!(this.els.invPanel && !this.els.invPanel.hidden);
+    },
+
+    showHandChooser(x, y, cb) {
+      if (!this.els.handChooser) return;
+      this._handChooserCb = cb;
+      this.els.handChooser.style.left = `${Math.round(x)}px`;
+      this.els.handChooser.style.top = `${Math.round(y)}px`;
+      this.els.handChooser.style.display = "block";
+    },
+
+    hideHandChooser() {
+      if (!this.els.handChooser) return;
+      this.els.handChooser.style.display = "none";
+      this._handChooserCb = null;
     },
 
     showLoot(list) {
