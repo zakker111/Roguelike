@@ -79,6 +79,36 @@ Rendering layers (in order)
   let isDead = false;
   let startRoomRect = null;
 
+  // Build a lightweight context object for modules
+  function getCtx() {
+    return {
+      // dims and enums
+      ROWS, COLS, TILES,
+      // state
+      player, map, seen, visible, enemies, corpses,
+      startRoomRect,
+      // visibility
+      fovRadius,
+      // utils
+      rng, randInt, chance,
+      inBounds, isWalkable,
+      // hooks
+      log, enemyThreatLabel,
+      // module callbacks
+      recomputeFOV: () => recomputeFOV(),
+      updateUI: () => updateUI(),
+      // expose tile enum for fov transparency checks
+      TILES,
+      // enemy factory
+      enemyFactory: (x, y, depth) => {
+        if (window.Enemies && Enemies.createEnemyAt) {
+          return Enemies.createEnemyAt(x, y, depth, rng);
+        }
+        return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
+      }
+    };
+  }
+
   // Utils
   function mulberry32(a) {
     return function() {
@@ -351,74 +381,26 @@ Rendering layers (in order)
    - recomputes FOV and updates UI/log
   */
   function generateLevel(depth = 1) {
-    // init
-    map = Array.from({length: ROWS}, () => Array(COLS).fill(TILES.WALL));
-    seen = Array.from({length: ROWS}, () => Array(COLS).fill(false));
-    visible = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+    if (window.Dungeon && typeof Dungeon.generateLevel === "function") {
+      // keep ctx fields up to date so module can mutate them
+      const ctx = getCtx();
+      ctx.startRoomRect = startRoomRect;
+      Dungeon.generateLevel(ctx, depth);
+      // pull back any updated refs from ctx
+      map = ctx.map;
+      seen = ctx.seen;
+      visible = ctx.visible;
+      enemies = ctx.enemies;
+      corpses = ctx.corpses;
+      startRoomRect = ctx.startRoomRect;
+      return;
+    }
+    // Fallback simple level if module missing
+    map = Array.from({ length: ROWS }, () => Array(COLS).fill(TILES.FLOOR));
     enemies = [];
     corpses = [];
-    isDead = false;
-
-    const rooms = [];
-    const roomAttempts = 80;
-    for (let i = 0; i < roomAttempts; i++) {
-      const w = randInt(4, 9);
-      const h = randInt(3, 7);
-      const x = randInt(1, COLS - w - 2);
-      const y = randInt(1, ROWS - h - 2);
-      const rect = { x, y, w, h };
-      if (rooms.every(r => !intersect(rect, r))) {
-        rooms.push(rect);
-        carveRoom(rect);
-      }
-    }
-    rooms.sort((a, b) => a.x - b.x);
-
-    // connect rooms with corridors
-    for (let i = 1; i < rooms.length; i++) {
-      const a = center(rooms[i - 1]);
-      const b = center(rooms[i]);
-      if (chance(0.5)) {
-        hCorridor(a.x, b.x, a.y);
-        vCorridor(a.y, b.y, b.x);
-      } else {
-        vCorridor(a.y, b.y, a.x);
-        hCorridor(a.x, b.x, b.y);
-      }
-    }
-
-    // place player in first room
-    const start = center(rooms[0] || {x:2,y:2,w:1,h:1});
-    player.x = start.x;
-    player.y = start.y;
-    // Remember starting room to prevent enemy spawns inside it
-    startRoomRect = rooms[0] || { x: start.x, y: start.y, w: 1, h: 1 };
-    if (depth === 1) {
-      player.maxHp = 15;
-      player.hp = player.maxHp;
-      player.inventory = [];
-      player.atk = 1;
-      player.xp = 0;
-      player.level = 1;
-      player.xpNext = 20;
-      player.equipment = { weapon: null, offhand: null, head: null, torso: null, legs: null, hands: null };
-    }
-
-    // place stairs down as a door tile in last room (use DOOR to render differently)
-    const end = center(rooms[rooms.length - 1] || {x:COLS-3,y:ROWS-3,w:1,h:1});
-    map[end.y][end.x] = TILES.DOOR;
-
-    // place enemies
-    const enemyCount = 8 + Math.floor(depth * 1.5);
-
-    for (let i = 0; i < enemyCount; i++) {
-      const p = randomFloor();
-      enemies.push(createEnemyAt(p.x, p.y, depth));
-    }
-
     recomputeFOV();
     updateUI();
-    log(`You descend to floor ${depth}.`);
   }
 
   function carveRoom({x, y, w, h}) {
@@ -503,50 +485,17 @@ Rendering layers (in order)
    - Stores both current visibility and "seen" memory for fog-of-war
   */
   function recomputeFOV() {
-    visible = Array.from({length: ROWS}, () => Array(COLS).fill(false));
-    const radiusSq = fovRadius * fovRadius;
-
-    function los(x0, y0, x1, y1) {
-      let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-      let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-      let err = dx + dy, e2;
-
-      while (true) {
-        if (!(x0 === player.x && y0 === player.y)) {
-          if (!isTransparent(x0, y0)) return false;
-        }
-        if (x0 === x1 && y0 === y1) break;
-        e2 = 2 * err;
-        if (e2 >= dy) { err += dy; x0 += sx; }
-        if (e2 <= dx) { err += dx; y0 += sy; }
-      }
-      return true;
+    if (window.FOV && typeof FOV.recomputeFOV === "function") {
+      const ctx = getCtx();
+      ctx.seen = seen;
+      ctx.visible = visible;
+      FOV.recomputeFOV(ctx);
+      // pull back arrays (replaced in module)
+      visible = ctx.visible;
+      seen = ctx.seen;
+      return;
     }
-
-    function isTransparent(x, y) {
-      if (!inBounds(x, y)) return false;
-      return map[y][x] !== TILES.WALL;
-    }
-
-    for (let y = Math.max(0, player.y - fovRadius); y <= Math.min(ROWS - 1, player.y + fovRadius); y++) {
-      for (let x = Math.max(0, player.x - fovRadius); x <= Math.min(COLS - 1, player.x + fovRadius); x++) {
-        const dx = x - player.x;
-        const dy = y - player.y;
-        if (dx*dx + dy*dy <= radiusSq && los(player.x, player.y, x, y)) {
-          visible[y][x] = true;
-          seen[y][x] = true;
-        }
-      }
-    }
-
-    // Announce newly visible enemies with a simple danger rating
-    for (const e of enemies) {
-      if (inBounds(e.x, e.y) && visible[e.y][e.x] && !e.announced) {
-        const { label, tone } = enemyThreatLabel(e);
-        log(`You spot a ${capitalize(e.type || "enemy")} Lv ${e.level || 1} (${label}).`, tone);
-        e.announced = true;
-      }
-    }
+    // Fallback: do nothing if module missing
   }
 
   // Rendering
