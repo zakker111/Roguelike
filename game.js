@@ -147,12 +147,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  /*
-   Computes total player attack:
-   - Base attack + level bonus
-   - Equipment bonuses (weapon, optionally hands)
-   - Uses fractional values (0.0–4.0 scale per item); rounded to 1 decimal for display/consistency
-  */
+  /* Total player attack (base + level + equipment), rounded to 1 decimal */
   function getPlayerAttack() {
     if (window.Player && typeof Player.getAttack === "function") {
       return Player.getAttack(player);
@@ -166,11 +161,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return round1(player.atk + bonus + levelBonus);
   }
 
-  /*
-   Computes total player defense:
-   - Sum of all equipped defensive slots (offhand, head, torso, legs, hands)
-   - Fractional values (0.0–4.0 scale per item), rounded to 1 decimal
-  */
+  /* Total player defense from equipment, rounded to 1 decimal */
   function getPlayerDefense() {
     if (window.Player && typeof Player.getDefense === "function") {
       return Player.getDefense(player);
@@ -368,10 +359,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return false;
   }
 
-  /*
-   Prepend a message to the on-screen log as a colored entry.
-   Types: info (default), crit, block, death, good, warn
-  */
+  /* Log a message to the UI (types: info, crit, block, death, good, warn) */
   function log(msg, type = "info") {
     if (window.Logger && typeof Logger.log === "function") {
       Logger.log(msg, type);
@@ -391,14 +379,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   }
 
   // Map generation: random rooms + corridors
-  /*
-   Generates a new floor:
-   - clears visibility, enemies, corpses and resets death flag
-   - carves non-overlapping rooms, connects them with corridors
-   - places player in first room; stairs (>) in last room
-   - spawns enemies with depth-scaled stats/types
-   - recomputes FOV and updates UI/log
-  */
+  /* Generate a new floor, reset visibility and repopulate enemies/corpses */
   function generateLevel(depth = 1) {
     if (window.Dungeon && typeof Dungeon.generateLevel === "function") {
       const ctx = getCtx();
@@ -474,11 +455,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   }
 
   // Field of view using simple ray casting within radius
-  /*
-   Recomputes visibility around the player using Bresenham-style line of sight.
-   - Only non-wall tiles are transparent
-   - Stores both current visibility and "seen" memory for fog-of-war
-  */
+  /* Recompute visibility around the player and update explored memory */
   function recomputeFOV() {
     if (window.FOV && typeof FOV.recomputeFOV === "function") {
       const ctx = getCtx();
@@ -515,12 +492,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     needsDraw = false;
   }
 
-  /*
-   Input handling (delegated to input.js):
-   We initialize the Input module with callbacks for movement, waiting, looting,
-   descending, inventory toggling, FOV adjustments, and restart. If Input isn't
-   available, we can later add a minimal fallback.
-  */
+  /* Input wiring (delegated to input.js) */
 
   function descendIfPossible() {
     hideLootPanel();
@@ -555,12 +527,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  /*
-   Attempts to move the player by (dx,dy):
-   - If an enemy occupies the destination, perform a melee attack using total attack
-   - Otherwise, move into walkable tiles (floors/doors) if not occupied
-   - Any action consumes a turn (enemies then act, FOV updates, redraw)
-  */
+  /* Try to move the player or attack if an enemy is in the target tile */
   function tryMovePlayer(dx, dy) {
     if (isDead) return;
     const nx = player.x + dx;
@@ -623,15 +590,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  /*
-   Loot generation from a defeated enemy:
-   - Always: some gold (scaled by enemy XP) and a chance for a small potion
-   - Sometimes: a piece of equipment; stronger enemies have higher chances and tiers
-   Equipment stats use a 0.0–4.0 scale (floats with 1 decimal) and are tier-biased:
-   - Tier 1 (rusty): weaker ranges
-   - Tier 2 (iron): mid ranges
-   - Tier 3 (steel): strong ranges
-  */
+  /* Generate loot: gold, potions, and sometimes equipment (tier-biased) */
   function generateLoot(source) {
     const drops = [];
     // base coins scale slightly with source strength
@@ -731,12 +690,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  /*
-   Loots a corpse on the current tile:
-   - Transfers gold to a stack, potions auto-consume, equipment auto-equips if better
-   - Shows a loot panel listing what was obtained
-   - Consumes a turn
-  */
+  /* Loot a corpse on the current tile; consuming a turn */
   function lootCorpse() {
     if (isDead) return;
 
@@ -825,7 +779,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     requestDraw();
   }
 
-  // Inventory & Equipment panel
+  /* Inventory & Equipment panel */
   function renderInventoryPanel() {
     if (window.UI && typeof UI.renderInventory === "function") {
       // Keep totals in sync
@@ -1103,12 +1057,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return enemies.some(e => e.x === x && e.y === y);
   }
 
-  /*
-   One full game turn after a player action:
-   - Enemies take their actions
-   - Recompute field of view
-   - Update UI and redraw the scene
-  */
+  /* One full game turn: enemies act, FOV updates, UI redraw */
   function turn() {
     enemiesAct();
     recomputeFOV();
@@ -1117,11 +1066,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   }
 
   // Game loop (only needed for animations; we redraw on each turn anyway)
-  /*
-   Lightweight animation loop:
-   - Keeps the canvas fresh and responsive to hover effects or future animations
-   - Core redraws happen during turns; this is a safety net
-  */
+  /* Lightweight animation loop to keep canvas responsive */
   function loop() {
     draw();
     requestAnimationFrame(loop);

@@ -19,8 +19,7 @@ Notes:
     3: "steel",
   };
 
-  // Registry for item types: enemy-like flat map keyed by item key
-  // Each entry includes its slot and stat ranges
+  // Item types registry (flat, enemy-like), keyed by item key
   const TYPES = {
     sword: { key: "sword", slot: "hand", twoHanded: false,
       weight: 0.35,
@@ -98,7 +97,7 @@ Notes:
     return entries[0].value ?? entries[0];
   }
 
-  // Decay: lower tiers start with more wear
+  // Decay: lower tiers start with more wear (percent)
   function initialDecay(tier, rng = Math.random) {
     if (tier <= 1) return randFloat(rng, 10, 35, 0);
     if (tier === 2) return randFloat(rng, 5, 20, 0);
@@ -169,7 +168,7 @@ Notes:
     return makeItemFromType(def, tier, r);
   }
 
-  // Enemy-like helpers for symmetry ----------------------------
+  // Helpers mirroring Enemies API
 
   function listTypes() {
     return Object.keys(TYPES);
@@ -259,9 +258,7 @@ Notes:
     return item;
   }
 
-  // Create an item directly from a minimal config (slot, name, tier, atk/def)
-  // Example:
-  //   Items.createNamed({ slot: "hand", tier: 3, name: "Excalibur", atk: 4.0, twoHanded: false }, rng)
+  // Create an item from a minimal config (slot, tier, name, atk/def, twoHanded, decay?)
   function createNamed(config, rng) {
     if (!config || typeof config !== "object") return null;
     const { slot, tier, name } = config;
