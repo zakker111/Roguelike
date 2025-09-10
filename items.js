@@ -278,21 +278,6 @@ Notes:
     return item;
   }
 
-  // Examples:
-  // - Add a new type (at runtime, after Items loads):
-  //   Items.addType("hand", {
-  //     key: "rapier",
-  //     weight: (tier) => tier >= 2 ? 0.14 : 0.09,
-  //     name: (mat) => `${mat} rapier`,
-  //     atkRange: { 1:[0.8,2.6], 2:[1.6,3.6], 3:[2.6,4.0] }
-  //   });
-  //
-  // - Create a registered item:
-  //   const it = Items.createByKey("rapier", 3, rng, { name: "Master's Rapier" });
-  //
-  // - Create a one-off named item:
-  //   const excalibur = Items.createNamed({ slot:"hand", tier:3, name:"Excalibur", atk:4.0 });
-
   window.Items = {
     // creation
     initialDecay,
