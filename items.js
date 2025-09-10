@@ -211,6 +211,30 @@ Type schema (for addType):
     return makeItemFromType(def, tier, r);
   }
 
+  // Enemy-like helpers for symmetry ----------------------------
+
+  function listTypes() {
+    return Object.keys(TYPES);
+  }
+
+  function getTypeDef(key) {
+    return TYPES[key] || null;
+  }
+
+  function typesBySlot(slot) {
+    return Object.values(TYPES).filter(t => t.slot === slot);
+  }
+
+  function pickType(slot, tier, rng) {
+    const defs = typesBySlot(slot).filter(d => (d.minTier || 1) <= tier);
+    if (defs.length === 0) return null;
+    const entries = defs.map(d => {
+      const w = typeof d.weight === "function" ? d.weight(tier) : (d.weight || 1);
+      return { value: d, w: Math.max(0, w) };
+    });
+    return pickWeighted(entries, rng || Math.random);
+  }
+
   function createEquipment(tier, rng) {
     const r = rng || Math.random;
     const slot = pickSlot(r);
@@ -323,12 +347,20 @@ Type schema (for addType):
   // --- End examples ---
 
   window.Items = {
+    // creation
     initialDecay,
     createEquipment,
     createEquipmentOfSlot,
     createByKey,
     createNamed,
+    // registry mgmt
     addType,
+    // symmetry helpers (enemy-like)
+    listTypes,
+    getTypeDef,
+    typesBySlot,
+    pickType,
+    // misc
     describe,
     MATERIALS,
     TYPES,
