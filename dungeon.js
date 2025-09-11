@@ -85,7 +85,7 @@ Exports (window.Dungeon):
         Object.assign(ctx.player, init);
       } else {
         Object.assign(ctx.player, {
-          hp: 10, maxHp: 10, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20,
+          hp: 40, maxHp: 40, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20,
           equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null }
         });
       }

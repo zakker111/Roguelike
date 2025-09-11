@@ -44,7 +44,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   let visible = []; // currently visible
   let player = (window.Player && typeof Player.createInitial === "function")
     ? Player.createInitial()
-    : { x: 0, y: 0, hp: 10, maxHp: 10, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null } };
+    : { x: 0, y: 0, hp: 40, maxHp: 40, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null } };
   let enemies = [];
   let corpses = [];
   let floor = 1;
