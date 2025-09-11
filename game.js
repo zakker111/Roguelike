@@ -914,8 +914,8 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     recomputeFOV();
     updateCamera();
     updateUI();
-    requestDraw();_code
- new </}
+    requestDraw();
+  }
 
   // Game loop (only needed for animations; we redraw on each turn anyway)
   /* Lightweight animation loop to keep canvas responsive */
