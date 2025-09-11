@@ -98,17 +98,29 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       },
       // module callbacks
       recomputeFOV: () => recomputeFOV(),
-      // enemy factory
-      enemyFactory: (x, y, depth) => {
-        if (window.Enemies && Enemies.createEnemyAt) {
-          return Enemies.createEnemyAt(x, y, depth, rng);
+    };
+
+    // Prefer constructing via Ctx to attach module handles for consumers
+    if (window.Ctx && typeof Ctx.create === "function") {
+      const ctx = Ctx.create(base);
+      // enemy factory prefers ctx.Enemies handle, falling back gracefully
+      ctx.enemyFactory = (x, y, depth) => {
+        const EM = ctx.Enemies || (typeof window !== "undefined" ? window.Enemies : null);
+        if (EM && typeof EM.createEnemyAt === "function") {
+          return EM.createEnemyAt(x, y, depth, rng);
         }
         return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
-      }
-    };
-    if (window.Ctx && typeof Ctx.create === "function") {
-      return Ctx.create(base);
+      };
+      return ctx;
     }
+
+    // Fallback without Ctx: include a local enemyFactory using window.Enemies if present
+    base.enemyFactory = (x, y, depth) => {
+      if (typeof window !== "undefined" && window.Enemies && typeof window.Enemies.createEnemyAt === "function") {
+        return window.Enemies.createEnemyAt(x, y, depth, rng);
+      }
+      return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
+    };
     return base;
   }
 
