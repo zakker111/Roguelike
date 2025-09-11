@@ -18,7 +18,7 @@ Exports (window.Dungeon):
     ctx.corpses = [];
     ctx.isDead = false;
 
-    // Carve rooms
+    
     const rooms = [];
     const roomAttempts = 80;
     for (let i = 0; i < roomAttempts; i++) {
@@ -32,7 +32,7 @@ Exports (window.Dungeon):
         carveRoom(ctx.map, TILES, rect);
       }
     }
-    // Fallback: ensure at least one room exists
+    
     if (rooms.length === 0) {
       const w = Math.min(9, Math.max(4, Math.floor(rCols / 5) || 6));
       const h = Math.min(7, Math.max(3, Math.floor(rRows / 5) || 4));
@@ -44,7 +44,7 @@ Exports (window.Dungeon):
     }
     rooms.sort((a, b) => a.x - b.x);
 
-    // Connect with corridors in a primary chain
+    
     for (let i = 1; i < rooms.length; i++) {
       const a = center(rooms[i - 1]);
       const b = center(rooms[i]);
@@ -57,7 +57,7 @@ Exports (window.Dungeon):
       }
     }
 
-    // Add a few extra connections to create loops/spurs
+    
     const extra = Math.max(0, Math.floor(rooms.length * 0.3));
     for (let n = 0; n < extra; n++) {
       const i = ctx.randInt(0, rooms.length - 1);
@@ -74,11 +74,11 @@ Exports (window.Dungeon):
       }
     }
 
-    // Place player at first room center
+    
     const start = center(rooms[0] || { x: 2, y: 2, w: 1, h: 1 });
     ctx.startRoomRect = rooms[0] || { x: start.x, y: start.y, w: 1, h: 1 };
 
-    // Reset player at floor 1 using Player.resetFromDefaults (or fallback)
+    
     if (depth === 1) {
       const PlayerMod = (ctx.Player || (typeof window !== "undefined" ? window.Player : null));
       if (PlayerMod && typeof PlayerMod.resetFromDefaults === "function") {
@@ -95,24 +95,24 @@ Exports (window.Dungeon):
       ctx.player.x = start.x;
       ctx.player.y = start.y;
 
-      // Place a starter chest in the spawn room (once)
+      
       const DI = (ctx.DungeonItems || (typeof window !== "undefined" ? window.DungeonItems : null));
       if (DI && typeof DI.placeChestInStartRoom === "function") {
         DI.placeChestInStartRoom(ctx);
       }
     } else {
-      // For subsequent floors, keep current stats, just move player to start
+      
       player.x = start.x;
       player.y = start.y;
     }
 
-    // Place staircase (prefer STAIRS tile if available), ensure not in the start room when possible
+    
     let endRoomIndex = rooms.length - 1;
     if (rooms.length > 1 && ctx.startRoomRect) {
       const sc = center(ctx.startRoomRect);
       const endC = center(rooms[endRoomIndex]);
       if (inRect(endC.x, endC.y, ctx.startRoomRect)) {
-        // pick farthest room from start that isn't the start room itself
+        
         let best = endRoomIndex;
         let bestD = -1;
         for (let k = 0; k < rooms.length; k++) {
@@ -128,7 +128,7 @@ Exports (window.Dungeon):
     const STAIRS = typeof TILES.STAIRS === "number" ? TILES.STAIRS : TILES.DOOR;
     ctx.map[end.y][end.x] = STAIRS;
 
-    // Spawn enemies
+    
     const enemyCount = 8 + Math.floor(depth * 1.5);
     const makeEnemy = ctx.enemyFactory || defaultEnemyFactory;
     for (let i = 0; i < enemyCount; i++) {

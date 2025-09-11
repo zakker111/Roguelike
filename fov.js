@@ -78,7 +78,7 @@ Exports (window.FOV):
       }
     }
 
-    // Always see your own tile
+    
     if (ctx.inBounds(player.x, player.y)) {
       visible[player.y][player.x] = true;
       ctx.seen[player.y][player.x] = true;
