@@ -7,7 +7,18 @@ Exports (window.FOV):
 (function () {
   function recomputeFOV(ctx) {
     const { ROWS, COLS, fovRadius, player, map, TILES } = ctx;
-    const visible = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+
+    // Reuse the visible array if shape matches to avoid allocations each turn
+    let visible = ctx.visible;
+    const shapeOk = Array.isArray(visible) && visible.length === ROWS && visible[0]?.length === COLS;
+    if (!shapeOk) {
+      visible = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+    } else {
+      for (let y = 0; y < ROWS; y++) {
+        visible[y].fill(false);
+      }
+    }
+
     const radius = Math.max(1, fovRadius);
 
     function isTransparent(x, y) {

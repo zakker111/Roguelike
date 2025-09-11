@@ -287,7 +287,9 @@ Notes:
   function createNamed(config, rng) {
     if (!config || typeof config !== "object") return null;
     const { slot, tier, name } = config;
-    if (!slot || !TYPES[slot]) return null;
+    // Validate against allowed equipment slots instead of the TYPES registry keys
+    const VALID_SLOTS = new Set(["hand","head","torso","legs","hands"]);
+    if (!slot || !VALID_SLOTS.has(slot)) return null;
     const t = Math.max(1, Math.min(3, tier || 1));
     const r = rng || Math.random;
     const item = {
