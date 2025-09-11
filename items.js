@@ -13,6 +13,7 @@ Notes:
 (function () {
   const round1 = (n) => Math.round(n * 10) / 10;
 
+  /* MATERIALS: map numeric tier (1..3) to material name used by item name builders */
   const MATERIALS = {
     1: "rusty",
     2: "iron",
@@ -96,7 +97,8 @@ Notes:
     },
   };
 
-  // Slot distribution weights when rolling a random equipment piece
+  // SLOT_WEIGHTS: relative chance to pick each equipment slot when generating a random item.
+  // Tuning these changes overall drop mix without touching per-type weights inside a slot.
   const SLOT_WEIGHTS = {
     hand: 0.38,
     head: 0.14,
@@ -110,6 +112,9 @@ Notes:
     const p = Math.pow(10, decimals);
     return Math.round(v * p) / p;
   }
+  // Pick a value from a list of weighted entries.
+  // Accepts objects of shape { value, w } or any object with a 'weight' property.
+  // - If total weight <= 0, returns the first entry as a fallback (or its .value if present).
   function pickWeighted(entries, rng) {
     const total = entries.reduce((s, e) => s + (e.w || e.weight || 0), 0);
     if (total <= 0) return entries[0]?.value ?? entries[0] ?? null;
@@ -122,7 +127,8 @@ Notes:
     return entries[0].value ?? entries[0];
   }
 
-  // Decay: lower tiers start with more wear (percent)
+  // initialDecay: starting wear in percent for generated items.
+  // Lower tiers begin more worn; higher tiers start closer to pristine.
   function initialDecay(tier, rng = Math.random) {
     if (tier <= 1) return randFloat(rng, 10, 35, 0);
     if (tier === 2) return randFloat(rng, 5, 20, 0);
@@ -140,6 +146,11 @@ Notes:
     return randFloat(rng, r[0], r[1], decimals);
   }
 
+  // Build a concrete item instance from a type definition at the given tier.
+  // - Rolls stats from the tiered ranges (atkRange/defRange)
+  // - Applies optional atkBonus biases per tier (e.g., axes lean higher)
+  // - Applies optional small hand attack bonus for "hands" slot (gloves)
+  // - Carries 'twoHanded' flag through for hand items that occupy both hands
   function makeItemFromType(def, tier, rng) {
     const material = MATERIALS[tier] || "iron";
     const name = typeof def.name === "function" ? def.name(material, tier) : (def.name || (material + " item"));
@@ -186,6 +197,8 @@ Notes:
     return pickWeighted(entries, rng);
   }
 
+  // Create a random equipment piece for a specific slot at the given tier.
+  // Respects per-type weights within that slot and minTier constraints.
   function createEquipmentOfSlot(slot, tier, rng) {
     const r = rng || Math.random;
     const def = pickTypeForSlot(slot, tier, r);
@@ -217,6 +230,12 @@ Notes:
     return pickWeighted(entries, rng || Math.random);
   }
 
+  // Create a random equipment piece at the given tier.
+  // Steps:
+  // 1) Pick a target slot using SLOT_WEIGHTS
+  // 2) Pick a type within that slot based on per-type weights
+  // 3) Roll stats and return the item
+  // Includes robust fallbacks if the slot has no valid types at this tier.
   function createEquipment(tier, rng) {
     const r = rng || Math.random;
     const slot = pickSlot(r);
@@ -283,7 +302,14 @@ Notes:
     return item;
   }
 
-  // Create an item from a minimal config (slot, tier, name, atk/def, twoHanded, decay?)
+  // Create a deterministic, named equipment item from a minimal config.
+  // Useful for scripted rewards, shops, or testing without touching the registry.
+  // - slot: one of "hand","head","torso","legs","hands"
+  // - tier: 1..3 (clamped); influences default material/decay and stat expectations
+  // - name: optional custom display name
+  // - atk/def: optional numeric stats (rounded to 1 decimal)
+  // - twoHanded: if true and slot is "hand", the item will occupy left+right hands
+  // - decay: optional starting wear percent; if omitted, derived from tier
   function createNamed(config, rng) {
     if (!config || typeof config !== "object") return null;
     const { slot, tier, name } = config;
