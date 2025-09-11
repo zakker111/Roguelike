@@ -18,7 +18,7 @@ Exports (window.Player):
   const defaults = {
     x: 0,
     y: 0,
-    hp: 40,
+    hp: 20,
     maxHp: 40,
     atk: 1,
     level: 1,
