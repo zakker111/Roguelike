@@ -4,7 +4,7 @@ instead of importing each other via window.*.
 
 Exports (window.Ctx):
 - create(base): returns a normalized ctx with consistent shape and optional module handles attached
-- attachModules(ctx): attaches discovered module handles to the ctx (Enemies, Items, Player, UI, Loot, Dungeon, FOV, AI)
+- attachModules(ctx): attaches discovered module handles to the ctx (Enemies, Items, Player, UI, Logger, Loot, Dungeon, DungeonItems, FOV, AI, Input, Render)
 Notes:
 - This is a thin layer. It does not mutate the provided base, it returns a new object.
 - Modules should read from ctx only; no direct window.* lookups are required if ctx is used consistently.
@@ -27,8 +27,11 @@ Notes:
       if (window.Logger) ctx.Logger = window.Logger;
       if (window.Loot) ctx.Loot = window.Loot;
       if (window.Dungeon) ctx.Dungeon = window.Dungeon;
+      if (window.DungeonItems) ctx.DungeonItems = window.DungeonItems;
       if (window.FOV) ctx.FOV = window.FOV;
       if (window.AI) ctx.AI = window.AI;
+      if (window.Input) ctx.Input = window.Input;
+      if (window.Render) ctx.Render = window.Render;
     }
     return ctx;
   }
