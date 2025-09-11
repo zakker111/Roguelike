@@ -337,7 +337,12 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   */
   function equipIfBetter(item) {
     if (window.Player && typeof Player.equipIfBetter === "function") {
-      return Player.equipIfBetter(player, item, { log, updateUI });
+      return Player.equipIfBetter(player, item, {
+        log,
+        updateUI,
+        renderInventory: () => renderInventoryPanel(),
+        describeItem: (it) => describeItem(it),
+      });
     }
     if (!item || item.kind !== "equip") return false;
     const slot = item.slot;
@@ -354,6 +359,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       const statStr = parts.join(", ");
       log(`You equip ${item.name} (${slot}${statStr ? ", " + statStr : ""}).`);
       updateUI();
+      renderInventoryPanel();
       return true;
     }
     return false;
