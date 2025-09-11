@@ -5,8 +5,13 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
 (() => {
   // Constants
   const TILE = 32;
-  const COLS = 30; // viewport width in tiles
-  const ROWS = 20; // viewport height in tiles
+  // Viewport dimensions (tiles visible on screen)
+  const COLS = 30;
+  const ROWS = 20;
+  // World/map dimensions (can be larger than the viewport)
+  const MAP_COLS = 60;
+  const MAP_ROWS = 40;
+
   const FOV_DEFAULT = 8;
   let fovRadius = FOV_DEFAULT;
 
@@ -66,6 +71,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     const base = {
       // dims and enums
       ROWS, COLS, TILES,
+      MAP_ROWS, MAP_COLS,
       // state
       player, map, seen, visible, enemies, corpses,
       startRoomRect,
@@ -467,7 +473,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       return;
     }
     // Fallback simple level if module missing
-    map = Array.from({ length: ROWS }, () => Array(COLS).fill(TILES.FLOOR));
+    map = Array.from({ length: MAP_ROWS }, () => Array(MAP_COLS).fill(TILES.FLOOR));
     enemies = [];
     corpses = [];
     recomputeFOV();
@@ -477,7 +483,9 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   }
 
   function inBounds(x, y) {
-    return x >= 0 && y >= 0 && x < COLS && y < ROWS;
+    const mh = map.length || MAP_ROWS;
+    const mw = map[0] ? map[0].length : MAP_COLS;
+    return x >= 0 && y >= 0 && x < mw && y < mh;
   }
 
   function isWalkable(x, y) {

@@ -6,12 +6,14 @@ Exports (window.Dungeon):
 */
 (function () {
   function generateLevel(ctx, depth) {
-    const { ROWS, COLS, TILES, player } = ctx;
+    const { ROWS, COLS, MAP_ROWS, MAP_COLS, TILES, player } = ctx;
+    const rRows = (typeof MAP_ROWS === "number" && MAP_ROWS > 0) ? MAP_ROWS : ROWS;
+    const rCols = (typeof MAP_COLS === "number" && MAP_COLS > 0) ? MAP_COLS : COLS;
 
     // Init arrays/state
-    ctx.map = Array.from({ length: ROWS }, () => Array(COLS).fill(TILES.WALL));
-    ctx.seen = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
-    ctx.visible = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+    ctx.map = Array.from({ length: rRows }, () => Array(rCols).fill(TILES.WALL));
+    ctx.seen = Array.from({ length: rRows }, () => Array(rCols).fill(false));
+    ctx.visible = Array.from({ length: rRows }, () => Array(rCols).fill(false));
     ctx.enemies = [];
     ctx.corpses = [];
     ctx.isDead = false;
@@ -22,8 +24,8 @@ Exports (window.Dungeon):
     for (let i = 0; i < roomAttempts; i++) {
       const w = ctx.randInt(4, 9);
       const h = ctx.randInt(3, 7);
-      const x = ctx.randInt(1, COLS - w - 2);
-      const y = ctx.randInt(1, ROWS - h - 2);
+      const x = ctx.randInt(1, rCols - w - 2);
+      const y = ctx.randInt(1, rRows - h - 2);
       const rect = { x, y, w, h };
       if (rooms.every(r => !intersect(rect, r))) {
         rooms.push(rect);
@@ -32,10 +34,10 @@ Exports (window.Dungeon):
     }
     // Fallback: ensure at least one room exists
     if (rooms.length === 0) {
-      const w = Math.min(9, Math.max(4, Math.floor(COLS / 5) || 6));
-      const h = Math.min(7, Math.max(3, Math.floor(ROWS / 5) || 4));
-      const x = Math.max(1, Math.min(COLS - w - 2, Math.floor(COLS / 2 - w / 2)));
-      const y = Math.max(1, Math.min(ROWS - h - 2, Math.floor(ROWS / 2 - h / 2)));
+      const w = Math.min(9, Math.max(4, Math.floor(rCols / 5) || 6));
+      const h = Math.min(7, Math.max(3, Math.floor(rRows / 5) || 4));
+      const x = Math.max(1, Math.min(rCols - w - 2, Math.floor(rCols / 2 - w / 2)));
+      const y = Math.max(1, Math.min(rRows - h - 2, Math.floor(rRows / 2 - h / 2)));
       const rect = { x, y, w, h };
       rooms.push(rect);
       carveRoom(ctx.map, TILES, rect);
@@ -122,7 +124,7 @@ Exports (window.Dungeon):
         endRoomIndex = best;
       }
     }
-    const end = center(rooms[endRoomIndex] || { x: COLS - 3, y: ROWS - 3, w: 1, h: 1 });
+    const end = center(rooms[endRoomIndex] || { x: rCols - 3, y: rRows - 3, w: 1, h: 1 });
     const STAIRS = typeof TILES.STAIRS === "number" ? TILES.STAIRS : TILES.DOOR;
     ctx.map[end.y][end.x] = STAIRS;
 
@@ -174,17 +176,19 @@ Exports (window.Dungeon):
   }
 
   function randomFloor(ctx, rooms) {
-    const { COLS, ROWS, TILES, player } = ctx;
+    const { MAP_COLS, MAP_ROWS, COLS, ROWS, TILES, player } = ctx;
+    const rCols = (typeof MAP_COLS === "number" && MAP_COLS > 0) ? MAP_COLS : COLS;
+    const rRows = (typeof MAP_ROWS === "number" && MAP_ROWS > 0) ? MAP_ROWS : ROWS;
     let x, y;
     let tries = 0;
     do {
-      x = ctx.randInt(1, COLS - 2);
-      y = ctx.randInt(1, ROWS - 2);
+      x = ctx.randInt(1, rCols - 2);
+      y = ctx.randInt(1, rRows - 2);
       tries++;
       if (tries > 500) {
         // Scan for any suitable floor tile as a safe fallback
-        for (let yy = 1; yy < ROWS - 1; yy++) {
-          for (let xx = 1; xx < COLS - 1; xx++) {
+        for (let yy = 1; yy < rRows - 1; yy++) {
+          for (let xx = 1; xx < rCols - 1; xx++) {
             if (!ctx.inBounds(xx, yy)) continue;
             if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
             if ((xx === player.x && yy === player.y)) continue;
@@ -204,8 +208,8 @@ Exports (window.Dungeon):
           return { x: xx, y: yy };
         }
         // Final fallback: any floor tile that's not the player's tile
-        for (let yy = 1; yy < ROWS - 1; yy++) {
-          for (let xx = 1; xx < COLS - 1; xx++) {
+        for (let yy = 1; yy < rRows - 1; yy++) {
+          for (let xx = 1; xx < rCols - 1; xx++) {
             if (!ctx.inBounds(xx, yy)) continue;
             if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
             if ((xx === player.x && yy === player.y)) continue;
@@ -213,7 +217,7 @@ Exports (window.Dungeon):
           }
         }
         // Give up: place one step to the right if in bounds
-        return { x: Math.min(COLS - 2, Math.max(1, player.x + 1)), y: Math.min(ROWS - 2, Math.max(1, player.y)) };
+        return { x: Math.min(rCols - 2, Math.max(1, player.x + 1)), y: Math.min(rRows - 2, Math.max(1, player.y)) };
       }
     } while (!(ctx.inBounds(x, y) && ctx.map[y][x] === TILES.FLOOR) ||
              (x === player.x && y === player.y) ||
