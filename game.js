@@ -93,7 +93,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       onPlayerDied: () => {
         isDead = true;
         updateUI();
-        log("You die. Press R or Enter to restart.", "death");
+        log("You die. Press R or Enter to restart.", "bad");
         showGameOver();
       },
       // module callbacks
@@ -165,7 +165,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     const before = it.decay || 0;
     it.decay = Math.min(100, round1(before + amount));
     if (it.decay >= 100) {
-      log(`${capitalize(it.name)} breaks and is destroyed.`, "death");
+      log(`${capitalize(it.name)} breaks and is destroyed.`, "bad");
       player.equipment[slot] = null;
       updateUI();
       rerenderInventoryIfOpen();
@@ -601,7 +601,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       }
 
       if (enemy.hp <= 0) {
-        log(`${capitalize(enemy.type || "enemy")} dies.`, "death");
+        log(`${capitalize(enemy.type || "enemy")} dies.`, "bad");
         // leave corpse with loot
         const loot = generateLoot(enemy);
         corpses.push({ x: enemy.x, y: enemy.y, loot, looted: loot.length === 0 });

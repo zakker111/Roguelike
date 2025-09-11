@@ -161,7 +161,7 @@ Exports (window.Player):
     const before = it.decay || 0;
     it.decay = Math.min(100, round1(before + amount));
     if (it.decay >= 100) {
-      if (hooks.log) hooks.log(`${(it.name || "Item")[0].toUpperCase()}${(it.name || "Item").slice(1)} breaks and is destroyed.`, "death");
+      if (hooks.log) hooks.log(`${(it.name || "Item")[0].toUpperCase()}${(it.name || "Item").slice(1)} breaks and is destroyed.`, "bad");
       player.equipment[slot] = null;
       if (hooks.updateUI) hooks.updateUI();
       if (hooks.onInventoryChange) hooks.onInventoryChange();

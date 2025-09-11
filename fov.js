@@ -104,12 +104,12 @@ Exports (window.FOV):
       const maxSolo = 2;
       const toSolo = newly.slice(0, maxSolo);
       for (const e of toSolo) {
-        const { label, tone } = ctx.enemyThreatLabel(e);
-        ctx.log(`You spot a ${capitalize(e.type || "enemy")} Lv ${e.level || 1} (${label}).`, tone);
+        const { label } = ctx.enemyThreatLabel(e);
+        ctx.log(`You spot a ${capitalize(e.type || "enemy")} Lv ${e.level || 1} (${label}).`, "notice");
       }
       const rest = newly.length - toSolo.length;
       if (rest > 0) {
-        ctx.log(`You also spot ${rest} more ${rest === 1 ? "enemy" : "enemies"}.`, "info");
+        ctx.log(`You also spot ${rest} more ${rest === 1 ? "enemy" : "enemies"}.`, "notice");
       }
       // Mark all newly seen enemies as announced
       for (const e of newly) e.announced = true;
