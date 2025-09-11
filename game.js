@@ -643,21 +643,22 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         return Items.createEquipment(tier, rng);
       }
       const material = tier === 1 ? "rusty" : tier === 2 ? "iron" : "steel";
-      const categories = ["weapon", "offhand", "head", "torso", "legs", "hands"];
+      const categories = ["hand", "head", "torso", "legs", "hands"];
       const cat = categories[randInt(0, categories.length - 1)];
 
-      if (cat === "weapon") {
-        const w = ["sword", "axe", "bow"][randInt(0, 2)];
-        const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
-        let atk = randFloat(ranges[0], ranges[1], 1);
-        if (w === "axe") atk = Math.min(4.0, round1(atk + randFloat(0.1, 0.5, 1)));
-        return { kind: "equip", slot: "hand", name: `${material} ${w}`, atk, tier, decay: initialDecay(tier) };
-      }
-
-      if (cat === "offhand") {
-        const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
-        const def = randFloat(ranges[0], ranges[1], 1);
-        return { kind: "equip", slot: "hand", name: `${material} shield`, def, tier, decay: initialDecay(tier) };
+      if (cat === "hand") {
+        // 65% chance to be a weapon (sword/axe/bow), 35% a shield
+        if (rng() < 0.65) {
+          const w = ["sword", "axe", "bow"][randInt(0, 2)];
+          const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
+          let atk = randFloat(ranges[0], ranges[1], 1);
+          if (w === "axe") atk = Math.min(4.0, round1(atk + randFloat(0.1, 0.5, 1)));
+          return { kind: "equip", slot: "hand", name: `${material} ${w}`, atk, tier, decay: initialDecay(tier) };
+        } else {
+          const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
+          const def = randFloat(ranges[0], ranges[1], 1);
+          return { kind: "equip", slot: "hand", name: `${material} shield`, def, tier, decay: initialDecay(tier) };
+        }
       }
 
       if (cat === "head") {
