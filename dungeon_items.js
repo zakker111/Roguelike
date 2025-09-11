@@ -19,26 +19,34 @@ Exports (window.DungeonItems):
     const slots = ["head", "torso", "legs", "hands"];
     const i = Math.floor(rng() * slots.length);
     const slot = slots[i];
+    let item;
     if (window.Items && typeof Items.createEquipmentOfSlot === "function") {
-      return Items.createEquipmentOfSlot(slot, tier, rng);
+      item = Items.createEquipmentOfSlot(slot, tier, rng);
+    } else {
+      // Fallback simple armor
+      const nameBy = {
+        head: "helmet",
+        torso: "leather armor",
+        legs: "leg armor",
+        hands: "gloves",
+      };
+      const name = nameBy[slot] || "armor";
+      item = { kind: "equip", slot, name: `iron ${name}`, def: 1.0, tier, decay: 10 };
     }
-    // Fallback simple armor
-    const nameBy = {
-      head: "helmet",
-      torso: "leather armor",
-      legs: "leg armor",
-      hands: "gloves",
-    };
-    const name = nameBy[slot] || "armor";
-    return { kind: "equip", slot, name: `iron ${name}`, def: 1.0, tier, decay: 10 };
+    if (item && item.kind === "equip") item.decay = 99;
+    return item;
   }
 
   function pickWeapon(tier, rng) {
+    let item;
     if (window.Items && typeof Items.createEquipmentOfSlot === "function") {
-      return Items.createEquipmentOfSlot("hand", tier, rng);
+      item = Items.createEquipmentOfSlot("hand", tier, rng);
+    } else {
+      // Fallback simple sword
+      item = { kind: "equip", slot: "hand", name: "iron sword", atk: 1.5, tier, decay: 8 };
     }
-    // Fallback simple sword
-    return { kind: "equip", slot: "hand", name: "iron sword", atk: 1.5, tier, decay: 8 };
+    if (item && item.kind === "equip") item.decay = 99;
+    return item;
   }
 
   function findSpotInStartRoom(ctx) {
