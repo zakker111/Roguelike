@@ -5,7 +5,7 @@ Exports (window.DungeonItems):
 - placeChestInStartRoom(ctx): backward compatible convenience for a starter chest
 - spawnChest(ctx, options): generic chest spawner with configurable loot/tier/position/decay
 - registerLoot(name, fn): add custom loot generators
-- lootFactories: bundled loot generator functions (potion, armor, weapon, equipment(slot), anyEquipment)
+- lootFactories: bundled loot generator functions (potion, armor, handWeapon, equipment(slot), anyEquipment)
 
 Chest representation:
 - Stored in ctx.corpses as { kind: "chest", x, y, loot, looted: false }
@@ -41,11 +41,15 @@ Chest representation:
       return setDecayIfEquip({ kind: "equip", slot, name: `iron ${nameBy[slot] || "armor"}`, def: 1.0, tier, decay: 10 }, opts.decayAll ?? 99);
     },
 
-    weapon: (ctx, opts = {}) => {
+    handWeapon: (ctx, opts = {}) => {
       const tier = opts.tier ?? 2;
       const rng = ctx.rng || Math.random;
-      if (window.Items && typeof Items.createEquipmentOfSlot === "function") {
-        return setDecayIfEquip(Items.createEquipmentOfSlot("hand", tier, rng), opts.decayAll ?? 99);
+      if (window.Items && typeof Items.createByKey === "function") {
+        const keys = ["sword", "axe", "bow"];
+        // allow two-handed at higher tiers with small chance
+        if (tier >= 2 && rng() < 0.2) keys.push("two_handed_axe");
+        const key = keys[Math.floor(rng() * keys.length)];
+        return setDecayIfEquip(Items.createByKey(key, tier, rng), opts.decayAll ?? 99);
       }
       // fallback
       return setDecayIfEquip({ kind: "equip", slot: "hand", name: "iron sword", atk: 1.5, tier, decay: 8 }, opts.decayAll ?? 99);
@@ -156,7 +160,7 @@ Chest representation:
       where: "start",
       tier: 2,
       decayAll: 99,
-      loot: ["potion", "armor", "weapon"],
+      loot: ["potion", "armor", "handWeapon"],
       announce: true,
     });
   }

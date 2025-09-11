@@ -647,7 +647,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       const cat = categories[randInt(0, categories.length - 1)];
 
       if (cat === "hand") {
-        // 65% chance to be a weapon (sword/axe/bow), 35% a shield
+        // 65% chance to be an attacking hand item (sword/axe/bow), 35% a shield
         if (rng() < 0.65) {
           const w = ["sword", "axe", "bow"][randInt(0, 2)];
           const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
