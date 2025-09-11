@@ -82,3 +82,5 @@ Milestones
 - M2: Status system (Limp/Dazed/Bleed) with basic UI hints and short durations
 - M3: Character panel (scars/events), first batch of scars with tiny modifiers
 - M4: Modularization phase 2/3; tests for combat + status tick paths
+
+make good prompt to always use JSDoc and reusable functions and modulize keep good coding practices and make simulation and review when code is changed
