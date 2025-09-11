@@ -620,17 +620,21 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
     return drops;
 
+    // Choose a potion type based on enemy type with weighted probabilities.
+    // - If Enemies.potionWeightsFor exists, use its weights (lesser/average/strong) for the source type.
+    // - Else use sensible defaults with slight bias for stronger enemies (troll/ogre -> more chance for better potions).
     function pickPotion(source) {
       const t = source?.type || "goblin";
-      let wL = 0.6, wA = 0.3, wS = 0.1;
+      let wL = 0.6, wA = 0.3, wS = 0.1; // lesser/average/strong defaults
       if (window.Enemies && Enemies.potionWeightsFor) {
         const w = Enemies.potionWeightsFor(t) || {};
         wL = typeof w.lesser === "number" ? w.lesser : wL;
         wA = typeof w.average === "number" ? w.average : wA;
         wS = typeof w.strong === "number" ? w.strong : wS;
       } else {
+        // Fallback: trolls/ogres skew toward better potions
         if (t === "troll") { wL = 0.5; wA = 0.35; wS = 0.15; }
-        if (t === "ogre") { wL = 0.4; wA = 0.35; wS = 0.25; }
+        if (t === "ogre")  { wL = 0.4; wA = 0.35; wS = 0.25; }
       }
       const r = rng();
       if (r < wL) return { name: "lesser potion (+3 HP)", kind: "potion", heal: 3 };
@@ -638,6 +642,9 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       return { name: "strong potion (+10 HP)", kind: "potion", heal: 10 };
     }
 
+    // Fallback equipment generator used only if Items.createEquipment is unavailable.
+    // - Picks a slot category and rolls stats inline.
+    // - Hand category splits into weapons (sword/axe/bow) vs shield with 65/35 split.
     function pickEquipment(tier) {
       if (window.Items && typeof Items.createEquipment === "function") {
         return Items.createEquipment(tier, rng);
@@ -647,12 +654,14 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       const cat = categories[randInt(0, categories.length - 1)];
 
       if (cat === "hand") {
-        // 65% chance to be an attacking hand item (sword/axe/bow), 35% a shield
+        // Hand items:
+        // - 65% attacking items (sword/axe/bow) with tiered attack ranges
+        // - 35% shield with tiered defense ranges
         if (rng() < 0.65) {
           const w = ["sword", "axe", "bow"][randInt(0, 2)];
           const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
           let atk = randFloat(ranges[0], ranges[1], 1);
-          if (w === "axe") atk = Math.min(4.0, round1(atk + randFloat(0.1, 0.5, 1)));
+          if (w === "axe") atk = Math.min(4.0, round1(atk + randFloat(0.1, 0.5, 1))); // axes bias higher
           return { kind: "equip", slot: "hand", name: `${material} ${w}`, atk, tier, decay: initialDecay(tier) };
         } else {
           const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
@@ -686,6 +695,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         const def = randFloat(ranges[0], ranges[1], 1);
         const name = tier >= 2 ? `${material} gauntlets` : `${material} gloves`;
         const drop = { kind: "equip", slot: "hands", name, def, tier, decay: initialDecay(tier) };
+        // Small chance for gloves to add attack at higher tiers
         if (tier >= 2 && chance(0.5)) {
           const atk = tier === 2 ? randFloat(0.1, 0.6, 1) : randFloat(0.2, 1.0, 1);
           drop.atk = atk;
@@ -693,6 +703,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         return drop;
       }
 
+      // Ultimate fallback: a hand weapon using a generalized tier scaling
       const atk = randFloat(0.8 + 0.4 * (tier - 1), 2.4 + 0.8 * (tier - 1), 1);
       return { kind: "equip", slot: "hand", name: `${material} sword`, atk, tier, decay: initialDecay(tier) };
     }
