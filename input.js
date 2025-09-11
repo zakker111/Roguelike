@@ -3,6 +3,8 @@
     // Numpad
     Numpad8: {x:0,y:-1}, Numpad2: {x:0,y:1}, Numpad4: {x:-1,y:0}, Numpad6: {x:1,y:0},
     Numpad7: {x:-1,y:-1}, Numpad9: {x:1,y:-1}, Numpad1: {x:-1,y:1}, Numpad3: {x:1,y:1},
+    // Arrows (4-directional)
+    ArrowUp: {x:0,y:-1}, ArrowDown: {x:0,y:1}, ArrowLeft: {x:-1,y:0}, ArrowRight: {x:1,y:0},
   };
 
   let _handlers = null;
@@ -31,6 +33,13 @@
         } else {
           e.preventDefault();
         }
+        return;
+      }
+
+      // loot panel gate: any key closes it
+      if (_handlers.isLootOpen && _handlers.isLootOpen()) {
+        e.preventDefault();
+        _handlers.onHideLoot && _handlers.onHideLoot();
         return;
       }
 
@@ -81,7 +90,7 @@
       }
 
       // wait
-      if (key === "Numpad5") {
+      if (key === "Numpad5" || key === "Space") {
         e.preventDefault();
         _handlers.onWait && _handlers.onWait();
         return;
