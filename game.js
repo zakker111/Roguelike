@@ -652,7 +652,13 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     if (window.UI && typeof UI.hideLoot === "function") {
       UI.hideLoot();
       requestDraw();
-    
+      return;
+    }
+    const panel = document.getElementById("loot-panel");
+    if (!panel) return;
+    panel.hidden = true;
+    requestDraw();
+  }
 
   /* Inventory & Equipment panel */
   function renderInventoryPanel() {
