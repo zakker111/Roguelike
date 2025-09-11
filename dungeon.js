@@ -78,10 +78,11 @@ Exports (window.Dungeon):
 
     // Reset player at floor 1 using Player.resetFromDefaults (or fallback)
     if (depth === 1) {
-      if (window.Player && typeof Player.resetFromDefaults === "function") {
-        Player.resetFromDefaults(ctx.player);
-      } else if (window.Player && typeof Player.createInitial === "function") {
-        const init = Player.createInitial();
+      const PlayerMod = (ctx.Player || (typeof window !== "undefined" ? window.Player : null));
+      if (PlayerMod && typeof PlayerMod.resetFromDefaults === "function") {
+        PlayerMod.resetFromDefaults(ctx.player);
+      } else if (PlayerMod && typeof PlayerMod.createInitial === "function") {
+        const init = PlayerMod.createInitial();
         Object.assign(ctx.player, init);
       } else {
         Object.assign(ctx.player, {
@@ -93,8 +94,9 @@ Exports (window.Dungeon):
       ctx.player.y = start.y;
 
       // Place a starter chest in the spawn room (once)
-      if (window.DungeonItems && typeof DungeonItems.placeChestInStartRoom === "function") {
-        DungeonItems.placeChestInStartRoom(ctx);
+      const DI = (ctx.DungeonItems || (typeof window !== "undefined" ? window.DungeonItems : null));
+      if (DI && typeof DI.placeChestInStartRoom === "function") {
+        DI.placeChestInStartRoom(ctx);
       }
     } else {
       // For subsequent floors, keep current stats, just move player to start
@@ -221,10 +223,11 @@ Exports (window.Dungeon):
   }
 
   function defaultEnemyFactory(x, y, depth, rng) {
-    if (window.Enemies && Enemies.createEnemyAt) {
-      return Enemies.createEnemyAt(x, y, depth, rng);
+    const EM = (typeof window !== "undefined" ? window.Enemies : null);
+    if (EM && EM.createEnemyAt) {
+      return EM.createEnemyAt(x, y, depth, rng);
     }
-    return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
+ 3, atk: 1, xp: 5, level: depth, announced: false };
   }
 
   window.Dungeon = { generateLevel };

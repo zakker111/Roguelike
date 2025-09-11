@@ -26,8 +26,9 @@ ctx contract (minimal):
   function pickPotion(ctx, source) {
     const t = source?.type || "goblin";
     let wL = 0.6, wA = 0.3, wS = 0.1;
-    if (window.Enemies && Enemies.potionWeightsFor) {
-      const w = Enemies.potionWeightsFor(t) || {};
+    const EM = (ctx.Enemies || (typeof window !== "undefined" ? window.Enemies : null));
+    if (EM && typeof EM.potionWeightsFor === "function") {
+      const w = EM.potionWeightsFor(t) || {};
       wL = typeof w.lesser === "number" ? w.lesser : wL;
       wA = typeof w.average === "number" ? w.average : wA;
       wS = typeof w.strong === "number" ? w.strong : wS;
@@ -116,11 +117,13 @@ ctx contract (minimal):
     }
 
     const type = source?.type || "goblin";
-    const tier = (window.Enemies && Enemies.equipTierFor) ? Enemies.equipTierFor(type) : (type === "ogre" ? 3 : (type === "troll" ? 2 : 1));
-    const equipChance = (window.Enemies && Enemies.equipChanceFor) ? Enemies.equipChanceFor(type) : (type === "ogre" ? 0.75 : (type === "troll" ? 0.55 : 0.35));
+    const EM = (ctx.Enemies || (typeof window !== "undefined" ? window.Enemies : null));
+    const tier = (EM && typeof EM.equipTierFor === "function") ? EM.equipTierFor(type) : (type === "ogre" ? 3 : (type === "troll" ? 2 : 1));
+    const equipChance = (EM && typeof EM.equipChanceFor === "function") ? EM.equipChanceFor(type) : (type === "ogre" ? 0.75 : (type === "troll" ? 0.55 : 0.35));
     if (ctx.chance(equipChance)) {
-      if (window.Items && typeof Items.createEquipment === "function") {
-        drops.push(Items.createEquipment(tier, ctx.rng));
+      const ItemsMod = (ctx.Items || (typeof window !== "undefined" ? window.Items : null));
+      if (ItemsMod && typeof ItemsMod.createEquipment === "function") {
+        drops.push(ItemsMod.createEquipment(tier, ctx.rng));
       } else {
         drops.push(fallbackEquipment(ctx, tier));
       }

@@ -60,7 +60,7 @@ Future Development TODOs (not wired to runtime; planning notes only)
   - input_bindings.js: key binds and remapping (currently in input.js)
 - Eliminate fallbacks by tightening load order and replacing with assertive delegates
 - Create a tiny utils.js (rng, clamp, round1, pickWeighted, randFloat) used by items/loot/combat
-- Add a shared ctx factory so modules do not import each other; only consume the ctx
+- DONE-Add a shared ctx factory so modules do not import each other; only consume the ctx
 
 Nice-to-haves
 - Sound hooks (optional): criticals, blocks, stairs, chest open
