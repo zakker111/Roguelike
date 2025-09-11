@@ -443,6 +443,15 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       startRoomRect = ctx.startRoomRect;
       // Now run post-gen steps in this orchestrator
       recomputeFOV();
+      // Safety: ensure player tile is marked visible after generation
+      if (inBounds(player.x, player.y) && !visible[player.y][player.x]) {
+        try { log("FOV sanity check: player tile not visible after gen; recomputing.", "warn"); } catch (_) {}
+        recomputeFOV();
+        if (inBounds(player.x, player.y)) {
+          visible[player.y][player.x] = true;
+          seen[player.y][player.x] = true;
+        }
+      }
       updateUI();
       log(`You descend to floor ${depth}.`);
       requestDraw();
