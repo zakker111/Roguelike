@@ -534,24 +534,6 @@
     }
     // Fallback: do nothing if module missing
   }
-</old_code>
-<new_code>
-      FOV.recomputeFOV(ctx);
-      // pull back arrays (replaced in module)
-      visible = ctx.visible;
-      seen = ctx.seen;
-      return;
-    }
-    // Fallback: do nothing if module missing
-  }
-</old_code>
-<new_code>
-      visible = ctx.visible;
-      seen = ctx.seen;
-      return;
-    }
-    // Fallback: do nothing if module missing
-  }
 
   
   function updateCamera() {
