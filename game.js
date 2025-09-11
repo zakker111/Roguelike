@@ -650,13 +650,13 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
         let atk = randFloat(ranges[0], ranges[1], 1);
         if (w === "axe") atk = Math.min(4.0, round1(atk + randFloat(0.1, 0.5, 1)));
-        return { kind: "equip", slot: "weapon", name: `${material} ${w}`, atk, tier, decay: initialDecay(tier) };
+        return { kind: "equip", slot: "hand", name: `${material} ${w}`, atk, tier, decay: initialDecay(tier) };
       }
 
       if (cat === "offhand") {
         const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
         const def = randFloat(ranges[0], ranges[1], 1);
-        return { kind: "equip", slot: "offhand", name: `${material} shield`, def, tier, decay: initialDecay(tier) };
+        return { kind: "equip", slot: "hand", name: `${material} shield`, def, tier, decay: initialDecay(tier) };
       }
 
       if (cat === "head") {
@@ -692,7 +692,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       }
 
       const atk = randFloat(0.8 + 0.4 * (tier - 1), 2.4 + 0.8 * (tier - 1), 1);
-      return { kind: "equip", slot: "weapon", name: `${material} sword`, atk, tier, decay: initialDecay(tier) };
+      return { kind: "equip", slot: "hand", name: `${material} sword`, atk, tier, decay: initialDecay(tier) };
     }
   }
 
