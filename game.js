@@ -53,9 +53,9 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   let isDead = false;
   let startRoomRect = null;
 
-  // Build a lightweight context object for modules
+  // Build a lightweight context object for modules (centralized via Ctx.create if available)
   function getCtx() {
-    return {
+    const base = {
       // dims and enums
       ROWS, COLS, TILES,
       // state
@@ -106,6 +106,10 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
       }
     };
+    if (window.Ctx && typeof Ctx.create === "function") {
+      return Ctx.create(base);
+    }
+    return base;
   }
 
   // Utils
