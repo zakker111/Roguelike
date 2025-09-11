@@ -1,19 +1,19 @@
 
 
 (() => {
-  // Constants
+  
   const TILE = 32;
-  // Viewport dimensions (tiles visible on screen)
+  
   const COLS = 30;
   const ROWS = 20;
-  // World/map dimensions (can be larger than the viewport)
+  
   const MAP_COLS = 60;
   const MAP_ROWS = 40;
 
   const FOV_DEFAULT = 8;
   let fovRadius = FOV_DEFAULT;
 
-  // Camera (pixel-based top-left of the viewport)
+  
   const camera = {
     x: 0,
     y: 0,
@@ -21,7 +21,7 @@
     height: ROWS * TILE,
   };
 
-  // Tile enums
+  
   const TILES = {
     WALL: 0,
     FLOOR: 1,
@@ -45,14 +45,14 @@
     dim: "rgba(13, 16, 24, 0.75)"
   };
 
-  // DOM
+  
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
 
-  // State
+  
   let map = [];
-  let seen = []; // explored tiles
-  let visible = []; // currently visible
+  let seen = [];
+  let visible = [];
   let player = (window.Player && typeof Player.createInitial === "function")
     ? Player.createInitial()
     : { x: 0, y: 0, hp: 40, maxHp: 40, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null } };
@@ -64,35 +64,35 @@
   let isDead = false;
   let startRoomRect = null;
 
-  // Build a lightweight context object for modules (centralized via Ctx.create if available)
+  
   function getCtx() {
     const base = {
-      // dims and enums
+      
       ROWS, COLS, TILES,
       MAP_ROWS, MAP_COLS,
       // state
       player, map, seen, visible, enemies, corpses,
       startRoomRect,
-      // visibility
+      
       fovRadius,
-      // utils
+      
       rng, randInt, chance,
       inBounds, isWalkable,
-      // hooks/log
+      
       log, enemyThreatLabel,
-      // UI helpers
+      
       updateUI: () => updateUI(),
       renderInventory: () => renderInventoryPanel(),
-      // Items-related helper (for fallback decay)
+      
       initialDecay: (tier) => initialDecay(tier),
-      // Delegations for loot
+      
       describeItem: (it) => describeItem(it),
       equipIfBetter: (item) => equipIfBetter(item),
       addPotionToInventory: (heal, name) => addPotionToInventory(heal, name),
       showLoot: (list) => showLootPanel(list),
       hideLoot: () => hideLootPanel(),
       turn: () => turn(),
-      // Combat helpers needed by AI
+      
       rollHitLocation: () => rollHitLocation(),
       critMultiplier: () => critMultiplier(),
       getPlayerBlockChance: (loc) => getPlayerBlockChance(loc),
@@ -101,18 +101,18 @@
       decayBlockingHands: () => decayBlockingHands(),
       decayEquipped: (slot, amt) => decayEquipped(slot, amt),
       enemyDamageMultiplier: (level) => enemyDamageMultiplier(level),
-      // lifecycle
+      
       onPlayerDied: () => {
         isDead = true;
         updateUI();
         log("You die. Press R or Enter to restart.", "bad");
         showGameOver();
       },
-      // module callbacks
+      
       recomputeFOV: () => recomputeFOV(),
     };
 
-    // Prefer constructing via Ctx to attach module handles for consumers
+    
     if (window.Ctx && typeof Ctx.create === "function") {
       const ctx = Ctx.create(base);
       // enemy factory prefers ctx.Enemies handle, falling back gracefully
@@ -136,7 +136,7 @@
     return base;
   }
 
-  // Utils
+  
   function mulberry32(a) {
     return function() {
       let t = a += 0x6D2B79F5;
@@ -166,10 +166,10 @@
     if (window.Items && typeof Items.initialDecay === "function") {
       return Items.initialDecay(tier);
     }
-    // Start items with some wear; higher tiers start in better condition
+    
     if (tier <= 1) return randFloat(10, 35, 0);
     if (tier === 2) return randFloat(5, 20, 0);
-    return randFloat(0, 10, 0); // tier 3 (steel)
+    return randFloat(0, 10, 0);
   }
 
   function rerenderInventoryIfOpen() {
@@ -187,7 +187,7 @@
       });
       return;
     }
-    // fallback minimal behavior
+    
     const it = player.equipment?.[slot];
     if (!it) return;
     const before = it.decay || 0;
@@ -255,7 +255,7 @@
     return item.name || "item";
   }
 
-  // Combat helpers: hit locations, crits, blocks
+  
   function rollHitLocation() {
     const r = rng();
     if (r < 0.50) return { part: "torso", mult: 1.0, blockMod: 1.0, critBonus: 0.00 };
@@ -265,7 +265,7 @@
   }
 
   function critMultiplier() {
-    // 1.6 - 2.0x
+    
     return 1.6 + rng() * 0.4;
   }
 
@@ -282,20 +282,20 @@
     const leftDef = (eq.left && typeof eq.left.def === "number") ? eq.left.def : 0;
     const rightDef = (eq.right && typeof eq.right.def === "number") ? eq.right.def : 0;
     const handDef = Math.max(leftDef, rightDef);
-    const base = 0.08 + handDef * 0.06; // a shield or defensive hand item helps a lot
+    const base = 0.08 + handDef * 0.06;
     return Math.max(0, Math.min(0.6, base * (loc?.blockMod || 1.0)));
   }
 
   // Enemy damage after applying player's defense with diminishing returns and a chip-damage floor
   function enemyDamageAfterDefense(raw) {
     const def = getPlayerDefense();
-    // Diminishing returns: as defense grows, reduction approaches a cap
-    const DR = Math.max(0, Math.min(0.85, def / (def + 6))); // cap at 85% reduction
+    
+    const DR = Math.max(0, Math.min(0.85, def / (def + 6)));
     const reduced = raw * (1 - DR);
-    return Math.max(0.1, round1(reduced)); // always at least 0.1 damage if not blocked
+    return Math.max(0.1, round1(reduced));
   }
 
-  // Enemy level and danger helpers
+  
   function enemyLevelFor(type, depth) {
     if (window.Enemies && typeof Enemies.levelFor === "function") {
       return Enemies.levelFor(type, depth, rng);
@@ -325,7 +325,7 @@
     return { label, tone, diff };
   }
 
-  // FOV adjustment helpers
+  
   function setFovRadius(r) {
     const clamped = Math.max(3, Math.min(14, r));
     if (clamped !== fovRadius) {
@@ -339,7 +339,7 @@
     setFovRadius(fovRadius + delta);
   }
 
-  // Potion helpers (stacking + consumption)
+  
   function addPotionToInventory(heal = 3, name = `potion (+${heal} HP)`) {
     if (window.Player && typeof Player.addPotion === "function") {
       Player.addPotion(player, heal, name);
@@ -435,7 +435,7 @@
     }
   }
 
-  // Map generation: random rooms + corridors
+  
   
   function generateLevel(depth = 1) {
     if (window.Dungeon && typeof Dungeon.generateLevel === "function") {
@@ -449,10 +449,10 @@
       enemies = ctx.enemies;
       corpses = ctx.corpses;
       startRoomRect = ctx.startRoomRect;
-      // Now run post-gen steps in this orchestrator
+      
       recomputeFOV();
       updateCamera();
-      // Safety: ensure player tile is marked visible after generation
+      
       if (inBounds(player.x, player.y) && !visible[player.y][player.x]) {
         try { log("FOV sanity check: player tile not visible after gen; recomputing.", "warn"); } catch (_) {}
         recomputeFOV();
@@ -466,7 +466,7 @@
       requestDraw();
       return;
     }
-    // Fallback simple level if module missing
+    
     map = Array.from({ length: MAP_ROWS }, () => Array(MAP_COLS).fill(TILES.FLOOR));
     enemies = [];
     corpses = [];
@@ -520,7 +520,7 @@
     return { x, y, type, glyph: "g", hp: 3, atk: 1, xp: 5, level, announced: false };
   }
 
-  // Field of view using simple ray casting within radius
+  
   
   function recomputeFOV() {
     if (window.FOV && typeof FOV.recomputeFOV === "function") {
@@ -528,7 +528,11 @@
       ctx.seen = seen;
       ctx.visible = visible;
       FOV.recomputeFOV(ctx);
-      // pull back arrays (replaced in module)
+      </newCode>
+<old_code>
+    // Fallback: do nothing if module missing
+</old_code>
+<new_code>
       visible = ctx.visible;
       seen = ctx.seen;
       return;
@@ -536,7 +540,7 @@
     // Fallback: do nothing if module missing
   }
 
-  // Camera helpers
+  
   function updateCamera() {
     // Center camera on player
     const mapCols = map[0] ? map[0].length : COLS;
@@ -551,7 +555,7 @@
     camera.y = Math.max(0, Math.min(targetY, Math.max(0, mapHeight - camera.height)));
   }
 
-  // Rendering
+  
   function getRenderCtx() {
     return {
       ctx2d: ctx,
@@ -563,7 +567,7 @@
     };
   }
 
-  // Draw-on-demand
+  
   let needsDraw = true;
   function requestDraw() { needsDraw = true; }
   function draw() {
@@ -626,22 +630,22 @@
     const ny = player.y + dy;
     if (!inBounds(nx, ny)) return;
 
-    // attack if enemy there
+    
     const enemy = enemies.find(e => e.x === nx && e.y === ny);
     if (enemy) {
       const loc = rollHitLocation();
 
-      // Enemy attempts to block
+      
       if (rng() < getEnemyBlockChance(enemy, loc)) {
         log(`${capitalize(enemy.type || "enemy")} blocks your attack to the ${loc.part}.`, "block");
-        // Still incur a bit of wear on your gear
+        
         decayAttackHands(true);
         decayEquipped("hands", randFloat(0.2, 0.7, 1));
         turn();
         return;
       }
 
-      // Compute damage with location/crit
+      
       let dmg = getPlayerAttack() * loc.mult;
       let isCrit = false;
       const critChance = Math.max(0, Math.min(0.6, 0.12 + loc.critBonus));
@@ -668,7 +672,7 @@
         enemies = enemies.filter(e => e !== enemy);
       }
 
-      // Item decay on use (hands)
+      
       decayAttackHands();
       decayEquipped("hands", randFloat(0.3, 1.0, 1));
       turn();
@@ -736,12 +740,12 @@
     const created = [];
     for (let i = 0; i < count; i++) {
       let it = null;
-      // Prefer Items module for proper generation
+      
       if (window.Items && typeof Items.createEquipment === "function") {
         const tier = Math.min(3, Math.max(1, Math.floor((floor + 1) / 2)));
         it = Items.createEquipment(tier, rng);
       } else if (window.DungeonItems && DungeonItems.lootFactories && typeof DungeonItems.lootFactories === "object") {
-        // Fallback: try one of the dungeon loot factories
+        
         const keys = Object.keys(DungeonItems.lootFactories);
         if (keys.length > 0) {
           const k = keys[randInt(0, keys.length - 1)];
@@ -749,7 +753,7 @@
         }
       }
       if (!it) {
-        // Last resort: simple generic weapon/armor
+        
         if (rng() < 0.5) it = { kind: "equip", slot: "hand", name: "debug sword", atk: 1.5, tier: 2, decay: initialDecay(2) };
         else it = { kind: "equip", slot: "torso", name: "debug armor", def: 1.0, tier: 2, decay: initialDecay(2) };
       }
@@ -959,14 +963,14 @@
     requestDraw();
   }
 
-  // Game loop (only needed for animations; we redraw on each turn anyway)
+  
   
   function loop() {
     draw();
     requestAnimationFrame(loop);
   }
 
-  // Initialize modules
+  
   if (window.UI && typeof UI.init === "function") {
     UI.init();
     if (typeof UI.setHandlers === "function") {
@@ -1031,7 +1035,7 @@
     }
   }
 
-  // Start
+  
   generateLevel(floor);
   setupInput();
   loop();
