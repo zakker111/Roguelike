@@ -477,6 +477,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     enemies = [];
     corpses = [];
     recomputeFOV();
+    updateCamera();
     updateUI();
     log(`You descend to floor ${depth}.`);
     requestDraw();

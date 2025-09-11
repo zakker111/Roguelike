@@ -13,9 +13,10 @@ Exports (window.Render):
     return COLORS.enemy || "#f7768e";
   }
 
-  function drawGlyphScreen(ctx2d, x, y, ch, color) {
+  function drawGlyphScreen(ctx2d, x, y, ch, color, TILE) {
+    const half = TILE / 2;
     ctx2d.fillStyle = color;
-    ctx2d.fillText(ch, x + 16, y + 16 + 1); // TILE assumed 32; adjust by half tile and slight vertical tweak
+    ctx2d.fillText(ch, x + half, y + half + 1);
   }
 
   function draw(ctx) {
@@ -82,7 +83,7 @@ Exports (window.Render):
 
         // staircase glyph overlay when visible
         if (vis && type === TILES.STAIRS) {
-          drawGlyphScreen(ctx2d, screenX, screenY, ">", "#d7ba7d");
+          drawGlyphScreen(ctx2d, screenX, screenY, ">", "#d7ba7d", TILE);
         }
       }
     }
@@ -94,9 +95,9 @@ Exports (window.Render):
       const screenX = (c.x - startX) * TILE - tileOffsetX;
       const screenY = (c.y - startY) * TILE - tileOffsetY;
       if (c.kind === "chest") {
-        drawGlyphScreen(ctx2d, screenX, screenY, "▯", c.looted ? "#8b7355" : "#d7ba7d");
+        drawGlyphScreen(ctx2d, screenX, screenY, "▯", c.looted ? "#8b7355" : "#d7ba7d", TILE);
       } else {
-        drawGlyphScreen(ctx2d, screenX, screenY, "%", c.looted ? COLORS.corpseEmpty : COLORS.corpse);
+        drawGlyphScreen(ctx2d, screenX, screenY, "%", c.looted ? COLORS.corpseEmpty : COLORS.corpse, TILE);
       }
     }
 
@@ -106,14 +107,14 @@ Exports (window.Render):
       if (e.x < startX || e.x > endX || e.y < startY || e.y > endY) continue;
       const screenX = (e.x - startX) * TILE - tileOffsetX;
       const screenY = (e.y - startY) * TILE - tileOffsetY;
-      drawGlyphScreen(ctx2d, screenX, screenY, e.glyph || "e", enemyColor(e.type));
+      drawGlyphScreen(ctx2d, screenX, screenY, e.glyph || "e", enemyColor(e.type), TILE);
     }
 
     // player
     if (player.x >= startX && player.x <= endX && player.y >= startY && player.y <= endY) {
       const screenX = (player.x - startX) * TILE - tileOffsetX;
       const screenY = (player.y - startY) * TILE - tileOffsetY;
-      drawGlyphScreen(ctx2d, screenX, screenY, "@", COLORS.player);
+      drawGlyphScreen(ctx2d, screenX, screenY, "@", COLORS.player, TILE);
     }
   }
 
