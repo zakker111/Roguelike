@@ -142,96 +142,10 @@ Exports (window.Player):
   }
 
   function equipIfBetter(player, item, hooks = {}) {
-    // Delegate to PlayerEquip if present
     if (window.PlayerEquip && typeof PlayerEquip.equipIfBetter === "function") {
       return PlayerEquip.equipIfBetter(player, item, hooks);
     }
-    if (!item || item.kind !== "equip") return false;
-
-    // Two-handed constraint
-    const twoH = !!item.twoHanded;
-
-    // Hand items: slot can be "hand" or legacy "weapon"/"offhand"
-    const isHandItem = item.slot === "hand" || item.slot === "weapon" || item.slot === "offhand" || item.slot === "left" || item.slot === "right";
-
-    if (isHandItem) {
-      const eq = player.equipment;
-      const holdingTwoH = eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded;
-
-      const score = (it) => (it ? (it.atk || 0) + (it.def || 0) : 0);
-
-      if (twoH) {
-        const prevL = eq.left, prevR = eq.right;
-        eq.left = item;
-        eq.right = item;
-        if (hooks.log) {
-          const parts = [];
-          if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-          if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-          const statStr = parts.join(", ");
-          hooks.log(`You equip ${item.name} (two-handed${statStr ? ", " + statStr : ""}).`);
-        }
-        if (prevL && prevL !== item) player.inventory.push(prevL);
-        if (prevR && prevR !== item) player.inventory.push(prevR);
-        if (hooks.updateUI) hooks.updateUI();
-        return true;
-      }
-
-      if (!eq.left && !eq.right) {
-        eq.left = item;
-      } else if (!eq.left) {
-        if (holdingTwoH) {
-          player.inventory.push(eq.left);
-          eq.right = null;
-          eq.left = item;
-        } else {
-          eq.left = item;
-        }
-      } else if (!eq.right) {
-        if (holdingTwoH) {
-          player.inventory.push(eq.right);
-          eq.left = item;
-          eq.right = null;
-        } else {
-          eq.right = item;
-        }
-      } else {
-        const worse = score(eq.left) <= score(eq.right) ? "left" : "right";
-        player.inventory.push(eq[worse]);
-        eq[worse] = item;
-      }
-
-      if (hooks.log) {
-        const parts = [];
-        if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-        if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-        const statStr = parts.join(", ");
-        hooks.log(`You equip ${item.name} (${statStr || "hand item"}).`);
-      }
-      if (hooks.updateUI) hooks.updateUI();
-      return true;
-    }
-
-    // Non-hand items: standard slot replace if better
-    const slot = item.slot;
-    const current = player.equipment[slot];
-    const newScore = (item.atk || 0) + (item.def || 0);
-    const curScore = current ? ((current.atk || 0) + (current.def || 0)) : -Infinity;
-    const better = !current || newScore > curScore + 1e-9;
-
-    if (better) {
-      player.equipment[slot] = item;
-      if (hooks.log) {
-        const parts = [];
-        if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-        if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-        const statStr = parts.join(", ");
-        hooks.log(`You equip ${item.name} (${slot}${statStr ? ", " + statStr : ""}).`);
-      }
-      if (hooks.updateUI) hooks.updateUI();
-      return true;
-    }
-    return false;
+    throw new Error("PlayerEquip module is required: PlayerEquip.equipIfBetter not found");
   } atk`);
           if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
           const statStr = parts.join(", ");
@@ -304,82 +218,10 @@ Exports (window.Player):
   }
 
   function equipItemByIndex(player, idx, hooks = {}) {
-    // Delegate to PlayerEquip if present
     if (window.PlayerEquip && typeof PlayerEquip.equipItemByIndex === "function") {
       return PlayerEquip.equipItemByIndex(player, idx, hooks);
     }
-    if (!player.inventory || idx < 0 || idx >= player.inventory.length) return;
-    const item = player.inventory[idx];
-    if (!item || item.kind !== "equip") {
-      if (hooks.log) hooks.log("That item cannot be equipped.");
-      return;
-    }
-    // remove from inventory first
-    player.inventory.splice(idx, 1);
-
-    const eq = player.equipment;
-    const twoH = !!item.twoHanded;
-    const preferredHand = hooks.preferredHand === "left" || hooks.preferredHand === "right" ? hooks.preferredHand : null;
-
-    if ((item.slot === "hand" || item.slot === "weapon" || item.slot === "offhand" || item.slot === "left" || item.slot === "right")) {
-      if (twoH) {
-        const prevL = eq.left, prevR = eq.right;
-        eq.left = item; eq.right = item;
-        if (hooks.log) {
-          const parts = [];
-          if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-          if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-          const statStr = parts.join(", ");
-          hooks.log(`You equip ${item.name} (two-handed${statStr ? ", " + statStr : ""}).`);
-        }
-        if (prevL && prevL !== item) player.inventory.push(prevL);
-        if (prevR && prevR !== item) player.inventory.push(prevR);
-      } else if (preferredHand) {
-        // respect user's choice
-        const other = preferredHand === "left" ? "right" : "left";
-        // detect two-handed holding BEFORE changing a hand
-        const wasTwoHanded = !!(eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded);
-        const prev = eq[preferredHand];
-
-        // equip into chosen hand
-        eq[preferredHand] = item;
-
-        if (hooks.log) {
-          const parts = [];
-          if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-          if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-          const statStr = parts.join(", ");
-          hooks.log(`You equip ${item.name} (${preferredHand}${statStr ? ", " + statStr : ""}).`);
-        }
-
-        if (prev) player.inventory.push(prev);
-
-        // If previously two-handed, free the other hand and return the old two-handed item
-        if (wasTwoHanded) {
-          if (eq[other]) player.inventory.push(eq[other]);
-          eq[other] = null;
-        }
-      } else {
-        // no preference -> use auto-placement/better logic
-        equipIfBetter(player, item, hooks);
-      }
-    } else {
-      // Non-hand items -> simple replacement logic
-      const slot = item.slot;
-      const prev = eq[slot];
-      eq[slot] = item;
-      if (hooks.log) {
-        const parts = [];
-        if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-        if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-        const statStr = parts.join(", ");
-        hooks.log(`You equip ${item.name} (${slot}${statStr ? ", " + statStr : ""}).`);
-      }
-      if (prev) player.inventory.push(prev);
-    }
-
-    if (hooks.updateUI) hooks.updateUI();
-    if (hooks.renderInventory) hooks.renderInventory();
+    throw new Error("PlayerEquip module is required: PlayerEquip.equipItemByIndex not found");
   }
 
   function decayEquipped(player, slot, amount, hooks = {}) {
@@ -413,33 +255,10 @@ Exports (window.Player):
   }
 
   function unequipSlot(player, slot, hooks = {}) {
-    // Delegate to PlayerEquip if present
     if (window.PlayerEquip && typeof PlayerEquip.unequipSlot === "function") {
       return PlayerEquip.unequipSlot(player, slot, hooks);
     }
-    if (!player || !player.equipment) return;
-    const eq = player.equipment;
-    const valid = ["left","right","head","torso","legs","hands"];
-    if (!valid.includes(slot)) return;
-
-    // Handle two-handed case if unequipping either hand and both reference same item
-    if ((slot === "left" || slot === "right") && eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded) {
-      const item = eq.left;
-      eq.left = null; eq.right = null;
-      player.inventory.push(item);
-      if (hooks.log) hooks.log(`You unequip ${describeItem(item)} (two-handed).`);
-      if (hooks.updateUI) hooks.updateUI();
-      if (hooks.renderInventory) hooks.renderInventory();
-      return;
-    }
-
-    const it = eq[slot];
-    if (!it) return;
-    eq[slot] = null;
-    player.inventory.push(it);
-    if (hooks.log) hooks.log(`You unequip ${describeItem(it)} from ${slot}.`);
-    if (hooks.updateUI) hooks.updateUI();
-    if (hooks.renderInventory) hooks.renderInventory();
+    throw new Error("PlayerEquip module is required: PlayerEquip.unequipSlot not found");
   }
 
   // Apply current defaults to an existing player (used when starting a new game)
