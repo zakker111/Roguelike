@@ -39,8 +39,8 @@ Notes:
     // Two-handed constraint
     const twoH = !!item.twoHanded;
 
-    // Hand items: slot can be "hand" or legacy "weapon"/"offhand"/"left"/"right"
-    const isHandItem = item.slot === "hand" || item.slot === "weapon" || item.slot === "offhand" || item.slot === "left" || item.slot === "right";
+    // Hand items: normalized to slot === "hand"
+    const isHandItem = item.slot === "hand";
 
     if (isHandItem) {
       const eq = player.equipment;
@@ -138,7 +138,7 @@ Notes:
     const twoH = !!item.twoHanded;
     const preferredHand = hooks.preferredHand === "left" || hooks.preferredHand === "right" ? hooks.preferredHand : null;
 
-    if ((item.slot === "hand" || item.slot === "weapon" || item.slot === "offhand" || item.slot === "left" || item.slot === "right")) {
+    if (item.slot === "hand") {
       if (twoH) {
         const prevL = eq.left, prevR = eq.right;
         eq.left = item; eq.right = item;

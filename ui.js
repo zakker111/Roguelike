@@ -190,7 +190,7 @@ Exports (window.UI):
           const li = document.createElement("li");
           li.dataset.index = String(idx);
           li.dataset.kind = it.kind || "misc";
-          if (it.kind === "equip" && (it.slot === "hand" || it.slot === "weapon" || it.slot === "offhand")) {
+          if (it.kind === "equip" && it.slot === "hand") {
             li.dataset.slot = "hand";
             if (it.twoHanded) {
               li.dataset.twohanded = "true";
