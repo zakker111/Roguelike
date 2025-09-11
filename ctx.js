@@ -32,6 +32,7 @@ Notes:
       if (window.AI) ctx.AI = window.AI;
       if (window.Input) ctx.Input = window.Input;
       if (window.Render) ctx.Render = window.Render;
+      if (window.Tileset) ctx.Tileset = window.Tileset;
     }
     return ctx;
   }
