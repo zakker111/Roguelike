@@ -710,8 +710,18 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     if (!corpse) {
       // mark all as looted to fade them visually
       here.forEach(c => c.looted = true);
-      log("All corpses here have nothing of value.");
+      // If any chest at this tile, announce empty chest
+      if (here.some(c => c.kind === "chest")) {
+        log("The chest is empty.");
+      } else {
+        log("All corpses here have nothing of value.");
+      }
       return;
+    }
+
+    // Announce opening chest
+    if (corpse.kind === "chest") {
+      log("You open the chest.", "info");
     }
 
     // transfer loot to inventory

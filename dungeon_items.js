@@ -98,9 +98,9 @@ Exports (window.DungeonItems):
       looted: false,
     });
 
-    // Announce
+    // Announce in green
     if (typeof ctx.log === "function") {
-      ctx.log("You notice a chest nearby.", "info");
+      ctx.log("You notice a chest nearby.", "good");
     }
   }
 

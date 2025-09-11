@@ -91,7 +91,8 @@ Exports (window.Render):
     for (const c of corpses) {
       if (!visible[c.y][c.x]) continue;
       if (c.kind === "chest") {
-        drawGlyph(ctx2d, TILE, c.x, c.y, "C", c.looted ? "#8b7355" : "#d7ba7d");
+        // rectangular glyph
+        drawGlyph(ctx2d, TILE, c.x, c.y, "▯", c.looted ? "#8b7355" : "#d7ba7d");
       } else {
         drawGlyph(ctx2d, TILE, c.x, c.y, "%", c.looted ? COLORS.corpseEmpty : COLORS.corpse);
       }
