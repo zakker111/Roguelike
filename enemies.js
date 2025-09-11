@@ -1,47 +1,11 @@
 /*
-Enemy registry and helpers for Tiny Roguelike.
-Attach as window.Enemies for use by game.js.
+Enemies: registry and helpers.
 
-How to add a new enemy type
-- Open this file and add a new entry inside TYPES with a unique key (e.g., "skeleton").
-- Provide at minimum:
-  - key: string identifier (same as the object key; used in logs/logic)
-  - glyph: single-character string drawn on the map
-  - color: CSS color for rendering
-  - tier: 1, 2, or 3 (affects equipment drop tier)
-  - blockBase: base chance to block (0.0–1.0 before modifiers)
-  - weight(depth): function returning spawn weight at a given floor depth
-  - hp(depth): function returning hit points at a given floor depth
-  - atk(depth): function returning attack value at a given floor depth
-  - xp(depth): function returning XP reward at a given floor depth
-  - potionWeights: { lesser, average, strong } relative weights for potion drop quality
-  - equipChance: chance (0.0–1.0) this enemy drops an equipment piece
-
-Notes
-- Spawning: pickType(depth, rng) uses weight(depth) across all TYPES to select what to spawn.
-- Level scaling: levelFor(type, depth, rng) adds a small tier/jitter to depth.
-- Damage scaling: damageMultiplier(level) is used in game.js for enemy damage.
-- Block chance: enemyBlockChance uses blockBase adjusted by hit location.
-- Loot integration in game.js:
-  - equipTierFor(type) selects loot tier from this registry.
-  - equipChanceFor(type) controls equipment drop chance.
-  - potionWeightsFor(type) biases potion quality from this enemy.
-- Simply defining a new TYPE here makes it available to spawning, rendering, and loot logic automatically.
-
-Example template
-{
-  key: "skeleton",
-  glyph: "s",
-  color: "#cbd5e1",
-  tier: 2,
-  blockBase: 0.07,
-  weight(depth) { return depth >= 2 ? 0.20 : 0.0; },
-  hp(depth) { return 5 + Math.floor(depth * 0.7); },
-  atk(depth) { return 2 + Math.floor(depth / 3); },
-  xp(depth) { return 10 + depth; },
-  potionWeights: { lesser: 0.55, average: 0.35, strong: 0.10 },
-  equipChance: 0.50,
-}
+Exports (window.Enemies):
+- TYPES, pickType(depth, rng), createEnemyAt(x, y, depth, rng)
+- colorFor(type), glyphFor(type)
+- equipTierFor(type), equipChanceFor(type), potionWeightsFor(type)
+- levelFor(type, depth, rng), damageMultiplier(level), enemyBlockChance(enemy, loc)
 */
 (function () {
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -86,6 +50,35 @@ Example template
       xp(depth) { return 20 + 2 * depth; },
       potionWeights: { lesser: 0.40, average: 0.35, strong: 0.25 },
       equipChance: 0.75,
+    },
+
+    // Example enemy template (reference only; weight() returns 0 so it won't spawn)
+    example_enemy: {
+      key: "example_enemy",         // Unique identifier; used in logs/logic
+      glyph: "S",                   // Single-character glyph drawn on the map
+      color: "#cbd5e1",             // CSS color used by the renderer for this enemy
+      tier: 2,                      // Loot tier bias (1..3). Affects equipment drop tier
+      blockBase: 0.07,              // Baseline block chance before hit-location modifiers (0.0..1.0)
+
+      // Spawn weighting as a function of depth. Return 0 to disable random spawns.
+      weight(depth) { return 0; },  // Example keeps it out of the spawn table
+
+      // Per-depth scaling functions. Keep these cheap and deterministic.
+      hp(depth) {                   // Total hit points at this depth
+        return 5 + Math.floor(depth * 0.7);
+      },
+      atk(depth) {                  // Base attack value at this depth
+        return 2 + Math.floor(depth / 3);
+      },
+      xp(depth) {                   // XP awarded on kill at this depth
+        return 10 + depth;
+      },
+
+      // Potion quality weights for drops (relative weights; not normalized)
+      potionWeights: { lesser: 0.55, average: 0.35, strong: 0.10 },
+
+      // Chance to drop an equipment piece (0.0..1.0). Tier is determined by 'tier' above.
+      equipChance: 0.50,
     },
   };
 

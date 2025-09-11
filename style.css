@@ -1,4 +1,3 @@
-/* Stylesheet for Tiny Roguelike: theme tokens, panels, and layout */
 :root {
   --bg: #0f0f12;
   --panel: #15161b;
@@ -78,9 +77,11 @@ html, body {
 .log .entry { margin: 2px 0; }
 .log .entry.crit { color: var(--danger); font-weight: 600; }
 .log .entry.block { color: var(--accent); font-weight: 500; }
-.log .entry.death { color: var(--danger); font-weight: 700; text-shadow: 0 0 6px rgba(247,118,142,0.25); }
+.log .entry.death { color: var(--danger); font-weight: 700; text-shadow: 0 0 6px rgba(247,118,142,0.25); } /* legacy */
+.log .entry.bad { color: var(--danger); font-weight: 700; text-shadow: 0 0 6px rgba(247,118,142,0.25); }
 .log .entry.good { color: var(--success); }
 .log .entry.warn { color: #e0af68; }
+.log .entry.notice { color: #e0af68; } /* yellow notice for spotting */
 
 .loot-panel {
   position: fixed;
@@ -151,7 +152,6 @@ html, body {
   filter: brightness(1.08);
 }
 
-/* Inventory & Equipment panel */
 .inv-panel {
   position: fixed;
   left: 50%;

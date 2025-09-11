@@ -1,37 +1,24 @@
 /*
-Player module for Tiny Roguelike.
+Player: creation, stats, inventory/equipment, decay, potions, XP/leveling.
 
-Responsibilities:
-- Create initial player state
-- Compute attack/defense totals
-- Inventory helpers (describe items, add potions, drink, equip)
-- Equipment decay handling
-- XP and leveling
-
-All functions are pure over the player object where possible; side-effects like UI/logging
-are done through hooks passed as parameters.
-
-API (window.Player):
-- createInitial() -> player
-- getAttack(player) -> number
-- getDefense(player) -> number
-- describeItem(item) -> string
-- addPotion(player, heal, name?)
-- drinkPotionByIndex(player, idx, { log, updateUI, renderInventory })
-- equipIfBetter(player, item, { log, updateUI }) -> boolean
-- equipItemByIndex(player, idx, { log, updateUI, renderInventory, describeItem })
-- decayEquipped(player, slot, amount, { log, updateUI, onInventoryChange })
-- gainXP(player, amount, { log, updateUI })
+Exports (window.Player):
+- createInitial, getAttack, getDefense, describeItem
+- addPotion, drinkPotionByIndex
+- equipIfBetter, equipItemByIndex, unequipSlot
+- decayEquipped, gainXP
+- defaults/setDefaults, normalize, resetFromDefaults, forceUpdate
 */
 (function () {
-  const round1 = (n) => Math.round(n * 10) / 10;
+  const round1 = (window.PlayerUtils && typeof PlayerUtils.round1 === "function")
+    ? PlayerUtils.round1
+    : (n) => Math.round(n * 10) / 10;
 
   // Editable defaults for new game. Change these to customize starting attributes.
   const DEFAULT_EQUIPMENT = { left: null, right: null, head: null, torso: null, legs: null, hands: null };
   const defaults = {
     x: 0,
     y: 0,
-    hp: 40,
+    hp: 20,
     maxHp: 40,
     atk: 1,
     level: 1,
@@ -102,6 +89,10 @@ API (window.Player):
   }
 
   function describeItem(item) {
+    // Prefer centralized description from Items module if available
+    if (window.Items && typeof Items.describe === "function") {
+      return Items.describe(item);
+    }
     if (!item) return "";
     if (item.kind === "equip") {
       const parts = [];
@@ -151,172 +142,17 @@ API (window.Player):
   }
 
   function equipIfBetter(player, item, hooks = {}) {
-    if (!item || item.kind !== "equip") return false;
-
-    // Two-handed constraint
-    const twoH = !!item.twoHanded;
-
-    // Hand items: slot can be "hand" or legacy "weapon"/"offhand"
-    const isHandItem = item.slot === "hand" || item.slot === "weapon" || item.slot === "offhand" || item.slot === "left" || item.slot === "right";
-
-    if (isHandItem) {
-      const eq = player.equipment;
-      // If currently holding a two-handed item and the new one isn't strictly better, keep it
-      const holdingTwoH = eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded;
-
-      const score = (it) => (it ? (it.atk || 0) + (it.def || 0) : 0);
-
-      if (twoH) {
-        // Equip to both hands, stow previous ones
-        const prevL = eq.left, prevR = eq.right;
-        eq.left = item;
-        eq.right = item;
-        if (hooks.log) {
-          const parts = [];
-          if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-          if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-          const statStr = parts.join(", ");
-          hooks.log(`You equip ${item.name} (two-handed${statStr ? ", " + statStr : ""}).`);
-        }
-        if (prevL && prevL !== item) player.inventory.push(prevL);
-        if (prevR && prevR !== item) player.inventory.push(prevR);
-        if (hooks.updateUI) hooks.updateUI();
-        return true;
-      }
-
-      // One-handed item: prefer empty hand, else replace worse hand
-      if (!eq.left && !eq.right) {
-        eq.left = item;
-      } else if (!eq.left) {
-        if (holdingTwoH) {
-          // replace two-handed with one-handed in left, stow previous
-          player.inventory.push(eq.left); // same object as right
-          eq.right = null;
-          eq.left = item;
-        } else {
-          eq.left = item;
-        }
-      } else if (!eq.right) {
-        if (holdingTwoH) {
-          player.inventory.push(eq.right);
-          eq.left = item;
-          eq.right = null;
-        } else {
-          eq.right = item;
-        }
-      } else {
-        // both occupied: replace worse
-        const worse = score(eq.left) <= score(eq.right) ? "left" : "right";
-        player.inventory.push(eq[worse]);
-        eq[worse] = item;
-      }
-
-      if (hooks.log) {
-        const parts = [];
-        if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-        if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-        const statStr = parts.join(", ");
-        hooks.log(`You equip ${item.name} (${statStr || "hand item"}).`);
-      }
-      if (hooks.updateUI) hooks.updateUI();
-      return true;
+    if (window.PlayerEquip && typeof PlayerEquip.equipIfBetter === "function") {
+      return PlayerEquip.equipIfBetter(player, item, hooks);
     }
-
-    // Non-hand items: standard slot replace if better
-    const slot = item.slot;
-    const current = player.equipment[slot];
-    const newScore = (item.atk || 0) + (item.def || 0);
-    const curScore = current ? ((current.atk || 0) + (current.def || 0)) : -Infinity;
-    const better = !current || newScore > curScore + 1e-9;
-
-    if (better) {
-      player.equipment[slot] = item;
-      if (hooks.log) {
-        const parts = [];
-        if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-        if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-        const statStr = parts.join(", ");
-        hooks.log(`You equip ${item.name} (${slot}${statStr ? ", " + statStr : ""}).`);
-      }
-      if (hooks.updateUI) hooks.updateUI();
-      return true;
-    }
-    return false;
+    throw new Error("PlayerEquip module is required: PlayerEquip.equipIfBetter not found");
   }
 
   function equipItemByIndex(player, idx, hooks = {}) {
-    if (!player.inventory || idx < 0 || idx >= player.inventory.length) return;
-    const item = player.inventory[idx];
-    if (!item || item.kind !== "equip") {
-      if (hooks.log) hooks.log("That item cannot be equipped.");
-      return;
+    if (window.PlayerEquip && typeof PlayerEquip.equipItemByIndex === "function") {
+      return PlayerEquip.equipItemByIndex(player, idx, hooks);
     }
-    // remove from inventory first
-    player.inventory.splice(idx, 1);
-
-    const eq = player.equipment;
-    const twoH = !!item.twoHanded;
-    const preferredHand = hooks.preferredHand === "left" || hooks.preferredHand === "right" ? hooks.preferredHand : null;
-
-    if ((item.slot === "hand" || item.slot === "weapon" || item.slot === "offhand" || item.slot === "left" || item.slot === "right")) {
-      if (twoH) {
-        const prevL = eq.left, prevR = eq.right;
-        eq.left = item; eq.right = item;
-        if (hooks.log) {
-          const parts = [];
-          if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-          if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-          const statStr = parts.join(", ");
-          hooks.log(`You equip ${item.name} (two-handed${statStr ? ", " + statStr : ""}).`);
-        }
-        if (prevL && prevL !== item) player.inventory.push(prevL);
-        if (prevR && prevR !== item) player.inventory.push(prevR);
-      } else if (preferredHand) {
-        // respect user's choice
-        const other = preferredHand === "left" ? "right" : "left";
-        // detect two-handed holding BEFORE changing a hand
-        const wasTwoHanded = !!(eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded);
-        const prev = eq[preferredHand];
-
-        // equip into chosen hand
-        eq[preferredHand] = item;
-
-        if (hooks.log) {
-          const parts = [];
-          if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-          if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-          const statStr = parts.join(", ");
-          hooks.log(`You equip ${item.name} (${preferredHand}${statStr ? ", " + statStr : ""}).`);
-        }
-
-        if (prev) player.inventory.push(prev);
-
-        // If previously two-handed, free the other hand and return the old two-handed item
-        if (wasTwoHanded) {
-          if (eq[other]) player.inventory.push(eq[other]);
-          eq[other] = null;
-        }
-      } else {
-        // no preference -> use auto-placement/better logic
-        equipIfBetter(player, item, hooks);
-      }
-    } else {
-      // Non-hand items -> simple replacement logic
-      const slot = item.slot;
-      const prev = eq[slot];
-      eq[slot] = item;
-      if (hooks.log) {
-        const parts = [];
-        if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-        if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-        const statStr = parts.join(", ");
-        hooks.log(`You equip ${item.name} (${slot}${statStr ? ", " + statStr : ""}).`);
-      }
-      if (prev) player.inventory.push(prev);
-    }
-
-    if (hooks.updateUI) hooks.updateUI();
-    if (hooks.renderInventory) hooks.renderInventory();
+    throw new Error("PlayerEquip module is required: PlayerEquip.equipItemByIndex not found");
   }
 
   function decayEquipped(player, slot, amount, hooks = {}) {
@@ -325,7 +161,7 @@ API (window.Player):
     const before = it.decay || 0;
     it.decay = Math.min(100, round1(before + amount));
     if (it.decay >= 100) {
-      if (hooks.log) hooks.log(`${(it.name || "Item")[0].toUpperCase()}${(it.name || "Item").slice(1)} breaks and is destroyed.`);
+      if (hooks.log) hooks.log(`${(it.name || "Item")[0].toUpperCase()}${(it.name || "Item").slice(1)} breaks and is destroyed.`, "bad");
       player.equipment[slot] = null;
       if (hooks.updateUI) hooks.updateUI();
       if (hooks.onInventoryChange) hooks.onInventoryChange();
@@ -344,35 +180,16 @@ API (window.Player):
       player.hp = player.maxHp;
       if (player.level % 2 === 0) player.atk += 1;
       player.xpNext = Math.floor(player.xpNext * 1.3 + 10);
-      if (hooks.log) hooks.log(`You are now level ${player.level}. Max HP increased.`);
+      if (hooks.log) hooks.log(`You are now level ${player.level}. Max HP increased.`, "good");
     }
     if (hooks.updateUI) hooks.updateUI();
   }
 
   function unequipSlot(player, slot, hooks = {}) {
-    if (!player || !player.equipment) return;
-    const eq = player.equipment;
-    const valid = ["left","right","head","torso","legs","hands"];
-    if (!valid.includes(slot)) return;
-
-    // Handle two-handed case if unequipping either hand and both reference same item
-    if ((slot === "left" || slot === "right") && eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded) {
-      const item = eq.left;
-      eq.left = null; eq.right = null;
-      player.inventory.push(item);
-      if (hooks.log) hooks.log(`You unequip ${describeItem(item)} (two-handed).`);
-      if (hooks.updateUI) hooks.updateUI();
-      if (hooks.renderInventory) hooks.renderInventory();
-      return;
+    if (window.PlayerEquip && typeof PlayerEquip.unequipSlot === "function") {
+      return PlayerEquip.unequipSlot(player, slot, hooks);
     }
-
-    const it = eq[slot];
-    if (!it) return;
-    eq[slot] = null;
-    player.inventory.push(it);
-    if (hooks.log) hooks.log(`You unequip ${describeItem(it)} from ${slot}.`);
-    if (hooks.updateUI) hooks.updateUI();
-    if (hooks.renderInventory) hooks.renderInventory();
+    throw new Error("PlayerEquip module is required: PlayerEquip.unequipSlot not found");
   }
 
   // Apply current defaults to an existing player (used when starting a new game)

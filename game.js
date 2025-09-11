@@ -1,23 +1,5 @@
 /*
-Tiny Roguelike - main game logic
-
-Overview
-- Procedural dungeon: rooms + corridors, stairs, enemies (goblins, trolls, ogres)
-- Turn-based: your actions advance enemies
-- FOV: simple ray cast with memory of explored tiles
-- Looting: gold, potions, and randomized equipment (0.0–4.0 atk/def scale)
-- Equipment decay: each equippable item has a decay %, reaching 100% destroys the item.
-  Equipped items gain decay when used (weapon/hands on attack) or when you are hit (armor/offhand).
-  Hover an inventory item to see its current decay value.
-- Inventory: I to open; click items to equip; auto-equip if strictly better on loot
-- Movement: Numpad (7/8/9/4/6/1/2/3), wait: Numpad5, G: loot, N: descend when on '>'
-
-Rendering layers (in order)
-1) Tiles
-2) Stair glyphs
-3) Corpses
-4) Enemies
-5) Player
+Main game orchestrator: state, turns, combat, loot, UI hooks, level generation and rendering.
 */
 
 (() => {
@@ -62,7 +44,7 @@ Rendering layers (in order)
   let visible = []; // currently visible
   let player = (window.Player && typeof Player.createInitial === "function")
     ? Player.createInitial()
-    : { x: 0, y: 0, hp: 10, maxHp: 10, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null } };
+    : { x: 0, y: 0, hp: 40, maxHp: 40, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null } };
   let enemies = [];
   let corpses = [];
   let floor = 1;
@@ -84,11 +66,38 @@ Rendering layers (in order)
       // utils
       rng, randInt, chance,
       inBounds, isWalkable,
-      // hooks
+      // hooks/log
       log, enemyThreatLabel,
+      // UI helpers
+      updateUI: () => updateUI(),
+      renderInventory: () => renderInventoryPanel(),
+      // Items-related helper (for fallback decay)
+      initialDecay: (tier) => initialDecay(tier),
+      // Delegations for loot
+      describeItem: (it) => describeItem(it),
+      equipIfBetter: (item) => equipIfBetter(item),
+      addPotionToInventory: (heal, name) => addPotionToInventory(heal, name),
+      showLoot: (list) => showLootPanel(list),
+      hideLoot: () => hideLootPanel(),
+      turn: () => turn(),
+      // Combat helpers needed by AI
+      rollHitLocation: () => rollHitLocation(),
+      critMultiplier: () => critMultiplier(),
+      getPlayerBlockChance: (loc) => getPlayerBlockChance(loc),
+      enemyDamageAfterDefense: (raw) => enemyDamageAfterDefense(raw),
+      randFloat: (a,b,c) => randFloat(a,b,c),
+      decayBlockingHands: () => decayBlockingHands(),
+      decayEquipped: (slot, amt) => decayEquipped(slot, amt),
+      enemyDamageMultiplier: (level) => enemyDamageMultiplier(level),
+      // lifecycle
+      onPlayerDied: () => {
+        isDead = true;
+        updateUI();
+        log("You die. Press R or Enter to restart.", "bad");
+        showGameOver();
+      },
       // module callbacks
       recomputeFOV: () => recomputeFOV(),
-      updateUI: () => updateUI(),
       // enemy factory
       enemyFactory: (x, y, depth) => {
         if (window.Enemies && Enemies.createEnemyAt) {
@@ -156,7 +165,7 @@ Rendering layers (in order)
     const before = it.decay || 0;
     it.decay = Math.min(100, round1(before + amount));
     if (it.decay >= 100) {
-      log(`${capitalize(it.name)} breaks and is destroyed.`);
+      log(`${capitalize(it.name)} breaks and is destroyed.`, "bad");
       player.equipment[slot] = null;
       updateUI();
       rerenderInventoryIfOpen();
@@ -165,12 +174,7 @@ Rendering layers (in order)
     }
   }
 
-  /*
-   Computes total player attack:
-   - Base attack + level bonus
-   - Equipment bonuses (weapon, optionally hands)
-   - Uses fractional values (0.0–4.0 scale per item); rounded to 1 decimal for display/consistency
-  */
+  /* Total player attack (base + level + equipment), rounded to 1 decimal */
   function getPlayerAttack() {
     if (window.Player && typeof Player.getAttack === "function") {
       return Player.getAttack(player);
@@ -184,11 +188,7 @@ Rendering layers (in order)
     return round1(player.atk + bonus + levelBonus);
   }
 
-  /*
-   Computes total player defense:
-   - Sum of all equipped defensive slots (offhand, head, torso, legs, hands)
-   - Fractional values (0.0–4.0 scale per item), rounded to 1 decimal
-  */
+  /* Total player defense from equipment, rounded to 1 decimal */
   function getPlayerDefense() {
     if (window.Player && typeof Player.getDefense === "function") {
       return Player.getDefense(player);
@@ -364,7 +364,12 @@ Rendering layers (in order)
   */
   function equipIfBetter(item) {
     if (window.Player && typeof Player.equipIfBetter === "function") {
-      return Player.equipIfBetter(player, item, { log, updateUI });
+      return Player.equipIfBetter(player, item, {
+        log,
+        updateUI,
+        renderInventory: () => renderInventoryPanel(),
+        describeItem: (it) => describeItem(it),
+      });
     }
     if (!item || item.kind !== "equip") return false;
     const slot = item.slot;
@@ -381,15 +386,13 @@ Rendering layers (in order)
       const statStr = parts.join(", ");
       log(`You equip ${item.name} (${slot}${statStr ? ", " + statStr : ""}).`);
       updateUI();
+      renderInventoryPanel();
       return true;
     }
     return false;
   }
 
-  /*
-   Prepend a message to the on-screen log as a colored entry.
-   Types: info (default), crit, block, death, good, warn
-  */
+  /* Log a message to the UI (types: info, crit, block, death, good, warn) */
   function log(msg, type = "info") {
     if (window.Logger && typeof Logger.log === "function") {
       Logger.log(msg, type);
@@ -409,14 +412,7 @@ Rendering layers (in order)
   }
 
   // Map generation: random rooms + corridors
-  /*
-   Generates a new floor:
-   - clears visibility, enemies, corpses and resets death flag
-   - carves non-overlapping rooms, connects them with corridors
-   - places player in first room; stairs (>) in last room
-   - spawns enemies with depth-scaled stats/types
-   - recomputes FOV and updates UI/log
-  */
+  /* Generate a new floor, reset visibility and repopulate enemies/corpses */
   function generateLevel(depth = 1) {
     if (window.Dungeon && typeof Dungeon.generateLevel === "function") {
       const ctx = getCtx();
@@ -456,6 +452,26 @@ Rendering layers (in order)
     return t === TILES.FLOOR || t === TILES.DOOR || t === TILES.STAIRS;
   }
 
+  // Simple LOS check for enemy AI (Bresenham-style)
+  function tileTransparent(x, y) {
+    if (!inBounds(x, y)) return false;
+    return map[y][x] !== TILES.WALL;
+  }
+  function hasLOS(x0, y0, x1, y1) {
+    let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy, e2;
+    while (true) {
+      if (x0 === x1 && y0 === y1) return true;
+      if (!(x0 === player.x && y0 === player.y)) {
+        if (!tileTransparent(x0, y0)) return false;
+      }
+      e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x0 += sx; }
+      if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+  }
+
   /*
    Factory for enemies at (x,y) for a given depth.
    - Chooses type based on depth (weighted goblin/troll/ogre)
@@ -472,11 +488,7 @@ Rendering layers (in order)
   }
 
   // Field of view using simple ray casting within radius
-  /*
-   Recomputes visibility around the player using Bresenham-style line of sight.
-   - Only non-wall tiles are transparent
-   - Stores both current visibility and "seen" memory for fog-of-war
-  */
+  /* Recompute visibility around the player and update explored memory */
   function recomputeFOV() {
     if (window.FOV && typeof FOV.recomputeFOV === "function") {
       const ctx = getCtx();
@@ -513,17 +525,13 @@ Rendering layers (in order)
     needsDraw = false;
   }
 
-  /*
-   Input handling (delegated to input.js):
-   We initialize the Input module with callbacks for movement, waiting, looting,
-   descending, inventory toggling, FOV adjustments, and restart. If Input isn't
-   available, we can later add a minimal fallback.
-  */
+  /* Input wiring (delegated to input.js) */
 
   function descendIfPossible() {
     hideLootPanel();
     const here = map[player.y][player.x];
-    if (here === TILES.STAIRS || here === TILES.DOOR) {
+    // Restrict descending to STAIRS tile only for clarity
+    if (here === TILES.STAIRS) {
       floor += 1;
       window.floor = floor;
       generateLevel(floor);
@@ -553,12 +561,7 @@ Rendering layers (in order)
     }
   }
 
-  /*
-   Attempts to move the player by (dx,dy):
-   - If an enemy occupies the destination, perform a melee attack using total attack
-   - Otherwise, move into walkable tiles (floors/doors) if not occupied
-   - Any action consumes a turn (enemies then act, FOV updates, redraw)
-  */
+  /* Try to move the player or attack if an enemy is in the target tile */
   function tryMovePlayer(dx, dy) {
     if (isDead) return;
     const nx = player.x + dx;
@@ -598,7 +601,7 @@ Rendering layers (in order)
       }
 
       if (enemy.hp <= 0) {
-        log(`${capitalize(enemy.type || "enemy")} dies.`, "death");
+        log(`${capitalize(enemy.type || "enemy")} dies.`, "bad");
         // leave corpse with loot
         const loot = generateLoot(enemy);
         corpses.push({ x: enemy.x, y: enemy.y, loot, looted: loot.length === 0 });
@@ -621,194 +624,28 @@ Rendering layers (in order)
     }
   }
 
-  /*
-   Loot generation from a defeated enemy:
-   - Always: some gold (scaled by enemy XP) and a chance for a small potion
-   - Sometimes: a piece of equipment; stronger enemies have higher chances and tiers
-   Equipment stats use a 0.0–4.0 scale (floats with 1 decimal) and are tier-biased:
-   - Tier 1 (rusty): weaker ranges
-   - Tier 2 (iron): mid ranges
-   - Tier 3 (steel): strong ranges
-  */
+  /* Generate loot: gold, potions, and sometimes equipment (tier-biased) */
   function generateLoot(source) {
-    const drops = [];
-    // base coins scale slightly with source strength
-    const baseCoins = randInt(1, 6);
-    const bonus = source ? Math.floor((source.xp || 0) / 10) : 0;
-    const coins = baseCoins + bonus;
-    drops.push({ name: `${coins} gold`, kind: "gold", amount: coins });
-
-    // Potions: lesser/average/strong; any enemy can drop one
-    if (chance(0.35)) {
-      drops.push(pickPotion(source));
+    if (window.Loot && typeof Loot.generate === "function") {
+      return Loot.generate(getCtx(), source);
     }
-
-    // chance to drop equipment (higher for stronger enemies)
-    const type = source?.type || "goblin";
-    const tier = (window.Enemies && Enemies.equipTierFor) ? Enemies.equipTierFor(type) : (type === "ogre" ? 3 : (type === "troll" ? 2 : 1));
-    const equipChance = (window.Enemies && Enemies.equipChanceFor) ? Enemies.equipChanceFor(type) : (type === "ogre" ? 0.75 : (type === "troll" ? 0.55 : 0.35));
-    if (chance(equipChance)) {
-      drops.push(pickEquipment(tier));
-    }
-    return drops;
-
-    function pickPotion(source) {
-      const t = source?.type || "goblin";
-      let wL = 0.6, wA = 0.3, wS = 0.1;
-      if (window.Enemies && Enemies.potionWeightsFor) {
-        const w = Enemies.potionWeightsFor(t) || {};
-        wL = typeof w.lesser === "number" ? w.lesser : wL;
-        wA = typeof w.average === "number" ? w.average : wA;
-        wS = typeof w.strong === "number" ? w.strong : wS;
-      } else {
-        if (t === "troll") { wL = 0.5; wA = 0.35; wS = 0.15; }
-        if (t === "ogre") { wL = 0.4; wA = 0.35; wS = 0.25; }
-      }
-      const r = rng();
-      if (r < wL) return { name: "lesser potion (+3 HP)", kind: "potion", heal: 3 };
-      if (r < wL + wA) return { name: "average potion (+6 HP)", kind: "potion", heal: 6 };
-      return { name: "strong potion (+10 HP)", kind: "potion", heal: 10 };
-    }
-
-    function pickEquipment(tier) {
-      if (window.Items && typeof Items.createEquipment === "function") {
-        return Items.createEquipment(tier, rng);
-      }
-      const material = tier === 1 ? "rusty" : tier === 2 ? "iron" : "steel";
-      const categories = ["weapon", "offhand", "head", "torso", "legs", "hands"];
-      const cat = categories[randInt(0, categories.length - 1)];
-
-      if (cat === "weapon") {
-        const w = ["sword", "axe", "bow"][randInt(0, 2)];
-        const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
-        let atk = randFloat(ranges[0], ranges[1], 1);
-        if (w === "axe") atk = Math.min(4.0, round1(atk + randFloat(0.1, 0.5, 1)));
-        return { kind: "equip", slot: "weapon", name: `${material} ${w}`, atk, tier, decay: initialDecay(tier) };
-      }
-
-      if (cat === "offhand") {
-        const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
-        const def = randFloat(ranges[0], ranges[1], 1);
-        return { kind: "equip", slot: "offhand", name: `${material} shield`, def, tier, decay: initialDecay(tier) };
-      }
-
-      if (cat === "head") {
-        const ranges = tier === 1 ? [0.2, 1.6] : tier === 2 ? [0.8, 2.8] : [1.6, 3.6];
-        const def = randFloat(ranges[0], ranges[1], 1);
-        const name = tier >= 3 ? `${material} great helm` : `${material} helmet`;
-        return { kind: "equip", slot: "head", name, def, tier, decay: initialDecay(tier) };
-      }
-
-      if (cat === "torso") {
-        const ranges = tier === 1 ? [0.6, 2.6] : tier === 2 ? [1.6, 3.6] : [2.4, 4.0];
-        const def = randFloat(ranges[0], ranges[1], 1);
-        const name = tier >= 3 ? `${material} plate armor` : (tier === 2 ? `${material} chainmail` : `${material} leather armor`);
-        return { kind: "equip", slot: "torso", name, def, tier, decay: initialDecay(tier) };
-      }
-
-      if (cat === "legs") {
-        const ranges = tier === 1 ? [0.3, 1.8] : tier === 2 ? [1.0, 3.0] : [1.8, 3.8];
-        const def = randFloat(ranges[0], ranges[1], 1);
-        return { kind: "equip", slot: "legs", name: `${material} leg armor`, def, tier, decay: initialDecay(tier) };
-      }
-
-      if (cat === "hands") {
-        const ranges = tier === 1 ? [0.2, 1.2] : tier === 2 ? [0.8, 2.4] : [1.2, 3.0];
-        const def = randFloat(ranges[0], ranges[1], 1);
-        const name = tier >= 2 ? `${material} gauntlets` : `${material} gloves`;
-        const drop = { kind: "equip", slot: "hands", name, def, tier, decay: initialDecay(tier) };
-        if (tier >= 2 && chance(0.5)) {
-          const atk = tier === 2 ? randFloat(0.1, 0.6, 1) : randFloat(0.2, 1.0, 1);
-          drop.atk = atk;
-        }
-        return drop;
-      }
-
-      const atk = randFloat(0.8 + 0.4 * (tier - 1), 2.4 + 0.8 * (tier - 1), 1);
-      return { kind: "equip", slot: "weapon", name: `${material} sword`, atk, tier, decay: initialDecay(tier) };
-    }
+    return [];
   }
 
-  /*
-   Loots a corpse on the current tile:
-   - Transfers gold to a stack, potions auto-consume, equipment auto-equips if better
-   - Shows a loot panel listing what was obtained
-   - Consumes a turn
-  */
+  /* Loot a corpse on the current tile; consuming a turn */
   function lootCorpse() {
     if (isDead) return;
-
-    const here = corpses.filter(c => c.x === player.x && c.y === player.y);
-    if (here.length === 0) {
-      log("There is no corpse here to loot.");
+    if (window.Loot && typeof Loot.lootHere === "function") {
+      Loot.lootHere(getCtx());
       return;
     }
-    // find first corpse here that still has loot
-    const corpse = here.find(c => c.loot && c.loot.length > 0);
-    if (!corpse) {
-      // mark all as looted to fade them visually
-      here.forEach(c => c.looted = true);
-      log("All corpses here have nothing of value.");
-      return;
-    }
-
-    // transfer loot to inventory
-    const acquired = [];
-    for (const item of corpse.loot) {
-      if (item.kind === "equip") {
-        const equipped = equipIfBetter(item);
-        acquired.push(equipped ? `equipped ${describeItem(item)}` : describeItem(item));
-        if (!equipped) {
-          player.inventory.push(item);
-        }
-      } else if (item.kind === "gold") {
-        const existing = player.inventory.find(i => i.kind === "gold");
-        if (existing) existing.amount += item.amount;
-        else player.inventory.push({ kind: "gold", amount: item.amount, name: "gold" });
-        acquired.push(item.name);
-      } else if (item.kind === "potion") {
-        const heal = item.heal || 3;
-        if (player.hp >= player.maxHp) {
-          addPotionToInventory(heal, item.name);
-          acquired.push(`${item.name}`);
-        } else {
-          const before = player.hp;
-          player.hp = Math.min(player.maxHp, player.hp + heal);
-          const gained = player.hp - before;
-          log(`You drink a potion and restore ${gained.toFixed(1)} HP (HP ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}).`, "good");
-          acquired.push(item.name);
-        }
-      } else {
-        player.inventory.push(item);
-        acquired.push(item.name);
-      }
-    }
-    updateUI();
-    corpse.loot = [];
-    corpse.looted = true;
-
-    showLootPanel(acquired);
-    log(`You loot: ${acquired.join(", ")}.`);
-    turn(); // looting consumes a turn
   }
 
   function showLootPanel(list) {
     if (window.UI && typeof UI.showLoot === "function") {
       UI.showLoot(list);
       requestDraw();
-      return;
     }
-    const panel = document.getElementById("loot-panel");
-    const ul = document.getElementById("loot-list");
-    if (!panel || !ul) return;
-    ul.innerHTML = "";
-    list.forEach(name => {
-      const li = document.createElement("li");
-      li.textContent = name;
-      ul.appendChild(li);
-    });
-    panel.hidden = false;
-    requestDraw();
   }
 
   function hideLootPanel() {
@@ -823,7 +660,7 @@ Rendering layers (in order)
     requestDraw();
   }
 
-  // Inventory & Equipment panel
+  /* Inventory & Equipment panel */
   function renderInventoryPanel() {
     if (window.UI && typeof UI.renderInventory === "function") {
       // Keep totals in sync
@@ -981,7 +818,7 @@ Rendering layers (in order)
       player.hp = player.maxHp;
       if (player.level % 2 === 0) player.atk += 1;
       player.xpNext = Math.floor(player.xpNext * 1.3 + 10);
-      log(`You are now level ${player.level}. Max HP increased.`);
+      log(`You are now level ${player.level}. Max HP increased.`, "good");
     }
     updateUI();
   }
@@ -1010,89 +847,8 @@ Rendering layers (in order)
    - Otherwise: small chance to wander
   */
   function enemiesAct() {
-    const senseRange = 8;
-    for (const e of enemies) {
-      const dx = player.x - e.x;
-      const dy = player.y - e.y;
-      const dist = Math.abs(dx) + Math.abs(dy);
-
-      // attack if adjacent
-      if (Math.abs(dx) + Math.abs(dy) === 1) {
-        const loc = rollHitLocation();
-
-        // Player attempts to block with hand/position
-        if (rng() < getPlayerBlockChance(loc)) {
-          log(`You block the ${e.type || "enemy"}'s attack to your ${loc.part}.`, "block");
-          // Blocking uses gear
-          decayBlockingHands();
-          decayEquipped("hands", randFloat(0.3, 1.0, 1));
-          continue;
-        }
-
-        // Compute damage with location and crit; then reduce by defense
-        let raw = e.atk * enemyDamageMultiplier(e.level) * loc.mult;
-        let isCrit = false;
-        const critChance = Math.max(0, Math.min(0.5, 0.10 + loc.critBonus));
-        if (rng() < critChance) {
-          isCrit = true;
-          raw *= critMultiplier();
-        }
-        const dmg = enemyDamageAfterDefense(raw);
-        player.hp -= dmg;
-        if (isCrit) {
-          log(`Critical! ${capitalize(e.type || "enemy")} hits your ${loc.part} for ${dmg}.`, "crit");
-        } else {
-          log(`${capitalize(e.type || "enemy")} hits your ${loc.part} for ${dmg}.`);
-        }
-
-        // Item decay on being hit (armor/hands)
-        decayBlockingHands();
-        decayEquipped("torso", randFloat(0.8, 2.0, 1));
-        decayEquipped("head", randFloat(0.3, 1.0, 1));
-        decayEquipped("legs", randFloat(0.4, 1.3, 1));
-        decayEquipped("hands", randFloat(0.3, 1.0, 1));
-        if (player.hp <= 0) {
-          player.hp = 0;
-          isDead = true;
-          updateUI();
-          log("You die. Press R or Enter to restart.", "death");
-          showGameOver();
-          // stop further AI this turn
-          return;
-        }
-        continue;
-      }
-
-      if (dist <= senseRange) {
-        // try step closer; prefer axis with greater delta
-        const sx = dx === 0 ? 0 : dx > 0 ? 1 : -1;
-        const sy = dy === 0 ? 0 : dy > 0 ? 1 : -1;
-
-        const tryDirs = Math.abs(dx) > Math.abs(dy) ? [{x:sx,y:0},{x:0,y:sy}] : [{x:0,y:sy},{x:sx,y:0}];
-        let moved = false;
-        for (const d of tryDirs) {
-          const nx = e.x + d.x;
-          const ny = e.y + d.y;
-          if (isWalkable(nx, ny) && !occupied(nx, ny)) {
-            e.x = nx; e.y = ny; moved = true; break;
-          }
-        }
-        if (!moved) {
-          // try alternate directions (simple wiggle)
-          const alt = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
-          for (const d of alt) {
-            const nx = e.x + d.x;
-            const ny = e.y + d.y;
-            if (isWalkable(nx, ny) && !occupied(nx, ny)) { e.x = nx; e.y = ny; break; }
-          }
-        }
-      } else if (chance(0.3)) {
-        // random wander
-        const dirs = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
-        const d = dirs[randInt(0, dirs.length - 1)];
-        const nx = e.x + d.x, ny = e.y + d.y;
-        if (isWalkable(nx, ny) && !occupied(nx, ny)) { e.x = nx; e.y = ny; }
-      }
+    if (window.AI && typeof AI.enemiesAct === "function") {
+      AI.enemiesAct(getCtx());
     }
   }
 
@@ -1101,12 +857,7 @@ Rendering layers (in order)
     return enemies.some(e => e.x === x && e.y === y);
   }
 
-  /*
-   One full game turn after a player action:
-   - Enemies take their actions
-   - Recompute field of view
-   - Update UI and redraw the scene
-  */
+  /* One full game turn: enemies act, FOV updates, UI redraw */
   function turn() {
     enemiesAct();
     recomputeFOV();
@@ -1115,11 +866,7 @@ Rendering layers (in order)
   }
 
   // Game loop (only needed for animations; we redraw on each turn anyway)
-  /*
-   Lightweight animation loop:
-   - Keeps the canvas fresh and responsive to hover effects or future animations
-   - Core redraws happen during turns; this is a safety net
-  */
+  /* Lightweight animation loop to keep canvas responsive */
   function loop() {
     draw();
     requestAnimationFrame(loop);
@@ -1149,6 +896,8 @@ Rendering layers (in order)
     const eq = player.equipment || {};
     const amtMain = light ? randFloat(0.6, 1.6, 1) : randFloat(1.0, 2.2, 1);
     if (usingTwoHanded()) {
+      // Two-handed: same item is referenced in both hands; applying to both intentionally doubles wear.
+      // If we ever want to apply once per swing, change to a single decayEquipped on one hand.
       if (eq.left) decayEquipped("left", amtMain);
       if (eq.right) decayEquipped("right", amtMain);
       return;
@@ -1171,6 +920,7 @@ Rendering layers (in order)
     const eq = player.equipment || {};
     const amt = randFloat(0.6, 1.6, 1);
     if (usingTwoHanded()) {
+      // Two-handed: same object on both hands; decaying both sides doubles the wear when blocking.
       if (eq.left) decayEquipped("left", amt);
       if (eq.right) decayEquipped("right", amt);
       return;

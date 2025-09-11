@@ -3,14 +3,6 @@
     // Numpad
     Numpad8: {x:0,y:-1}, Numpad2: {x:0,y:1}, Numpad4: {x:-1,y:0}, Numpad6: {x:1,y:0},
     Numpad7: {x:-1,y:-1}, Numpad9: {x:1,y:-1}, Numpad1: {x:-1,y:1}, Numpad3: {x:1,y:1},
-    // Arrow keys (no diagonals)
-    ArrowUp: {x:0,y:-1}, ArrowDown: {x:0,y:1}, ArrowLeft: {x:-1,y:0}, ArrowRight: {x:1,y:0},
-    // WASD (no diagonals)
-    KeyW: {x:0,y:-1}, KeyS: {x:0,y:1}, KeyA: {x:-1,y:0}, KeyD: {x:1,y:0},
-    // Vim-style HJKL (no diagonals)
-    KeyK: {x:0,y:-1}, KeyJ: {x:0,y:1}, KeyH: {x:-1,y:0}, KeyL: {x:1,y:0},
-    // Diagonals via Q/E/Z/C
-    KeyQ: {x:-1,y:-1}, KeyE: {x:1,y:-1}, KeyZ: {x:-1,y:1}, KeyC: {x:1,y:1},
   };
 
   let _handlers = null;
@@ -71,7 +63,7 @@
       }
 
       // wait
-      if (key === "Numpad5" || e.code === "Space") {
+      if (key === "Numpad5") {
         e.preventDefault();
         _handlers.onWait && _handlers.onWait();
         return;

@@ -1,15 +1,9 @@
 /*
-Logger module for Tiny Roguelike.
+Logger: simple in-DOM log with capped length.
 
-- Creates colored log entries in the #log panel
-- Keeps most recent entries at the top
-- Caps the total number of entries (default 60)
-
-API:
-- Logger.init(target = "#log", max = 60)
-  target can be a CSS selector, HTMLElement, or omitted to auto-detect #log
-- Logger.log(message, type = "info")
-  type is one of: "info" (default), "crit", "block", "death", "good", "warn"
+Exports (window.Logger):
+- init(target = "#log", max = 60), log(message, type = "info")
+Types: info, crit, block, death, good, warn.
 */
 (function () {
   const Logger = {

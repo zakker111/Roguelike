@@ -1,24 +1,24 @@
 /*
-FOV module: recompute line-of-sight and explored memory.
+FOV: symmetrical shadowcasting with explored memory.
 
-API:
-- FOV.recomputeFOV(ctx)
-  ctx needs:
-    ROWS, COLS, fovRadius
-    player {x,y}
-    map (2D of TILES)
-    visible (2D boolean) [will be overwritten]
-    seen (2D boolean)    [will be updated]
-    inBounds(x,y)
-    TILES enum
-    enemies []
-    enemyThreatLabel(e) -> {label, tone}
-    log(msg, tone)
+Exports (window.FOV):
+- recomputeFOV(ctx) mutates ctx.visible and ctx.seen and announces newly seen enemies.
 */
 (function () {
   function recomputeFOV(ctx) {
     const { ROWS, COLS, fovRadius, player, map, TILES } = ctx;
-    const visible = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+
+    // Reuse the visible array if shape matches to avoid allocations each turn
+    let visible = ctx.visible;
+    const shapeOk = Array.isArray(visible) && visible.length === ROWS && visible[0]?.length === COLS;
+    if (!shapeOk) {
+      visible = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+    } else {
+      for (let y = 0; y < ROWS; y++) {
+        visible[y].fill(false);
+      }
+    }
+
     const radius = Math.max(1, fovRadius);
 
     function isTransparent(x, y) {
@@ -93,13 +93,26 @@ API:
 
     ctx.visible = visible;
 
-    // Announce newly visible enemies with a simple danger rating
+    // Announce newly visible enemies with a simple danger rating (rate-limited)
+    const newly = [];
     for (const e of ctx.enemies) {
       if (ctx.inBounds(e.x, e.y) && ctx.visible[e.y][e.x] && !e.announced) {
-        const { label, tone } = ctx.enemyThreatLabel(e);
-        ctx.log(`You spot a ${capitalize(e.type || "enemy")} Lv ${e.level || 1} (${label}).`, tone);
-        e.announced = true;
+        newly.push(e);
       }
+    }
+    if (newly.length > 0) {
+      const maxSolo = 2;
+      const toSolo = newly.slice(0, maxSolo);
+      for (const e of toSolo) {
+        const { label } = ctx.enemyThreatLabel(e);
+        ctx.log(`You spot a ${capitalize(e.type || "enemy")} Lv ${e.level || 1} (${label}).`, "notice");
+      }
+      const rest = newly.length - toSolo.length;
+      if (rest > 0) {
+        ctx.log(`You also spot ${rest} more ${rest === 1 ? "enemy" : "enemies"}.`, "notice");
+      }
+      // Mark all newly seen enemies as announced
+      for (const e of newly) e.announced = true;
     }
   }
 
