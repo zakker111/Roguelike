@@ -1,6 +1,4 @@
-/*
-Main game orchestrator: state, turns, combat, loot, UI hooks, level generation and rendering.
-*/
+
 
 (() => {
   // Constants
@@ -204,7 +202,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  /* Total player attack (base + level + equipment), rounded to 1 decimal */
+  
   function getPlayerAttack() {
     if (window.Player && typeof Player.getAttack === "function") {
       return Player.getAttack(player);
@@ -218,7 +216,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return round1(player.atk + bonus + levelBonus);
   }
 
-  /* Total player defense from equipment, rounded to 1 decimal */
+  
   function getPlayerDefense() {
     if (window.Player && typeof Player.getDefense === "function") {
       return Player.getDefense(player);
@@ -387,11 +385,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     renderInventoryPanel();
   }
 
-  /*
-   Auto-equip helper used on loot:
-   - Compares new item to current slot via a simple score (atk + def)
-   - Equips if strictly better; logs the change
-  */
+  
   function equipIfBetter(item) {
     if (window.Player && typeof Player.equipIfBetter === "function") {
       return Player.equipIfBetter(player, item, {
@@ -422,7 +416,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return false;
   }
 
-  /* Log a message to the UI (types: info, crit, block, death, good, warn) */
+  
   function log(msg, type = "info") {
     if (window.Logger && typeof Logger.log === "function") {
       Logger.log(msg, type);
@@ -442,7 +436,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   }
 
   // Map generation: random rooms + corridors
-  /* Generate a new floor, reset visibility and repopulate enemies/corpses */
+  
   function generateLevel(depth = 1) {
     if (window.Dungeon && typeof Dungeon.generateLevel === "function") {
       const ctx = getCtx();
@@ -515,11 +509,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  /*
-   Factory for enemies at (x,y) for a given depth.
-   - Chooses type based on depth (weighted goblin/troll/ogre)
-   - Sets glyph, hp/atk and XP reward
-  */
+  
   function createEnemyAt(x, y, depth) {
     if (window.Enemies && typeof Enemies.createEnemyAt === "function") {
       return Enemies.createEnemyAt(x, y, depth, rng);
@@ -531,7 +521,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   }
 
   // Field of view using simple ray casting within radius
-  /* Recompute visibility around the player and update explored memory */
+  
   function recomputeFOV() {
     if (window.FOV && typeof FOV.recomputeFOV === "function") {
       const ctx = getCtx();
@@ -584,7 +574,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     needsDraw = false;
   }
 
-  /* Input wiring (delegated to input.js) */
+  
 
   function descendIfPossible() {
     hideLootPanel();
@@ -629,7 +619,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  /* Try to move the player or attack if an enemy is in the target tile */
+  
   function tryMovePlayer(dx, dy) {
     if (isDead) return;
     const nx = player.x + dx;
@@ -693,7 +683,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  /* Generate loot: gold, potions, and sometimes equipment (tier-biased) */
+  
   function generateLoot(source) {
     if (window.Loot && typeof Loot.generate === "function") {
       return Loot.generate(getCtx(), source);
@@ -701,7 +691,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return [];
   }
 
-  /* Loot a corpse on the current tile; consuming a turn */
+  
   function lootCorpse() {
     if (isDead) return;
     if (window.Loot && typeof Loot.lootHere === "function") {
@@ -775,7 +765,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  /* Inventory & Equipment panel */
+  
   function renderInventoryPanel() {
     if (window.UI && typeof UI.renderInventory === "function") {
       // Keep totals in sync
@@ -914,11 +904,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     generateLevel(floor);
   }
 
-  /*
-   XP and leveling:
-   - Gain XP on kills; when threshold reached, level up
-   - Level up: +Max HP, full heal, +Atk every other level, next threshold increases
-  */
+  
   function gainXP(amount) {
     if (window.Player && typeof Player.gainXP === "function") {
       Player.gainXP(player, amount, { log, updateUI });
@@ -938,10 +924,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     updateUI();
   }
 
-  /*
-   Refreshes small UI labels in the top panel:
-   - HP and Gold on the left, Floor / Level / XP on the right
-  */
+  
   function updateUI() {
     if (window.UI && typeof UI.updateStats === "function") {
       UI.updateStats(player, floor, getPlayerAttack, getPlayerDefense);
@@ -955,12 +938,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     if (floorEl) floorEl.textContent = `Floor: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
   }
 
-  /*
-   Enemy AI:
-   - If adjacent: attack (damage reduced by your total defense)
-   - If within sense range: greedy step toward player with simple fallback wiggle
-   - Otherwise: small chance to wander
-  */
+  
   function enemiesAct() {
     if (window.AI && typeof AI.enemiesAct === "function") {
       AI.enemiesAct(getCtx());
@@ -972,7 +950,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return enemies.some(e => e.x === x && e.y === y);
   }
 
-  /* One full game turn: enemies act, FOV updates, UI redraw */
+  
   function turn() {
     enemiesAct();
     recomputeFOV();
@@ -982,7 +960,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   }
 
   // Game loop (only needed for animations; we redraw on each turn anyway)
-  /* Lightweight animation loop to keep canvas responsive */
+  
   function loop() {
     draw();
     requestAnimationFrame(loop);

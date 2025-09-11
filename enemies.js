@@ -52,32 +52,18 @@ Exports (window.Enemies):
       equipChance: 0.75,
     },
 
-    // Example enemy template (reference only; weight() returns 0 so it won't spawn)
+    // Example enemy template (reference; weight() returns 0 so it won't spawn)
     example_enemy: {
-      key: "example_enemy",         // Unique identifier; used in logs/logic
-      glyph: "S",                   // Single-character glyph drawn on the map
-      color: "#cbd5e1",             // CSS color used by the renderer for this enemy
-      tier: 2,                      // Loot tier bias (1..3). Affects equipment drop tier
-      blockBase: 0.07,              // Baseline block chance before hit-location modifiers (0.0..1.0)
-
-      // Spawn weighting as a function of depth. Return 0 to disable random spawns.
-      weight(depth) { return 0; },  // Example keeps it out of the spawn table
-
-      // Per-depth scaling functions. Keep these cheap and deterministic.
-      hp(depth) {                   // Total hit points at this depth
-        return 5 + Math.floor(depth * 0.7);
-      },
-      atk(depth) {                  // Base attack value at this depth
-        return 2 + Math.floor(depth / 3);
-      },
-      xp(depth) {                   // XP awarded on kill at this depth
-        return 10 + depth;
-      },
-
-      // Potion quality weights for drops (relative weights; not normalized)
+      key: "example_enemy",
+      glyph: "S",
+      color: "#cbd5e1",
+      tier: 2,
+      blockBase: 0.07,
+      weight(depth) { return 0; },
+      hp(depth) { return 5 + Math.floor(depth * 0.7); },
+      atk(depth) { return 2 + Math.floor(depth / 3); },
+      xp(depth) { return 10 + depth; },
       potionWeights: { lesser: 0.55, average: 0.35, strong: 0.10 },
-
-      // Chance to drop an equipment piece (0.0..1.0). Tier is determined by 'tier' above.
       equipChance: 0.50,
     },
   };
