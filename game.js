@@ -716,6 +716,9 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         acquired.push(equipped ? `equipped ${describeItem(item)}` : describeItem(item));
         if (!equipped) {
           player.inventory.push(item);
+        } else {
+          // If inventory panel is open, re-render to reflect equipment changes immediately
+          rerenderInventoryIfOpen();
         }
       } else if (item.kind === "gold") {
         const existing = player.inventory.find(i => i.kind === "gold");
