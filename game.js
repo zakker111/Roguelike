@@ -527,6 +527,7 @@
       const ctx = getCtx();
       ctx.seen = seen;
       ctx.visible = visible;
+      FOV.recomputeFOV(ctx);
       visible = ctx.visible;
       seen = ctx.seen;
       return;
