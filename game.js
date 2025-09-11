@@ -66,11 +66,38 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       // utils
       rng, randInt, chance,
       inBounds, isWalkable,
-      // hooks
+      // hooks/log
       log, enemyThreatLabel,
+      // UI helpers
+      updateUI: () => updateUI(),
+      renderInventory: () => renderInventoryPanel(),
+      // Items-related helper (for fallback decay)
+      initialDecay: (tier) => initialDecay(tier),
+      // Delegations for loot
+      describeItem: (it) => describeItem(it),
+      equipIfBetter: (item) => equipIfBetter(item),
+      addPotionToInventory: (heal, name) => addPotionToInventory(heal, name),
+      showLoot: (list) => showLootPanel(list),
+      hideLoot: () => hideLootPanel(),
+      turn: () => turn(),
+      // Combat helpers needed by AI
+      rollHitLocation: () => rollHitLocation(),
+      critMultiplier: () => critMultiplier(),
+      getPlayerBlockChance: (loc) => getPlayerBlockChance(loc),
+      enemyDamageAfterDefense: (raw) => enemyDamageAfterDefense(raw),
+      randFloat: (a,b,c) => randFloat(a,b,c),
+      decayBlockingHands: () => decayBlockingHands(),
+      decayEquipped: (slot, amt) => decayEquipped(slot, amt),
+      enemyDamageMultiplier: (level) => enemyDamageMultiplier(level),
+      // lifecycle
+      onPlayerDied: () => {
+        isDead = true;
+        updateUI();
+        log("You die. Press R or Enter to restart.", "death");
+        showGameOver();
+      },
       // module callbacks
       recomputeFOV: () => recomputeFOV(),
-      updateUI: () => updateUI(),
       // enemy factory
       enemyFactory: (x, y, depth) => {
         if (window.Enemies && Enemies.createEnemyAt) {
@@ -599,202 +626,34 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
 
   /* Generate loot: gold, potions, and sometimes equipment (tier-biased) */
   function generateLoot(source) {
-    const drops = [];
-    // base coins scale slightly with source strength
-    const baseCoins = randInt(1, 6);
-    const bonus = source ? Math.floor((source.xp || 0) / 10) : 0;
-    const coins = baseCoins + bonus;
-    drops.push({ name: `${coins} gold`, kind: "gold", amount: coins });
-
-    // Potions: lesser/average/strong; any enemy can drop one
-    if (chance(0.35)) {
-      drops.push(pickPotion(source));
+    if (window.Loot && typeof Loot.generate === "function") {
+      return Loot.generate(getCtx(), source);
     }
-
-    // chance to drop equipment (higher for stronger enemies)
-    const type = source?.type || "goblin";
-    const tier = (window.Enemies && Enemies.equipTierFor) ? Enemies.equipTierFor(type) : (type === "ogre" ? 3 : (type === "troll" ? 2 : 1));
-    const equipChance = (window.Enemies && Enemies.equipChanceFor) ? Enemies.equipChanceFor(type) : (type === "ogre" ? 0.75 : (type === "troll" ? 0.55 : 0.35));
-    if (chance(equipChance)) {
-      drops.push(pickEquipment(tier));
-    }
-    return drops;
-
-    // Choose a potion type based on enemy type with weighted probabilities.
-    // - If Enemies.potionWeightsFor exists, use its weights (lesser/average/strong) for the source type.
-    // - Else use sensible defaults with slight bias for stronger enemies (troll/ogre -> more chance for better potions).
-    function pickPotion(source) {
-      const t = source?.type || "goblin";
-      let wL = 0.6, wA = 0.3, wS = 0.1; // lesser/average/strong defaults
-      if (window.Enemies && Enemies.potionWeightsFor) {
-        const w = Enemies.potionWeightsFor(t) || {};
-        wL = typeof w.lesser === "number" ? w.lesser : wL;
-        wA = typeof w.average === "number" ? w.average : wA;
-        wS = typeof w.strong === "number" ? w.strong : wS;
-      } else {
-        // Fallback: trolls/ogres skew toward better potions
-        if (t === "troll") { wL = 0.5; wA = 0.35; wS = 0.15; }
-        if (t === "ogre")  { wL = 0.4; wA = 0.35; wS = 0.25; }
-      }
-      const r = rng();
-      if (r < wL) return { name: "lesser potion (+3 HP)", kind: "potion", heal: 3 };
-      if (r < wL + wA) return { name: "average potion (+6 HP)", kind: "potion", heal: 6 };
-      return { name: "strong potion (+10 HP)", kind: "potion", heal: 10 };
-    }
-
-    // Fallback equipment generator used only if Items.createEquipment is unavailable.
-    // - Picks a slot category and rolls stats inline.
-    // - Hand category splits into weapons (sword/axe/bow) vs shield with 65/35 split.
-    function pickEquipment(tier) {
-      if (window.Items && typeof Items.createEquipment === "function") {
-        return Items.createEquipment(tier, rng);
-      }
-      const material = tier === 1 ? "rusty" : tier === 2 ? "iron" : "steel";
-      const categories = ["hand", "head", "torso", "legs", "hands"];
-      const cat = categories[randInt(0, categories.length - 1)];
-
-      if (cat === "hand") {
-        // Hand items:
-        // - 65% attacking items (sword/axe/bow) with tiered attack ranges
-        // - 35% shield with tiered defense ranges
-        if (rng() < 0.65) {
-          const w = ["sword", "axe", "bow"][randInt(0, 2)];
-          const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
-          let atk = randFloat(ranges[0], ranges[1], 1);
-          if (w === "axe") atk = Math.min(4.0, round1(atk + randFloat(0.1, 0.5, 1))); // axes bias higher
-          return { kind: "equip", slot: "hand", name: `${material} ${w}`, atk, tier, decay: initialDecay(tier) };
-        } else {
-          const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
-          const def = randFloat(ranges[0], ranges[1], 1);
-          return { kind: "equip", slot: "hand", name: `${material} shield`, def, tier, decay: initialDecay(tier) };
-        }
-      }
-
-      if (cat === "head") {
-        const ranges = tier === 1 ? [0.2, 1.6] : tier === 2 ? [0.8, 2.8] : [1.6, 3.6];
-        const def = randFloat(ranges[0], ranges[1], 1);
-        const name = tier >= 3 ? `${material} great helm` : `${material} helmet`;
-        return { kind: "equip", slot: "head", name, def, tier, decay: initialDecay(tier) };
-      }
-
-      if (cat === "torso") {
-        const ranges = tier === 1 ? [0.6, 2.6] : tier === 2 ? [1.6, 3.6] : [2.4, 4.0];
-        const def = randFloat(ranges[0], ranges[1], 1);
-        const name = tier >= 3 ? `${material} plate armor` : (tier === 2 ? `${material} chainmail` : `${material} leather armor`);
-        return { kind: "equip", slot: "torso", name, def, tier, decay: initialDecay(tier) };
-      }
-
-      if (cat === "legs") {
-        const ranges = tier === 1 ? [0.3, 1.8] : tier === 2 ? [1.0, 3.0] : [1.8, 3.8];
-        const def = randFloat(ranges[0], ranges[1], 1);
-        return { kind: "equip", slot: "legs", name: `${material} leg armor`, def, tier, decay: initialDecay(tier) };
-      }
-
-      if (cat === "hands") {
-        const ranges = tier === 1 ? [0.2, 1.2] : tier === 2 ? [0.8, 2.4] : [1.2, 3.0];
-        const def = randFloat(ranges[0], ranges[1], 1);
-        const name = tier >= 2 ? `${material} gauntlets` : `${material} gloves`;
-        const drop = { kind: "equip", slot: "hands", name, def, tier, decay: initialDecay(tier) };
-        // Small chance for gloves to add attack at higher tiers
-        if (tier >= 2 && chance(0.5)) {
-          const atk = tier === 2 ? randFloat(0.1, 0.6, 1) : randFloat(0.2, 1.0, 1);
-          drop.atk = atk;
-        }
-        return drop;
-      }
-
-      // Ultimate fallback: a hand weapon using a generalized tier scaling
-      const atk = randFloat(0.8 + 0.4 * (tier - 1), 2.4 + 0.8 * (tier - 1), 1);
-      return { kind: "equip", slot: "hand", name: `${material} sword`, atk, tier, decay: initialDecay(tier) };
-    }
+    return [];
   }
 
   /* Loot a corpse on the current tile; consuming a turn */
   function lootCorpse() {
     if (isDead) return;
-
-    const here = corpses.filter(c => c.x === player.x && c.y === player.y);
-    if (here.length === 0) {
-      log("There is no corpse here to loot.");
+    if (window.Loot && typeof Loot.lootHere === "function") {
+      Loot.lootHere(getCtx());
       return;
     }
-    // find first corpse here that still has loot
-    const corpse = here.find(c => c.loot && c.loot.length > 0);
-    if (!corpse) {
-      // mark all as looted to fade them visually
-      here.forEach(c => c.looted = true);
-      // If any chest at this tile, announce empty chest
-      if (here.some(c => c.kind === "chest")) {
-        log("The chest is empty.");
-      } else {
-        log("All corpses here have nothing of value.");
-      }
-      return;
-    }
-
-    // Announce opening chest
-    if (corpse.kind === "chest") {
-      log("You open the chest.", "info");
-    }
-
-    // transfer loot to inventory
-    const acquired = [];
-    for (const item of corpse.loot) {
-      if (item.kind === "equip") {
-        const equipped = equipIfBetter(item);
-        acquired.push(equipped ? `equipped ${describeItem(item)}` : describeItem(item));
-        if (!equipped) {
-          player.inventory.push(item);
-        } else {
-          // If inventory panel is open, re-render to reflect equipment changes immediately
-          rerenderInventoryIfOpen();
-        }
-      } else if (item.kind === "gold") {
-        const existing = player.inventory.find(i => i.kind === "gold");
-        if (existing) existing.amount += item.amount;
-        else player.inventory.push({ kind: "gold", amount: item.amount, name: "gold" });
-        acquired.push(item.name);
-      } else if (item.kind === "potion") {
-        const heal = item.heal || 3;
-        if (player.hp >= player.maxHp) {
-          addPotionToInventory(heal, item.name);
-          acquired.push(`${item.name}`);
-        } else {
-          const before = player.hp;
-          player.hp = Math.min(player.maxHp, player.hp + heal);
-          const gained = player.hp - before;
-          log(`You drink a potion and restore ${gained.toFixed(1)} HP (HP ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}).`, "good");
-          acquired.push(item.name);
-        }
-      } else {
-        player.inventory.push(item);
-        acquired.push(item.name);
-      }
-    }
-    updateUI();
-    corpse.loot = [];
-    corpse.looted = true;
-
-    showLootPanel(acquired);
-    log(`You loot: ${acquired.join(", ")}.`);
-    turn(); // looting consumes a turn
   }
 
   function showLootPanel(list) {
     if (window.UI && typeof UI.showLoot === "function") {
       UI.showLoot(list);
       requestDraw();
-      return;
     }
-    const panel = document.getElementById("loot-panel");
-    const ul = document.getElementById("loot-list");
-    if (!panel || !ul) return;
-    ul.innerHTML = "";
-    list.forEach(name => {
-      const li = document.createElement("li");
-      li.textContent = name;
-      ul.appendChild(li);
-    });
+  }
+
+  function hideLootPanel() {
+    if (window.UI && typeof UI.hideLoot === "function") {
+      UI.hideLoot();
+      requestDraw();
+    }
+  });
     panel.hidden = false;
     requestDraw();
   }
@@ -998,110 +857,8 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
    - Otherwise: small chance to wander
   */
   function enemiesAct() {
-    const senseRange = 8;
-
-    // Build occupancy set for O(1) checks this turn
-    const occ = new Set(enemies.map(en => `${en.x},${en.y}`));
-    const isFree = (x, y) => isWalkable(x, y) && !occ.has(`${x},${y}`) && !(player.x === x && player.y === y);
-
-    for (const e of enemies) {
-      const dx = player.x - e.x;
-      const dy = player.y - e.y;
-      const dist = Math.abs(dx) + Math.abs(dy);
-
-      // attack if adjacent
-      if (Math.abs(dx) + Math.abs(dy) === 1) {
-        const loc = rollHitLocation();
-
-        // Player attempts to block with hand/position
-        if (rng() < getPlayerBlockChance(loc)) {
-          log(`You block the ${e.type || "enemy"}'s attack to your ${loc.part}.`, "block");
-          // Blocking uses gear
-          decayBlockingHands();
-          decayEquipped("hands", randFloat(0.3, 1.0, 1));
-          continue;
-        }
-
-        // Compute damage with location and crit; then reduce by defense
-        let raw = e.atk * enemyDamageMultiplier(e.level) * loc.mult;
-        let isCrit = false;
-        const critChance = Math.max(0, Math.min(0.5, 0.10 + loc.critBonus));
-        if (rng() < critChance) {
-          isCrit = true;
-          raw *= critMultiplier();
-        }
-        const dmg = enemyDamageAfterDefense(raw);
-        player.hp -= dmg;
-        if (isCrit) {
-          log(`Critical! ${capitalize(e.type || "enemy")} hits your ${loc.part} for ${dmg}.`, "crit");
-        } else {
-          log(`${capitalize(e.type || "enemy")} hits your ${loc.part} for ${dmg}.`);
-        }
-
-        // Item decay on being hit: only the struck location should wear.
-        // critWear > 1 models that critical hits stress armor more than normal blows.
-        const critWear = isCrit ? 1.6 : 1.0;
-        let wear = 0.5;
-        if (loc.part === "torso") wear = randFloat(0.8, 2.0, 1);
-        else if (loc.part === "head") wear = randFloat(0.3, 1.0, 1);
-        else if (loc.part === "legs") wear = randFloat(0.4, 1.3, 1);
-        else if (loc.part === "hands") wear = randFloat(0.3, 1.0, 1);
-        decayEquipped(loc.part, wear * critWear);
-        if (player.hp <= 0) {
-          player.hp = 0;
-          isDead = true;
-          updateUI();
-          log("You die. Press R or Enter to restart.", "death");
-          showGameOver();
-          // stop further AI this turn
-          return;
-        }
-        continue;
-      }
-
-      if (dist <= senseRange && hasLOS(e.x, e.y, player.x, player.y)) {
-        // try step closer; prefer axis with greater delta
-        const sx = dx === 0 ? 0 : dx > 0 ? 1 : -1;
-        const sy = dy === 0 ? 0 : dy > 0 ? 1 : -1;
-
-        const tryDirs = Math.abs(dx) > Math.abs(dy) ? [{x:sx,y:0},{x:0,y:sy}] : [{x:0,y:sy},{x:sx,y:0}];
-        let moved = false;
-        for (const d of tryDirs) {
-          const nx = e.x + d.x;
-          const ny = e.y + d.y;
-          if (isFree(nx, ny)) {
-            // update occupancy
-            occ.delete(`${e.x},${e.y}`);
-            e.x = nx; e.y = ny;
-            occ.add(`${e.x},${e.y}`);
-            moved = true; break;
-          }
-        }
-        if (!moved) {
-          // try alternate directions (simple wiggle)
-          const alt = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
-          for (const d of alt) {
-            const nx = e.x + d.x;
-            const ny = e.y + d.y;
-            if (isFree(nx, ny)) {
-              occ.delete(`${e.x},${e.y}`);
-              e.x = nx; e.y = ny;
-              occ.add(`${e.x},${e.y}`);
-              break;
-            }
-          }
-        }
-      } else if (chance(0.3)) {
-        // random wander
-        const dirs = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
-        const d = dirs[randInt(0, dirs.length - 1)];
-        const nx = e.x + d.x, ny = e.y + d.y;
-        if (isFree(nx, ny)) {
-          occ.delete(`${e.x},${e.y}`);
-          e.x = nx; e.y = ny;
-          occ.add(`${e.x},${e.y}`);
-        }
-      }
+    if (window.AI && typeof AI.enemiesAct === "function") {
+      AI.enemiesAct(getCtx());
     }
   }
 

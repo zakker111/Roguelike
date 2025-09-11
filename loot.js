@@ -1,0 +1,225 @@
+/*
+Loot: enemy drops and looting interactions.
+
+Exports (window.Loot):
+- generate(ctx, source): returns an array of loot items for a defeated enemy
+- lootHere(ctx): loot at the player's current tile; handles auto-equip, potions, UI
+
+ctx contract (minimal):
+{
+  // state
+  player, corpses,
+  // rng utils
+  rng, randInt, chance,
+  // item helpers
+  describeItem(item),
+  equipIfBetter(item),
+  addPotionToInventory(heal, name),
+  initialDecay(tier),
+  // ui/log/turn
+  log(msg, type?), updateUI(), renderInventory(), showLoot(list), hideLoot(), turn(),
+  // items module presence hint
+  Items
+}
+*/
+(function () {
+  function pickPotion(ctx, source) {
+    const t = source?.type || "goblin";
+    let wL = 0.6, wA = 0.3, wS = 0.1;
+    if (window.Enemies && Enemies.potionWeightsFor) {
+      const w = Enemies.potionWeightsFor(t) || {};
+      wL = typeof w.lesser === "number" ? w.lesser : wL;
+      wA = typeof w.average === "number" ? w.average : wA;
+      wS = typeof w.strong === "number" ? w.strong : wS;
+    } else {
+      if (t === "troll") { wL = 0.5; wA = 0.35; wS = 0.15; }
+      if (t === "ogre")  { wL = 0.4; wA = 0.35; wS = 0.25; }
+    }
+    const r = ctx.rng();
+    if (r < wL) return { name: "lesser potion (+3 HP)", kind: "potion", heal: 3 };
+    if (r < wL + wA) return { name: "average potion (+6 HP)", kind: "potion", heal: 6 };
+    return { name: "strong potion (+10 HP)", kind: "potion", heal: 10 };
+  }
+
+  // Fallback equipment generator used only if Items.createEquipment is unavailable
+  function fallbackEquipment(ctx, tier) {
+    const material = tier === 1 ? "rusty" : tier === 2 ? "iron" : "steel";
+    const categories = ["hand", "head", "torso", "legs", "hands"];
+    const cat = categories[ctx.randInt(0, categories.length - 1)];
+
+    if (cat === "hand") {
+      if (ctx.rng() < 0.65) {
+        const w = ["sword", "axe", "bow"][ctx.randInt(0, 2)];
+        const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
+        let atk = randFloatLocal(ctx, ranges[0], ranges[1], 1);
+        if (w === "axe") atk = Math.min(4.0, round1Local(atk + randFloatLocal(ctx, 0.1, 0.5, 1)));
+        return { kind: "equip", slot: "hand", name: `${material} ${w}`, atk, tier, decay: ctx.initialDecay(tier) };
+      } else {
+        const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
+        const def = randFloatLocal(ctx, ranges[0], ranges[1], 1);
+        return { kind: "equip", slot: "hand", name: `${material} shield`, def, tier, decay: ctx.initialDecay(tier) };
+      }
+    }
+
+    if (cat === "head") {
+      const ranges = tier === 1 ? [0.2, 1.6] : tier === 2 ? [0.8, 2.8] : [1.6, 3.6];
+      const def = randFloatLocal(ctx, ranges[0], ranges[1], 1);
+      const name = tier >= 3 ? `${material} great helm` : `${material} helmet`;
+      return { kind: "equip", slot: "head", name, def, tier, decay: ctx.initialDecay(tier) };
+    }
+
+    if (cat === "torso") {
+      const ranges = tier === 1 ? [0.6, 2.6] : tier === 2 ? [1.6, 3.6] : [2.4, 4.0];
+      const def = randFloatLocal(ctx, ranges[0], ranges[1], 1);
+      const name = tier >= 3 ? `${material} plate armor` : (tier === 2 ? `${material} chainmail` : `${material} leather armor`);
+      return { kind: "equip", slot: "torso", name, def, tier, decay: ctx.initialDecay(tier) };
+    }
+
+    if (cat === "legs") {
+      const ranges = tier === 1 ? [0.3, 1.8] : tier === 2 ? [1.0, 3.0] : [1.8, 3.8];
+      const def = randFloatLocal(ctx, ranges[0], ranges[1], 1);
+      return { kind: "equip", slot: "legs", name: `${material} leg armor`, def, tier, decay: ctx.initialDecay(tier) };
+    }
+
+    if (cat === "hands") {
+      const ranges = tier === 1 ? [0.2, 1.2] : tier === 2 ? [0.8, 2.4] : [1.2, 3.0];
+      const def = randFloatLocal(ctx, ranges[0], ranges[1], 1);
+      const name = tier >= 2 ? `${material} gauntlets` : `${material} gloves`;
+      const drop = { kind: "equip", slot: "hands", name, def, tier, decay: ctx.initialDecay(tier) };
+      if (tier >= 2 && ctx.chance(0.5)) {
+        const atk = tier === 2 ? randFloatLocal(ctx, 0.1, 0.6, 1) : randFloatLocal(ctx, 0.2, 1.0, 1);
+        drop.atk = atk;
+      }
+      return drop;
+    }
+
+    const atk = randFloatLocal(ctx, 0.8 + 0.4 * (tier - 1), 2.4 + 0.8 * (tier - 1), 1);
+    return { kind: "equip", slot: "hand", name: `${material} sword`, atk, tier, decay: ctx.initialDecay(tier) };
+  }
+
+  function round1Local(n) { return Math.round(n * 10) / 10; }
+  function randFloatLocal(ctx, min, max, decimals = 1) {
+    const v = min + ctx.rng() * (max - min);
+    const p = Math.pow(10, decimals);
+    return Math.round(v * p) / p;
+  }
+
+  function generate(ctx, source) {
+    const drops = [];
+    const baseCoins = ctx.randInt(1, 6);
+    const bonus = source ? Math.floor((source.xp || 0) / 10) : 0;
+    const coins = baseCoins + bonus;
+    drops.push({ name: `${coins} gold`, kind: "gold", amount: coins });
+
+    if (ctx.chance(0.35)) {
+      drops.push(pickPotion(ctx, source));
+    }
+
+    const type = source?.type || "goblin";
+    const tier = (window.Enemies && Enemies.equipTierFor) ? Enemies.equipTierFor(type) : (type === "ogre" ? 3 : (type === "troll" ? 2 : 1));
+    const equipChance = (window.Enemies && Enemies.equipChanceFor) ? Enemies.equipChanceFor(type) : (type === "ogre" ? 0.75 : (type === "troll" ? 0.55 : 0.35));
+    if (ctx.chance(equipChance)) {
+      if (window.Items && typeof Items.createEquipment === "function") {
+        drops.push(Items.createEquipment(tier, ctx.rng));
+      } else {
+        drops.push(fallbackEquipment(ctx, tier));
+      }
+    }
+    return drops;
+  }
+
+  function showLoot(ctx, list) {
+    if (window.UI && typeof UI.showLoot === "function") {
+      UI.showLoot(list);
+      return;
+    }
+    const panel = document.getElementById("loot-panel");
+    const ul = document.getElementById("loot-list");
+    if (!panel || !ul) return;
+    ul.innerHTML = "";
+    list.forEach(name => {
+      const li = document.createElement("li");
+      li.textContent = name;
+      ul.appendChild(li);
+    });
+    panel.hidden = false;
+  }
+
+  function hideLoot(ctx) {
+    if (window.UI && typeof UI.hideLoot === "function") {
+      UI.hideLoot();
+      return;
+    }
+    const panel = document.getElementById("loot-panel");
+    if (!panel) return;
+    panel.hidden = true;
+  }
+
+  function lootHere(ctx) {
+    const { player, corpses } = ctx;
+    const here = corpses.filter(c => c.x === player.x && c.y === player.y);
+    if (here.length === 0) {
+      ctx.log("There is no corpse here to loot.");
+      return;
+    }
+    const container = here.find(c => c.loot && c.loot.length > 0);
+    if (!container) {
+      here.forEach(c => c.looted = true);
+      if (here.some(c => c.kind === "chest")) ctx.log("The chest is empty.");
+      else ctx.log("All corpses here have nothing of value.");
+      return;
+    }
+
+    if (container.kind === "chest") {
+      ctx.log("You open the chest.", "info");
+    }
+
+    const acquired = [];
+    for (const item of container.loot) {
+      if (item.kind === "equip") {
+        const equipped = ctx.equipIfBetter(item);
+        acquired.push(equipped ? `equipped ${ctx.describeItem(item)}` : ctx.describeItem(item));
+        if (!equipped) {
+          player.inventory.push(item);
+        } else {
+          if (window.UI && UI.isInventoryOpen && UI.isInventoryOpen() && typeof ctx.renderInventory === "function") {
+            ctx.renderInventory();
+          }
+        }
+      } else if (item.kind === "gold") {
+        const existing = player.inventory.find(i => i.kind === "gold");
+        if (existing) existing.amount += item.amount;
+        else player.inventory.push({ kind: "gold", amount: item.amount, name: "gold" });
+        acquired.push(item.name);
+      } else if (item.kind === "potion") {
+        const heal = item.heal || 3;
+        if (player.hp >= player.maxHp) {
+          ctx.addPotionToInventory(heal, item.name);
+          acquired.push(`${item.name}`);
+        } else {
+          const before = player.hp;
+          player.hp = Math.min(player.maxHp, player.hp + heal);
+          const gained = player.hp - before;
+          ctx.log(`You drink a potion and restore ${gained.toFixed(1)} HP (HP ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}).`, "good");
+          acquired.push(item.name);
+        }
+      } else {
+        player.inventory.push(item);
+        acquired.push(item.name);
+      }
+    }
+
+    ctx.updateUI();
+    container.loot = [];
+    container.looted = true;
+
+    showLoot(ctx, acquired);
+    ctx.log(`You loot: ${acquired.join(", ")}.`);
+    if (typeof ctx.turn === "function") ctx.turn();
+  }
+
+  window.Loot = {
+    generate,
+    lootHere,
+  };
+})();
