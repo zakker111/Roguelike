@@ -61,6 +61,7 @@ Notes:
         if (prevL && prevL !== item) player.inventory.push(prevL);
         if (prevR && prevR !== item) player.inventory.push(prevR);
         if (hooks.updateUI) hooks.updateUI();
+        if (hooks.renderInventory) hooks.renderInventory();
         return true;
       }
 
@@ -96,6 +97,7 @@ Notes:
         hooks.log(`You equip ${item.name} (${statStr || "hand item"}).`);
       }
       if (hooks.updateUI) hooks.updateUI();
+      if (hooks.renderInventory) hooks.renderInventory();
       return true;
     }
 
@@ -116,6 +118,7 @@ Notes:
         hooks.log(`You equip ${item.name} (${slot}${statStr ? ", " + statStr : ""}).`);
       }
       if (hooks.updateUI) hooks.updateUI();
+      if (hooks.renderInventory) hooks.renderInventory();
       return true;
     }
     return false;
