@@ -83,8 +83,9 @@ Milestones
 - M3: Character panel (scars/events), first batch of scars with tiny modifiers
 - M4: Modularization phase 2/3; tests for combat + status tick paths
 
- simulation and review when code is changed
 
+
+**Prompt start**
 Project engineering prompt (guidelines to enforce JSDoc, reusable functions, modularization, and smoke-test review)
 - Documentation
   - Add concise JSDoc at the top of each module and for exported or non-trivial functions.
@@ -108,3 +109,4 @@ Project engineering prompt (guidelines to enforce JSDoc, reusable functions, mod
   - [ ] Randomness uses ctx.rng or injected rng param
   - [ ] Smoke test passes; browser console is clean
   - [ ] Summary, rationale, affected files, and test steps included
+  **Prompt end**
