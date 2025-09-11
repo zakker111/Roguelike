@@ -42,11 +42,14 @@ Exports (window.Render):
 
     // tiles
     for (let y = 0; y < ROWS; y++) {
+      const rowMap = map[y];
+      const rowSeen = seen[y];
+      const rowVis = visible[y];
       for (let x = 0; x < COLS; x++) {
         const screenX = x * TILE;
         const screenY = y * TILE;
-        const vis = visible[y][x];
-        const everSeen = seen[y][x];
+        const vis = rowVis[x];
+        const everSeen = rowSeen[x];
 
         // If tile has never been seen, render as unknown to avoid revealing layout
         if (!everSeen) {
@@ -56,7 +59,7 @@ Exports (window.Render):
           continue;
         }
 
-        const type = map[y][x];
+        const type = rowMap[x];
         let fill;
         if (type === TILES.WALL) fill = vis ? COLORS.wall : COLORS.wallDark;
         else if (type === TILES.STAIRS) fill = vis ? "#3a2f1b" : "#241e14";
@@ -77,11 +80,13 @@ Exports (window.Render):
       }
     }
 
-    // staircase glyphs (">") overlay for visible stairs/doors
+    // staircase glyphs (">") overlay for visible stairs only
     for (let y = 0; y < ROWS; y++) {
+      const rowMap = map[y];
+      const rowVis = visible[y];
       for (let x = 0; x < COLS; x++) {
-        const t = map[y][x];
-        if (visible[y][x] && (t === TILES.STAIRS || t === TILES.DOOR)) {
+        const t = rowMap[x];
+        if (rowVis[x] && t === TILES.STAIRS) {
           drawGlyph(ctx2d, TILE, x, y, ">", "#d7ba7d");
         }
       }

@@ -503,7 +503,8 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   function descendIfPossible() {
     hideLootPanel();
     const here = map[player.y][player.x];
-    if (here === TILES.STAIRS || here === TILES.DOOR) {
+    // Restrict descending to STAIRS tile only for clarity
+    if (here === TILES.STAIRS) {
       floor += 1;
       window.floor = floor;
       generateLevel(floor);
@@ -986,6 +987,11 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   */
   function enemiesAct() {
     const senseRange = 8;
+
+    // Build occupancy set for O(1) checks this turn
+    const occ = new Set(enemies.map(en => `${en.x},${en.y}`));
+    const isFree = (x, y) => isWalkable(x, y) && !occ.has(`${x},${y}`) && !(player.x === x && player.y === y);
+
     for (const e of enemies) {
       const dx = player.x - e.x;
       const dy = player.y - e.y;
@@ -1050,8 +1056,12 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         for (const d of tryDirs) {
           const nx = e.x + d.x;
           const ny = e.y + d.y;
-          if (isWalkable(nx, ny) && !occupied(nx, ny)) {
-            e.x = nx; e.y = ny; moved = true; break;
+          if (isFree(nx, ny)) {
+            // update occupancy
+            occ.delete(`${e.x},${e.y}`);
+            e.x = nx; e.y = ny;
+            occ.add(`${e.x},${e.y}`);
+            moved = true; break;
           }
         }
         if (!moved) {
@@ -1060,7 +1070,12 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
           for (const d of alt) {
             const nx = e.x + d.x;
             const ny = e.y + d.y;
-            if (isWalkable(nx, ny) && !occupied(nx, ny)) { e.x = nx; e.y = ny; break; }
+            if (isFree(nx, ny)) {
+              occ.delete(`${e.x},${e.y}`);
+              e.x = nx; e.y = ny;
+              occ.add(`${e.x},${e.y}`);
+              break;
+            }
           }
         }
       } else if (chance(0.3)) {
@@ -1068,7 +1083,11 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         const dirs = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
         const d = dirs[randInt(0, dirs.length - 1)];
         const nx = e.x + d.x, ny = e.y + d.y;
-        if (isWalkable(nx, ny) && !occupied(nx, ny)) { e.x = nx; e.y = ny; }
+        if (isFree(nx, ny)) {
+          occ.delete(`${e.x},${e.y}`);
+          e.x = nx; e.y = ny;
+          occ.add(`${e.x},${e.y}`);
+        }
       }
     }
   }
