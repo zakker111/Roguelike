@@ -613,6 +613,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         onHideInventory: () => hideInventoryPanel(),
         onHideLoot: () => hideLootPanel(),
         onHideGod: () => { if (window.UI && UI.hideGod) UI.hideGod(); requestDraw(); },
+        onShowGod: () => { if (window.UI && UI.showGod) UI.showGod(); requestDraw(); },
         onMove: (dx, dy) => tryMovePlayer(dx, dy),
         onWait: () => turn(),
         onLoot: () => lootCorpse(),

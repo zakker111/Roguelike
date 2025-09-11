@@ -52,6 +52,13 @@
         return;
       }
 
+      // Open GOD mode
+      if (e.key && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        _handlers.onShowGod && _handlers.onShowGod();
+        return;
+      }
+
       // FOV adjust
       if (e.code === "BracketLeft" || e.key === "[" || e.code === "Minus" || e.code === "NumpadSubtract" || e.key === "-") {
         e.preventDefault();
