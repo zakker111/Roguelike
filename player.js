@@ -89,6 +89,10 @@ Exports (window.Player):
   }
 
   function describeItem(item) {
+    // Prefer centralized description from Items module if available
+    if (window.Items && typeof Items.describe === "function") {
+      return Items.describe(item);
+    }
     if (!item) return "";
     if (item.kind === "equip") {
       const parts = [];
