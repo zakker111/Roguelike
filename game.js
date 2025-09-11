@@ -1026,8 +1026,9 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
           log(`${capitalize(e.type || "enemy")} hits your ${loc.part} for ${dmg}.`);
         }
 
-        // Item decay on being hit: only the struck location should wear
-        const critWear = isCrit ? 1.6 : 1.0; // critical hits stress armor more
+        // Item decay on being hit: only the struck location should wear.
+        // critWear > 1 models that critical hits stress armor more than normal blows.
+        const critWear = isCrit ? 1.6 : 1.0;
         let wear = 0.5;
         if (loc.part === "torso") wear = randFloat(0.8, 2.0, 1);
         else if (loc.part === "head") wear = randFloat(0.3, 1.0, 1);
@@ -1136,6 +1137,8 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     const eq = player.equipment || {};
     const amtMain = light ? randFloat(0.6, 1.6, 1) : randFloat(1.0, 2.2, 1);
     if (usingTwoHanded()) {
+      // Two-handed: same item is referenced in both hands; applying to both intentionally doubles wear.
+      // If we ever want to apply once per swing, change to a single decayEquipped on one hand.
       if (eq.left) decayEquipped("left", amtMain);
       if (eq.right) decayEquipped("right", amtMain);
       return;
@@ -1158,6 +1161,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     const eq = player.equipment || {};
     const amt = randFloat(0.6, 1.6, 1);
     if (usingTwoHanded()) {
+      // Two-handed: same object on both hands; decaying both sides doubles the wear when blocking.
       if (eq.left) decayEquipped("left", amt);
       if (eq.right) decayEquipped("right", amt);
       return;

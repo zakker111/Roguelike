@@ -117,7 +117,14 @@ Notes:
   // - If total weight <= 0, returns the first entry as a fallback (or its .value if present).
   function pickWeighted(entries, rng) {
     const total = entries.reduce((s, e) => s + (e.w || e.weight || 0), 0);
-    if (total <= 0) return entries[0]?.value ?? entries[0] ?? null;
+    if (total <= 0) {
+      // Debug hint: sum of weights is non-positive; likely a data/config issue.
+      // Keep behavior stable by returning the first entry.
+      if (typeof console !== "undefined" && console && typeof console.warn === "function") {
+        try { console.warn("Items.pickWeighted: total weight <= 0; using first entry.", entries); } catch (_) {}
+      }
+      return entries[0]?.value ?? entries[0] ?? null;
+    }
     let r = rng() * total;
     for (const e of entries) {
       const w = e.w || e.weight || 0;
