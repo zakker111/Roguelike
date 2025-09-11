@@ -91,6 +91,11 @@ Exports (window.Dungeon):
       }
       ctx.player.x = start.x;
       ctx.player.y = start.y;
+
+      // Place a starter chest in the spawn room (once)
+      if (window.DungeonItems && typeof DungeonItems.placeChestInStartRoom === "function") {
+        DungeonItems.placeChestInStartRoom(ctx);
+      }
     } else {
       // For subsequent floors, keep current stats, just move player to start
       player.x = start.x;

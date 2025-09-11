@@ -87,10 +87,14 @@ Exports (window.Render):
       }
     }
 
-    // corpses
+    // corpses and chests
     for (const c of corpses) {
       if (!visible[c.y][c.x]) continue;
-      drawGlyph(ctx2d, TILE, c.x, c.y, "%", c.looted ? COLORS.corpseEmpty : COLORS.corpse);
+      if (c.kind === "chest") {
+        drawGlyph(ctx2d, TILE, c.x, c.y, "C", c.looted ? "#8b7355" : "#d7ba7d");
+      } else {
+        drawGlyph(ctx2d, TILE, c.x, c.y, "%", c.looted ? COLORS.corpseEmpty : COLORS.corpse);
+      }
     }
 
     // enemies
