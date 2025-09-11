@@ -10,41 +10,48 @@
 </head>
 <body>
   <div class="ui">
-   <<div class="title">Tiny Rogueli</</div>
-   <<div class="stats">
-     <<span id="health">HP: </</span>
-     <<span id="floor">Floor:</</span>
-  </</div>
-   <<div class="help">
-      Move: Numpad (7/8/9/4/6/1/2/3) or arrows. Wait: Numpad5/Space. Bump to attack. G to loot. I to inventory. N/Enter to descend (stand on >). Adjust FOV: [ ] or +/-. Dev: press P for God mode.
+    <div class="title">Tiny Roguelike</div>
+    <div class="stats">
+      <span id="health">HP: 40</span>
+      <span id="floor">Floor: 1</span>
+    </div>
+    <div class="help">
+      Move: Numpad (7/8/9/4/6/1/2/3) or arrows. Wait: Numpad5/Space. Bump to attack. G to loot. I to inventory. N/Enter to descend (stand on >). Adjust FOV: [ ] or +/-.
     </div>
   </div>
+
   <canvas id="game" width="960" height="640"></canvas>
   <div class="log" id="log"></div>
-      Move: Numpad (7/8/9/4/6/1/2/3) or arrows. Wait: Numpad5/Space. Bump to attack. G to loot. I to inventory. N/Enter to descend (stand on >). Adjust FOV: [ ] or +/-.
-  </</div>
-   <dbutton id="god-open-btn" class="btn" title="God Mode">G</>
-button> </ssdiv>
- <icanvas id="game" width="960" height="6"></sscanvas>
- <ediv class="log" id="l"></="div>
 
- <ldiv id="loot-panel" class="loot-panel" hidden>
-   <
-div class="loot-title">Loot acquir</ kdiv>
-   <cul id="loot-li"></ <ul>
-   < div class="loot-hint">Press any key or click to clo</n>div> </ivdiv>
+  <div id="loot-panel" class="loot-panel" hidden>
+    <div class="loot-title">Loot acquired</div>
+    <ul id="loot-list"></ul>
+    <div class="loot-hint">Press any key or click to close</div>
+  </div>
 
- <ldiv id="gameover-panel" class="gameover-panel" hidden>
-   <ldiv class="loot-title">Game Ov</  div>
-   <ddiv id="gameover-summary" class="gameover-summa"></v div>
-   <obutton id="restart-btn" class="btn">Resta</ <button>
-   <vdiv class="loot-hint">Press R or Enter to resta</v div> </indiv>
+  <div id="gameover-panel" class="gameover-panel" hidden>
+    <div class="loot-title">Game Over</div>
+    <div id="gameover-summary" class="gameover-summary"></div>
+    <button id="restart-btn" class="btn">Restart</button>
+    <div class="loot-hint">Press R or Enter to restart</div>
+  </div>
 
- <>div id="inv-panel" class="inv-panel" hidden>
-   <sdiv class="inv-title">Inventory & Equipme</ipdiv>
-   <ldiv id="inv-stats" class="inv-sta"></s=div>
-   <idiv id="equip-slots" class="equip-gr"></t"div>
-   <ndiv class="inv-subtitle">Invento</-hdiv">Click an equippable item to equip. Press I or Esc to close.</div>
+  <div id="inv-panel" class="inv-panel" hidden>
+    <div class="inv-title">Inventory & Equipment</div>
+    <div id="inv-stats" class="inv-stats"></div>
+    <div id="equip-slots" class="equip-grid"></div>
+    <div class="inv-subtitle">Inventory</div>
+    <ul id="inv-list" class="inv-list"></ul>
+    <div class="loot-hint">Click an equippable item to equip. Press I or Esc to close.</div>
+  </div>
+
+  <div id="god-panel" class="inv-panel" hidden>
+    <div class="inv-title">GOD Mode</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+      <button id="god-heal-btn" class="btn">Fully Heal</button>
+      <button id="god-spawn-btn" class="btn">Spawn Random Items</button>
+    </div>
+    <div class="loot-hint">Press Esc to close</div>
   </div>
 
   <script src="ctx.js"></script>
