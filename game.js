@@ -613,7 +613,13 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         onHideInventory: () => hideInventoryPanel(),
         onHideLoot: () => hideLootPanel(),
         onHideGod: () => { if (window.UI && UI.hideGod) UI.hideGod(); requestDraw(); },
-        onShowGod: () => { if (window.UI && UI.showGod) UI.showGod(); requestDraw(); },
+        onShowGod: () => {
+          if (window.UI) {
+            if (typeof UI.setGodFov === "function") UI.setGodFov(fovRadius);
+            if (typeof UI.showGod === "function") UI.showGod();
+          }
+          requestDraw();
+        },
         onMove: (dx, dy) => tryMovePlayer(dx, dy),
         onWait: () => turn(),
         onLoot: () => lootCorpse(),
@@ -994,6 +1000,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         onRestart: () => restartGame(),
         onGodHeal: () => godHeal(),
         onGodSpawn: () => godSpawnItems(),
+        onGodSetFov: (v) => setFovRadius(v),
       });
     }
   }

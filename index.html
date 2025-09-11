@@ -16,7 +16,7 @@
       <span id="floor">Floor: 1</span>
     </div>
     <div class="help">
-      Move: Numpad (7/8/9/4/6/1/2/3). Wait: Numpad5. Bump to attack. G to loot. I to inventory. N/Enter to descend (stand on >). Adjust FOV: [ ] or +/-.
+      Move: Numpad (7/8/9/4/6/1/2/3). Wait: Numpad5. Bump to attack. G to loot. I to inventory. N/Enter to descend (stand on >).
     </div>
   </div>
 
@@ -50,6 +50,11 @@
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
       <button id="god-heal-btn" class="btn">Fully Heal</button>
       <button id="god-spawn-btn" class="btn">Spawn Random Items</button>
+    </div>
+    <div class="inv-subtitle">Field of view (FOV)</div>
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+      <input id="god-fov" type="range" min="3" max="14" step="1" />
+      <span id="god-fov-value" class="help" style="font-size:12px;"></span>
     </div>
     <div class="loot-hint">Press Esc to close</div>
   </div>
