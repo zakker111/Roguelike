@@ -224,10 +224,10 @@ Exports (window.Dungeon):
 
   function defaultEnemyFactory(x, y, depth, rng) {
     const EM = (typeof window !== "undefined" ? window.Enemies : null);
-    if (EM && EM.createEnemyAt) {
+    if (EM && typeof EM.createEnemyAt === "function") {
       return EM.createEnemyAt(x, y, depth, rng);
     }
- 3, atk: 1, xp: 5, level: depth, announced: false };
+    return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
   }
 
   window.Dungeon = { generateLevel };
