@@ -5,10 +5,18 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
 (() => {
   // Constants
   const TILE = 32;
-  const COLS = 30;
-  const ROWS = 20;
+  const COLS = 30; // viewport width in tiles
+  const ROWS = 20; // viewport height in tiles
   const FOV_DEFAULT = 8;
   let fovRadius = FOV_DEFAULT;
+
+  // Camera (pixel-based top-left of the viewport)
+  const camera = {
+    x: 0,
+    y: 0,
+    width: COLS * TILE,
+    height: ROWS * TILE,
+  };
 
   // Tile enums
   const TILES = {
@@ -443,6 +451,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       startRoomRect = ctx.startRoomRect;
       // Now run post-gen steps in this orchestrator
       recomputeFOV();
+      updateCamera();
       // Safety: ensure player tile is marked visible after generation
       if (inBounds(player.x, player.y) && !visible[player.y][player.x]) {
         try { log("FOV sanity check: player tile not visible after gen; recomputing.", "warn"); } catch (_) {}
@@ -528,6 +537,21 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     // Fallback: do nothing if module missing
   }
 
+  // Camera helpers
+  function updateCamera() {
+    // Center camera on player
+    const mapCols = map[0] ? map[0].length : COLS;
+    const mapRows = map ? map.length : ROWS;
+    const mapWidth = mapCols * TILE;
+    const mapHeight = mapRows * TILE;
+
+    const targetX = player.x * TILE + TILE / 2 - camera.width / 2;
+    const targetY = player.y * TILE + TILE / 2 - camera.height / 2;
+
+    camera.x = Math.max(0, Math.min(targetX, Math.max(0, mapWidth - camera.width)));
+    camera.y = Math.max(0, Math.min(targetY, Math.max(0, mapHeight - camera.height)));
+  }
+
   // Rendering
   function getRenderCtx() {
     return {
@@ -535,6 +559,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       TILE, ROWS, COLS, COLORS, TILES,
       map, seen, visible,
       player, enemies, corpses,
+      camera,
       enemyColor: (t) => enemyColor(t),
     };
   }
@@ -645,6 +670,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     if (isWalkable(nx, ny) && !enemies.some(e => e.x === nx && e.y === ny)) {
       player.x = nx;
       player.y = ny;
+      updateCamera();
       turn();
     }
   }
@@ -886,9 +912,10 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   function turn() {
     enemiesAct();
     recomputeFOV();
+    updateCamera();
     updateUI();
-    requestDraw();
-  }
+    requestDraw();_code
+ new </}
 
   // Game loop (only needed for animations; we redraw on each turn anyway)
   /* Lightweight animation loop to keep canvas responsive */
