@@ -41,6 +41,17 @@
         return;
       }
 
+      // GOD mode modal gate
+      if (_handlers.isGodOpen && _handlers.isGodOpen()) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          _handlers.onHideGod && _handlers.onHideGod();
+        } else {
+          e.preventDefault();
+        }
+        return;
+      }
+
       // FOV adjust
       if (e.code === "BracketLeft" || e.key === "[" || e.code === "Minus" || e.code === "NumpadSubtract" || e.key === "-") {
         e.preventDefault();

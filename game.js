@@ -606,11 +606,13 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         isDead: () => isDead,
         isInventoryOpen: () => !!(window.UI && UI.isInventoryOpen && UI.isInventoryOpen()),
         isLootOpen: () => !!(window.UI && UI.isLootOpen && UI.isLootOpen()),
+        isGodOpen: () => !!(window.UI && UI.isGodOpen && UI.isGodOpen()),
         // actions
         onRestart: () => restartGame(),
         onShowInventory: () => showInventoryPanel(),
         onHideInventory: () => hideInventoryPanel(),
         onHideLoot: () => hideLootPanel(),
+        onHideGod: () => { if (window.UI && UI.hideGod) UI.hideGod(); requestDraw(); },
         onMove: (dx, dy) => tryMovePlayer(dx, dy),
         onWait: () => turn(),
         onLoot: () => lootCorpse(),
@@ -718,6 +720,52 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     if (!panel) return;
     panel.hidden = true;
     requestDraw();
+  }
+
+  // GOD mode actions
+  function godHeal() {
+    const prev = player.hp;
+    player.hp = Math.max(player.hp, player.maxHp);
+    if (player.hp > prev) {
+      log(`GOD: You are fully healed (${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)} HP).`, "good");
+    } else {
+      log(`GOD: HP already full (${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}).`, "warn");
+    }
+    updateUI();
+    requestDraw();
+  }
+
+  function godSpawnItems(count = 3) {
+    const created = [];
+    for (let i = 0; i < count; i++) {
+      let it = null;
+      // Prefer Items module for proper generation
+      if (window.Items && typeof Items.createEquipment === "function") {
+        const tier = Math.min(3, Math.max(1, Math.floor((floor + 1) / 2)));
+        it = Items.createEquipment(tier, rng);
+      } else if (window.DungeonItems && DungeonItems.lootFactories && typeof DungeonItems.lootFactories === "object") {
+        // Fallback: try one of the dungeon loot factories
+        const keys = Object.keys(DungeonItems.lootFactories);
+        if (keys.length > 0) {
+          const k = keys[randInt(0, keys.length - 1)];
+          try { it = DungeonItems.lootFactories[k](getCtx(), { tier: 2 }); } catch (_) {}
+        }
+      }
+      if (!it) {
+        // Last resort: simple generic weapon/armor
+        if (rng() < 0.5) it = { kind: "equip", slot: "hand", name: "debug sword", atk: 1.5, tier: 2, decay: initialDecay(2) };
+        else it = { kind: "equip", slot: "torso", name: "debug armor", def: 1.0, tier: 2, decay: initialDecay(2) };
+      }
+      player.inventory.push(it);
+      created.push(describeItem(it));
+    }
+    if (created.length) {
+      log(`GOD: Spawned ${created.length} item${created.length > 1 ? "s" : ""}:`);
+      created.forEach(n => log(`- ${n}`));
+      updateUI();
+      renderInventoryPanel();
+      requestDraw();
+    }
   }
 
   /* Inventory & Equipment panel */
@@ -943,6 +991,8 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         onUnequip: (slot) => unequipSlot(slot),
         onDrink: (idx) => drinkPotionByIndex(idx),
         onRestart: () => restartGame(),
+        onGodHeal: () => godHeal(),
+        onGodSpawn: () => godSpawnItems(),
       });
     }
   }

@@ -17,6 +17,8 @@ Exports (window.UI):
       onUnequip: null,
       onDrink: null,
       onRestart: null,
+      onGodHeal: null,
+      onGodSpawn: null,
     },
 
     init() {
@@ -32,6 +34,12 @@ Exports (window.UI):
       this.els.invList = document.getElementById("inv-list");
       this.els.equipSlotsEl = document.getElementById("equip-slots");
       this.els.invStatsEl = document.getElementById("inv-stats");
+
+      // GOD mode elements
+      this.els.godOpenBtn = document.getElementById("god-open-btn");
+      this.els.godPanel = document.getElementById("god-panel");
+      this.els.godHealBtn = document.getElementById("god-heal-btn");
+      this.els.godSpawnBtn = document.getElementById("god-spawn-btn");
 
       // transient hand-chooser element
       this.els.handChooser = document.createElement("div");
@@ -58,6 +66,15 @@ Exports (window.UI):
       this.els.restartBtn?.addEventListener("click", () => {
         if (typeof this.handlers.onRestart === "function") this.handlers.onRestart();
       });
+      // GOD panel open + actions
+      this.els.godOpenBtn?.addEventListener("click", () => this.showGod());
+      this.els.godHealBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodHeal === "function") this.handlers.onGodHeal();
+      });
+      this.els.godSpawnBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodSpawn === "function") this.handlers.onGodSpawn();
+      });
+
       // Delegate equip slot clicks (unequip)
       this.els.equipSlotsEl?.addEventListener("click", (ev) => {
         const span = ev.target.closest("span.name[data-slot]");
@@ -133,12 +150,14 @@ Exports (window.UI):
       return true;
     },
 
-    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart } = {}) {
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
       if (typeof onDrink === "function") this.handlers.onDrink = onDrink;
       if (typeof onRestart === "function") this.handlers.onRestart = onRestart;
+      if (typeof onGodHeal === "function") this.handlers.onGodHeal = onGodHeal;
+      if (typeof onGodSpawn === "function") this.handlers.onGodSpawn = onGodSpawn;
     },
 
     updateStats(player, floor, getAtk, getDef) {
@@ -267,6 +286,21 @@ Exports (window.UI):
 
     isLootOpen() {
       return !!(this.els.lootPanel && !this.els.lootPanel.hidden);
+    },
+
+    // GOD mode modal
+    showGod() {
+      if (this.isLootOpen()) this.hideLoot();
+      if (this.isInventoryOpen()) this.hideInventory();
+      if (this.els.godPanel) this.els.godPanel.hidden = false;
+    },
+
+    hideGod() {
+      if (this.els.godPanel) this.els.godPanel.hidden = true;
+    },
+
+    isGodOpen() {
+      return !!(this.els.godPanel && !this.els.godPanel.hidden);
     },
 
     showGameOver(player, floor) {
