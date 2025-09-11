@@ -161,7 +161,7 @@ Exports (window.Player):
     const before = it.decay || 0;
     it.decay = Math.min(100, round1(before + amount));
     if (it.decay >= 100) {
-      if (hooks.log) hooks.log(`${(it.name || "Item")[0].toUpperCase()}${(it.name || "Item").slice(1)} breaks and is destroyed.`);
+      if (hooks.log) hooks.log(`${(it.name || "Item")[0].toUpperCase()}${(it.name || "Item").slice(1)} breaks and is destroyed.`, "death");
       player.equipment[slot] = null;
       if (hooks.updateUI) hooks.updateUI();
       if (hooks.onInventoryChange) hooks.onInventoryChange();
@@ -180,7 +180,7 @@ Exports (window.Player):
       player.hp = player.maxHp;
       if (player.level % 2 === 0) player.atk += 1;
       player.xpNext = Math.floor(player.xpNext * 1.3 + 10);
-      if (hooks.log) hooks.log(`You are now level ${player.level}. Max HP increased.`);
+      if (hooks.log) hooks.log(`You are now level ${player.level}. Max HP increased.`, "good");
     }
     if (hooks.updateUI) hooks.updateUI();
   }

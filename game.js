@@ -165,7 +165,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     const before = it.decay || 0;
     it.decay = Math.min(100, round1(before + amount));
     if (it.decay >= 100) {
-      log(`${capitalize(it.name)} breaks and is destroyed.`);
+      log(`${capitalize(it.name)} breaks and is destroyed.`, "death");
       player.equipment[slot] = null;
       updateUI();
       rerenderInventoryIfOpen();
@@ -818,7 +818,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       player.hp = player.maxHp;
       if (player.level % 2 === 0) player.atk += 1;
       player.xpNext = Math.floor(player.xpNext * 1.3 + 10);
-      log(`You are now level ${player.level}. Max HP increased.`);
+      log(`You are now level ${player.level}. Max HP increased.`, "good");
     }
     updateUI();
   }
