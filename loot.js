@@ -1,28 +1,40 @@
 /*
-Loot: enemy drops and looting interactions.
+Loot subsystem: enemy drops and player looting.
 
 Exports (window.Loot):
-- generate(ctx, source): returns an array of loot items for a defeated enemy
-- lootHere(ctx): loot at the player's current tile; handles auto-equip, potions, UI
+- generate(ctx, source): build an array of drop items for a defeated enemy (gold, optional potion, optional equipment)
+- lootHere(ctx): resolve looting interaction at the player's position (corpses and chests). Handles
+  - auto-equip if the item is strictly better (via ctx.equipIfBetter)
+  - gold stacking
+  - potions: drink immediately if missing HP, otherwise add to inventory
+  - UI side effects: logs, top HUD update, and a small \"Loot acquired\" panel
 
-ctx contract (minimal):
+Design goals:
+- Keep this module UI-agnostic: it uses small hooks provided by ctx (log/updateUI/renderInventory/showLoot/hideLoot),
+  falling back to simple DOM manipulation when UI module is absent.
+- Prefer data-driven equipment via Items module when available; otherwise generate sensible fallbacks with ctx.rng
+- Be deterministic with ctx.rng when present (important for seeded runs / replays)
+
+Minimal ctx contract (soft):
 {
   // state
   player, corpses,
-  // rng utils
+  // RNG utils
   rng, randInt, chance,
   // item helpers
-  describeItem(item),
-  equipIfBetter(item),
-  addPotionToInventory(heal, name),
-  initialDecay(tier),
+  describeItem(item), equipIfBetter(item), addPotionToInventory(heal, name), initialDecay(tier),
   // ui/log/turn
   log(msg, type?), updateUI(), renderInventory(), showLoot(list), hideLoot(), turn(),
-  // items module presence hint
-  Items
+  // optional modules
+  Items, Enemies
 }
 */
 (function () {
+  /**
+   * Choose a potion tier based on enemy type.
+   * Prefers Enemies.potionWeightsFor(type) when available; otherwise uses sane defaults.
+   * Returns a plain item object: { kind: "potion", name, heal }
+   */
   function pickPotion(ctx, source) {
     const t = source?.type || "goblin";
     let wL = 0.6, wA = 0.3, wS = 0.1;
@@ -42,7 +54,11 @@ ctx contract (minimal):
     return { name: "strong potion (+10 HP)", kind: "potion", heal: 10 };
   }
 
-  // Fallback equipment generator used only if Items.createEquipment is unavailable
+  /**
+   * Create an equipment item when Items.createEquipment is unavailable.
+   * Uses ctx.rng to pick a slot and generate tier-appropriate stats and names.
+   * This ensures the game remains playable without the Items module.
+   */
   function fallbackEquipment(ctx, tier) {
     const material = tier === 1 ? "rusty" : tier === 2 ? "iron" : "steel";
     const categories = ["hand", "head", "torso", "legs", "hands"];
@@ -105,6 +121,13 @@ ctx contract (minimal):
     return Math.round(v * p) / p;
   }
 
+  /**
+   * Build the drop list for a defeated enemy.
+   * Always grants some gold, may add:
+   * - a potion (weighted by enemy type)
+   * - equipment (tier and chance driven by Enemies helpers when available)
+   * Returns: Array of items (gold/potion/equip/...)
+   */
   function generate(ctx, source) {
     const drops = [];
     const baseCoins = ctx.randInt(1, 6);
@@ -131,6 +154,10 @@ ctx contract (minimal):
     return drops;
   }
 
+  /**
+   * Show a small modal panel listing the acquired item names.
+   * Uses UI.showLoot when present, otherwise writes directly to the fallback DOM panel.
+   */
   function showLoot(ctx, list) {
     if (window.UI && typeof UI.showLoot === "function") {
       UI.showLoot(list);
@@ -148,6 +175,9 @@ ctx contract (minimal):
     panel.hidden = false;
   }
 
+  /**
+   * Hide the loot panel. Uses UI.hideLoot when present or a simple DOM toggle otherwise.
+   */
   function hideLoot(ctx) {
     if (window.UI && typeof UI.hideLoot === "function") {
       UI.hideLoot();
@@ -158,6 +188,17 @@ ctx contract (minimal):
     panel.hidden = true;
   }
 
+  /**
+   * Loot whatever is at the player's tile:
+   * - If a chest/corpse has items, transfer them (auto-equip if strictly better).
+   * - Mark the container as looted and show a short summary panel.
+   * - Consume a turn for the player (ctx.turn()).
+   *
+   * Side effects:
+   * - May mutate player.inventory/equipment and HP (when drinking potions)
+   * - Updates HUD via ctx.updateUI and logs summary lines
+   * - Rerenders inventory panel if open (to reflect auto-equip/stacking changes)
+   */
   function lootHere(ctx) {
     const { player, corpses } = ctx;
     const here = corpses.filter(c => c.x === player.x && c.y === player.y);
