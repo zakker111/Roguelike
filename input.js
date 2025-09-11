@@ -92,8 +92,6 @@
         e.preventDefault();
         _handlers.onWait && _handlers.onWait();
         return;
-);
-        return;
       }
 
       // loot
