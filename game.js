@@ -1020,13 +1020,14 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
           log(`${capitalize(e.type || "enemy")} hits your ${loc.part} for ${dmg}.`);
         }
 
-        // Item decay on being hit (armor/hands)
-        decayBlockingHands();
+        // Item decay on being hit: only the struck location should wear
         const critWear = isCrit ? 1.6 : 1.0; // critical hits stress armor more
-        decayEquipped("torso", randFloat(0.8, 2.0, 1) * critWear);
-        decayEquipped("head", randFloat(0.3, 1.0, 1) * critWear);
-        decayEquipped("legs", randFloat(0.4, 1.3, 1) * critWear);
-        decayEquipped("hands", randFloat(0.3, 1.0, 1) * critWear);
+        let wear = 0.5;
+        if (loc.part === "torso") wear = randFloat(0.8, 2.0, 1);
+        else if (loc.part === "head") wear = randFloat(0.3, 1.0, 1);
+        else if (loc.part === "legs") wear = randFloat(0.4, 1.3, 1);
+        else if (loc.part === "hands") wear = randFloat(0.3, 1.0, 1);
+        decayEquipped(loc.part, wear * critWear);
         if (player.hp <= 0) {
           player.hp = 0;
           isDead = true;
