@@ -151,11 +151,16 @@ Exports (window.Dungeon):
     }
 
     
-    const enemyCount = 8 + Math.floor(depth * 1.5);
+    const enemyCount = 12 + Math.floor(depth * 2);
     const makeEnemy = ctx.enemyFactory || defaultEnemyFactory;
     for (let i = 0; i < enemyCount; i++) {
       const p = randomFloor(ctx, rooms);
       ctx.enemies.push(makeEnemy(p.x, p.y, depth, ctx.rng));
+    }
+    // Announce total enemies on this floor via flavor module (optional)
+    const FlavorMod = (ctx.Flavor || (typeof window !== "undefined" ? window.Flavor : null));
+    if (FlavorMod && typeof FlavorMod.announceFloorEnemyCount === "function") {
+      try { FlavorMod.announceFloorEnemyCount(ctx); } catch (_) {}
     }
   }
 

@@ -90,5 +90,22 @@ Behavior:
     }
   }
 
-  window.Flavor = { logHit, logPlayerHit };
+  /**
+   * Announce total enemies present on the floor (once per floor start).
+   * Always logs a concise summary using ctx.enemies.length.
+   * ctx: { enemies:Array, log:fn }
+   */
+  function announceFloorEnemyCount(ctx) {
+    if (!ctx || typeof ctx.log !== "function" || !Array.isArray(ctx.enemies)) return;
+    const n = ctx.enemies.length | 0;
+    if (n <= 0) {
+      ctx.log("You sense no enemies on this floor.", "notice");
+    } else if (n === 1) {
+      ctx.log("You sense 1 enemy on this floor.", "notice");
+    } else {
+      ctx.log(`You sense ${n} enemies on this floor.`, "notice");
+    }
+  }
+
+  window.Flavor = { logHit, logPlayerHit, announceFloorEnemyCount };
 })();
