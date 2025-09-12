@@ -468,6 +468,11 @@
     }
     
     map = Array.from({ length: MAP_ROWS }, () => Array(MAP_COLS).fill(TILES.FLOOR));
+    // Ensure a staircase exists in the fallback map
+    const sy = Math.max(1, MAP_ROWS - 2), sx = Math.max(1, MAP_COLS - 2);
+    if (map[sy] && typeof map[sy][sx] !== "undefined") {
+      map[sy][sx] = TILES.STAIRS;
+    }
     enemies = [];
     corpses = [];
     recomputeFOV();

@@ -128,6 +128,28 @@ Exports (window.Dungeon):
     const STAIRS = typeof TILES.STAIRS === "number" ? TILES.STAIRS : TILES.DOOR;
     ctx.map[end.y][end.x] = STAIRS;
 
+    // Ensure at least one staircase exists as a safety net
+    let stairsCount = 0;
+    for (let yy = 1; yy < rRows - 1; yy++) {
+      for (let xx = 1; xx < rCols - 1; xx++) {
+        if (ctx.map[yy][xx] === STAIRS) stairsCount++;
+      }
+    }
+    if (stairsCount === 0) {
+      // Place fallback stairs far from the player and outside the start room when possible
+      let best = null, bestD = -1;
+      for (let yy = 1; yy < rRows - 1; yy++) {
+        for (let xx = 1; xx < rCols - 1; xx++) {
+          if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
+          if (ctx.startRoomRect && inRect(xx, yy, ctx.startRoomRect)) continue;
+          const d = Math.abs(xx - ctx.player.x) + Math.abs(yy - ctx.player.y);
+          if (d > bestD) { bestD = d; best = { x: xx, y: yy }; }
+        }
+      }
+      if (!best) best = { x: Math.max(1, rCols - 2), y: Math.max(1, rRows - 2) };
+      ctx.map[best.y][best.x] = STAIRS;
+    }
+
     
     const enemyCount = 8 + Math.floor(depth * 1.5);
     const makeEnemy = ctx.enemyFactory || defaultEnemyFactory;
