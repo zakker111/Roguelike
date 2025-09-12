@@ -53,5 +53,42 @@ Behavior:
     }
   }
 
-  window.Flavor = { logHit };
+  // --- Player hitting enemies ---
+  const ENEMY_HEAD_CRIT = [
+    "A clean crack to the skull; it reels.",
+    "Your strike slams its head; it staggers."
+  ];
+
+  const ENEMY_GOBLIN_TORSO = [
+    "You jab the goblin's ribs; it wheezes.",
+    "A punch to its ribs knocks the wind from the goblin."
+  ];
+
+  /**
+   * Log an optional flavor line for when the player hits an enemy.
+   * ctx: { rng():fn, log(msg, type?):fn }
+   * opts: { target:{type?}, loc:{part}, crit:boolean }
+   */
+  function logPlayerHit(ctx, opts) {
+    if (!ctx || typeof ctx.log !== "function" || typeof ctx.rng !== "function") return;
+    const target = opts && opts.target || {};
+    const loc = opts && opts.loc || {};
+    const crit = !!(opts && opts.crit);
+
+    if (crit && loc.part === "head") {
+      if (ctx.rng() < 0.6) {
+        ctx.log(pick(ENEMY_HEAD_CRIT, ctx.rng), "notice");
+      }
+      return;
+    }
+
+    if ((target.type || "") === "goblin" && loc.part === "torso") {
+      if (ctx.rng() < 0.6) {
+        ctx.log(pick(ENEMY_GOBLIN_TORSO, ctx.rng), "info");
+      }
+      return;
+    }
+  }
+
+  window.Flavor = { logHit, logPlayerHit };
 })();
