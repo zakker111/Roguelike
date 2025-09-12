@@ -661,7 +661,7 @@
       } else {
         log(`You hit the ${enemy.type || "enemy"}'s ${loc.part} for ${dmg}.`);
       }
-      { const ctx = getCtx(); if (ctx.Flavor && typeof ctx.Flavor.logPlayerHit === "function") ctx.Flavor.logPlayerHit(ctx, { target: enemy, loc, crit: isCrit }); }
+      { const ctx = getCtx(); if (ctx.Flavor && typeof ctx.Flavor.logPlayerHit === "function") ctx.Flavor.logPlayerHit(ctx, { target: enemy, loc, crit: isCrit, dmg }); }
 
       if (enemy.hp <= 0) {
         log(`${capitalize(enemy.type || "enemy")} dies.`, "bad");

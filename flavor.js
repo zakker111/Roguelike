@@ -64,17 +64,25 @@ Behavior:
     "A punch to its ribs knocks the wind from the goblin."
   ];
 
+  const GOOD_HIT_GENERIC = [
+    "A heavy blow!",
+    "A solid hit!",
+    "A telling strike!"
+  ];
+
   /**
    * Log an optional flavor line for when the player hits an enemy.
    * ctx: { rng():fn, log(msg, type?):fn }
-   * opts: { target:{type?}, loc:{part}, crit:boolean }
+   * opts: { target:{type?}, loc:{part}, crit:boolean, dmg:number }
    */
   function logPlayerHit(ctx, opts) {
     if (!ctx || typeof ctx.log !== "function" || typeof ctx.rng !== "function") return;
     const target = opts && opts.target || {};
     const loc = opts && opts.loc || {};
     const crit = !!(opts && opts.crit);
+    const dmg = (opts && typeof opts.dmg === "number") ? opts.dmg : null;
 
+    // Strong crit to head -> yellow notice
     if (crit && loc.part === "head") {
       if (ctx.rng() < 0.6) {
         ctx.log(pick(ENEMY_HEAD_CRIT, ctx.rng), "notice");
@@ -82,10 +90,21 @@ Behavior:
       return;
     }
 
+    // Good damage threshold (absolute, simple): >= 3.0 -> green "good"
+    if (!crit && dmg != null && dmg >= 3.0) {
+      if (ctx.rng() < 0.7) {
+        ctx.log(pick(GOOD_HIT_GENERIC, ctx.rng), "good");
+      }
+      // continue; allow location/type-specific variants below via early return
+    }
+
     if ((target.type || "") === "goblin" && loc.part === "torso") {
       if (ctx.rng() < 0.6) {
         ctx.log(pick(ENEMY_GOBLIN_TORSO, ctx.rng), "info");
       }
+      return;
+    }
+  }
       return;
     }
   }
