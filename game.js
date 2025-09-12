@@ -727,7 +727,7 @@
   // GOD mode actions
   function godHeal() {
     const prev = player.hp;
-    player.hp = Math.max(player.hp, player.maxHp);
+    player.hp = player.maxHp;
     if (player.hp > prev) {
       log(`GOD: You are fully healed (${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)} HP).`, "good");
     } else {

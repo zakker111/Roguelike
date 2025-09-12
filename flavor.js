@@ -90,21 +90,18 @@ Behavior:
       return;
     }
 
-    // Good damage threshold (absolute, simple): >= 3.0 -> green "good"
-    if (!crit && dmg != null && dmg >= 3.0) {
-      if (ctx.rng() < 0.7) {
+    // Good damage (more frequent): absolute >= 2.0 -> green "good"
+    if (!crit && dmg != null && dmg >= 2.0) {
+      if (ctx.rng() < 0.8) {
         ctx.log(pick(GOOD_HIT_GENERIC, ctx.rng), "good");
       }
-      // continue; allow location/type-specific variants below via early return
+      // continue to allow location/type-specific line below with its own chance
     }
 
     if ((target.type || "") === "goblin" && loc.part === "torso") {
       if (ctx.rng() < 0.6) {
         ctx.log(pick(ENEMY_GOBLIN_TORSO, ctx.rng), "info");
       }
-      return;
-    }
-  }
       return;
     }
   }
