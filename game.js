@@ -765,6 +765,70 @@
     }
   }
 
+  /**
+   * Spawn one or more enemies near the player (debug/GOD).
+   * - Chooses a free FLOOR tile within a small radius; falls back to any free floor tile.
+   * - Creates enemy via ctx.enemyFactory or Enemies.createEnemyAt.
+   * - Applies small randomized jitters to hp/atk for variety (deterministic via rng).
+   */
+  function godSpawnEnemyNearby(count = 1) {
+    const isFreeFloor = (x, y) => {
+      if (!inBounds(x, y)) return false;
+      if (map[y][x] !== TILES.FLOOR) return false;
+      if (player.x === x && player.y === y) return false;
+      if (enemies.some(e => e.x === x && e.y === y)) return false;
+      return true;
+    };
+
+    const pickNearby = () => {
+      const maxAttempts = 60;
+      for (let i = 0; i < maxAttempts; i++) {
+        const dx = randInt(-5, 5);
+        const dy = randInt(-5, 5);
+        const x = player.x + dx;
+        const y = player.y + dy;
+        if (isFreeFloor(x, y)) return { x, y };
+      }
+      // fallback: any free floor
+      const free = [];
+      for (let y = 0; y < map.length; y++) {
+        for (let x = 0; x < (map[0] ? map[0].length : 0); x++) {
+          if (isFreeFloor(x, y)) free.push({ x, y });
+        }
+      }
+      if (free.length === 0) return null;
+      return free[randInt(0, free.length - 1)];
+    };
+
+    const ctx = getCtx();
+    const spawned = [];
+    for (let i = 0; i < count; i++) {
+      const spot = pickNearby();
+      if (!spot) break;
+      const makeEnemy = (ctx.enemyFactory || ((x, y, depth) => createEnemyAt(x, y, depth)));
+      const e = makeEnemy(spot.x, spot.y, floor);
+
+      // Jitter stats a bit for flavor
+      if (typeof e.hp === "number" && rng() < 0.7) {
+        const mult = 0.85 + rng() * 0.5; // 0.85..1.35
+        e.hp = Math.max(1, Math.round(e.hp * mult));
+      }
+      if (typeof e.atk === "number" && rng() < 0.7) {
+        const multA = 0.85 + rng() * 0.5;
+        e.atk = Math.max(0.1, round1(e.atk * multA));
+      }
+      e.announced = false;
+      enemies.push(e);
+      spawned.push(e);
+      log(`GOD: Spawned ${capitalize(e.type || "enemy")} Lv ${e.level || 1} at (${e.x},${e.y}).`, "notice");
+    }
+    if (spawned.length > 0) {
+      requestDraw();
+    } else {
+      log("GOD: No free space to spawn an enemy nearby.", "warn");
+    }
+  }
+
   
   function renderInventoryPanel() {
     if (window.UI && typeof UI.renderInventory === "function") {
@@ -979,6 +1043,7 @@
         onGodHeal: () => godHeal(),
         onGodSpawn: () => godSpawnItems(),
         onGodSetFov: (v) => setFovRadius(v),
+        onGodSpawnEnemy: () => godSpawnEnemyNearby(),
       });
     }
   }

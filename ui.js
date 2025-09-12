@@ -20,6 +20,7 @@ Exports (window.UI):
       onGodHeal: null,
       onGodSpawn: null,
       onGodSetFov: null,
+      onGodSpawnEnemy: null,
     },
 
     init() {
@@ -41,6 +42,7 @@ Exports (window.UI):
       this.els.godPanel = document.getElementById("god-panel");
       this.els.godHealBtn = document.getElementById("god-heal-btn");
       this.els.godSpawnBtn = document.getElementById("god-spawn-btn");
+      this.els.godSpawnEnemyBtn = document.getElementById("god-spawn-enemy-btn");
       this.els.godFov = document.getElementById("god-fov");
       this.els.godFovValue = document.getElementById("god-fov-value");
 
@@ -76,6 +78,9 @@ Exports (window.UI):
       });
       this.els.godSpawnBtn?.addEventListener("click", () => {
         if (typeof this.handlers.onGodSpawn === "function") this.handlers.onGodSpawn();
+      });
+      this.els.godSpawnEnemyBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodSpawnEnemy === "function") this.handlers.onGodSpawnEnemy();
       });
       if (this.els.godFov) {
         const updateFov = () => {
@@ -162,7 +167,7 @@ Exports (window.UI):
       return true;
     },
 
-    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov } = {}) {
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
@@ -171,6 +176,7 @@ Exports (window.UI):
       if (typeof onGodHeal === "function") this.handlers.onGodHeal = onGodHeal;
       if (typeof onGodSpawn === "function") this.handlers.onGodSpawn = onGodSpawn;
       if (typeof onGodSetFov === "function") this.handlers.onGodSetFov = onGodSetFov;
+      if (typeof onGodSpawnEnemy === "function") this.handlers.onGodSpawnEnemy = onGodSpawnEnemy;
     },
 
     updateStats(player, floor, getAtk, getDef) {
