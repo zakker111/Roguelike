@@ -33,6 +33,7 @@ Notes:
       if (window.Input) ctx.Input = window.Input;
       if (window.Render) ctx.Render = window.Render;
       if (window.Tileset) ctx.Tileset = window.Tileset;
+      if (window.Flavor) ctx.Flavor = window.Flavor;
     }
     return ctx;
   }

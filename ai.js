@@ -82,6 +82,9 @@ ctx contract (minimal):
         player.hp -= dmg;
         if (isCrit) ctx.log(`Critical! ${cap(e.type)} hits your ${loc.part} for ${dmg}.`, "crit");
         else ctx.log(`${cap(e.type)} hits your ${loc.part} for ${dmg}.`);
+        if (ctx.Flavor && typeof ctx.Flavor.logHit === "function") {
+          ctx.Flavor.logHit(ctx, { attacker: e, loc, crit: isCrit });
+        }
 
         // Item decay on being hit (only struck location)
         const critWear = isCrit ? 1.6 : 1.0;
