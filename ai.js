@@ -24,7 +24,10 @@ ctx contract (minimal):
 */
 (function () {
   function tileTransparent(ctx, x, y) {
-    if (!ctx.inBounds(x, y)) return false;
+    if (ctx.los && typeof ctx.los.tileTransparent === "function") {
+      return ctx.los.tileTransparent(ctx, x, y);
+    }
+    if (!ctx.inBounds || !ctx.inBounds(x, y)) return false;
     return ctx.map[y][x] !== ctx.TILES.WALL;
   }
 

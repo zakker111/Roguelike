@@ -34,7 +34,53 @@ Notes:
       if (window.Render) ctx.Render = window.Render;
       if (window.Tileset) ctx.Tileset = window.Tileset;
       if (window.Flavor) ctx.Flavor = window.Flavor;
+      if (window.PlayerUtils) ctx.PlayerUtils = window.PlayerUtils;
     }
+    return ctx;
+  }
+
+  function ensureUtils(ctx) {
+    const rng = typeof ctx.rng === "function" ? ctx.rng : Math.random;
+    const round1 = (ctx.PlayerUtils && typeof ctx.PlayerUtils.round1 === "function")
+      ? ctx.PlayerUtils.round1
+      : (n) => Math.round(n * 10) / 10;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const randInt = (min, max) => Math.floor(rng() * (max - min + 1)) + min;
+    const chance = (p) => rng() < p;
+    const randFloat = (min, max, decimals = 1) => {
+      const v = min + rng() * (max - min);
+      const p = Math.pow(10, decimals);
+      return Math.round(v * p) / p;
+    };
+    const pick = (arr, rfn) => {
+      const r = rfn || rng;
+      return arr[Math.floor(r() * arr.length)];
+    };
+    const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
+    ctx.utils = ctx.utils || { round1, clamp, randInt, chance, randFloat, pick, capitalize };
+    return ctx;
+  }
+
+  function ensureLOS(ctx) {
+    function tileTransparent(c, x, y) {
+      if (!c.inBounds || !c.inBounds(x, y)) return false;
+      return c.map[y][x] !== c.TILES.WALL;
+    }
+    function hasLOS(c, x0, y0, x1, y1) {
+      let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+      let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+      let err = dx + dy, e2;
+      while (!(x0 === x1 && y0 === y1)) {
+        e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 += sx; }
+        if (e2 <= dx) { err += dx; y0 += sy; }
+        if (x0 === x1 && y0 === y1) break;
+        if (!tileTransparent(c, x0, y0)) return false;
+      }
+      return true;
+    }
+    ctx.los = ctx.los || { tileTransparent, hasLOS };
     return ctx;
   }
 
@@ -42,6 +88,9 @@ Notes:
     const ctx = shallowClone(base || {});
     // Attach module handles as conveniences to discourage window.* usage in modules
     attachModules(ctx);
+    // Provide shared helpers
+    ensureUtils(ctx);
+    ensureLOS(ctx);
     // Optionally, freeze shallowly to prevent accidental mutation of the ctx contract by modules
     // Return non-frozen to keep flexibility; if desired, uncomment the next line:
     // return Object.freeze(ctx);
