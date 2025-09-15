@@ -1019,12 +1019,55 @@
       AI.enemiesAct(getCtx());
       return;
     }
-    // Fallback: very simple chase/wander if AI module is unavailable
+    // Fallback: simple attack/chase/wander if AI module is unavailable
     const occ = new Set(enemies.map(e => `${e.x},${e.y}`));
     const isFree = (x, y) => isWalkable(x, y) && !occ.has(`${x},${y}`) && !(player.x === x && player.y === y);
     for (const e of enemies) {
       const dx = player.x - e.x;
       const dy = player.y - e.y;
+      const dist = Math.abs(dx) + Math.abs(dy);
+
+      // Attack if adjacent
+      if (dist === 1) {
+        const loc = rollHitLocation();
+        // Block
+        if (rng() < getPlayerBlockChance(loc)) {
+          log(`You block the ${e.type || "enemy"}'s attack to your ${loc.part}.`, "block");
+          decayBlockingHands();
+          decayEquipped("hands", randFloat(0.3, 1.0, 1));
+          continue;
+        }
+        // Damage calc (approximate baseline)
+        let raw = e.atk * enemyDamageMultiplier(e.level) * (loc.mult || 1);
+        let isCrit = false;
+        const critChance = Math.max(0, Math.min(0.5, 0.10 + (loc.critBonus || 0)));
+        if (rng() < critChance) { isCrit = true; raw *= critMultiplier(); }
+        const dmg = enemyDamageAfterDefense(raw);
+        player.hp -= dmg;
+        if (isCrit) log(`Critical! ${capitalize(e.type || "enemy")} hits your ${loc.part} for ${dmg}.`, "crit");
+        else log(`${capitalize(e.type || "enemy")} hits your ${loc.part} for ${dmg}.`);
+        try {
+          if (window.Flavor && typeof Flavor.logHit === "function") {
+            Flavor.logHit(getCtx(), { attacker: e, loc, crit: isCrit, dmg });
+          }
+        } catch (_) {}
+        // Wear on struck slot
+        const critWear = isCrit ? 1.6 : 1.0;
+        let wear = 0.5;
+        if (loc.part === "torso") wear = randFloat(0.8, 2.0, 1);
+        else if (loc.part === "head") wear = randFloat(0.3, 1.0, 1);
+        else if (loc.part === "legs") wear = randFloat(0.4, 1.3, 1);
+        else if (loc.part === "hands") wear = randFloat(0.3, 1.0, 1);
+        decayEquipped(loc.part, wear * critWear);
+        if (player.hp <= 0) {
+          player.hp = 0;
+          if (typeof onPlayerDied === "function") onPlayerDied();
+          return;
+        }
+        continue;
+      }
+
+      // Otherwise move toward player
       const sx = dx === 0 ? 0 : (dx > 0 ? 1 : -1);
       const sy = dy === 0 ? 0 : (dy > 0 ? 1 : -1);
       const tryDirs = Math.abs(dx) > Math.abs(dy) ? [{x:sx,y:0},{x:0,y:sy}] : [{x:0,y:sy},{x:sx,y:0}];
@@ -1040,6 +1083,7 @@
         }
       }
       if (!moved) {
+        // try alternate directions
         const alt = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
         for (const d of alt) {
           const nx = e.x + d.x, ny = e.y + d.y;
