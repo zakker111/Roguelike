@@ -59,7 +59,7 @@ Notes:
     };
     const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
-    ctx.utils = ctx.utils || { round1, clamp, randInt, chance, randFloat, pick, capitalize };
+    ctx.utils = { round1, clamp, randInt, chance, randFloat, pick, capitalize };
     return ctx;
   }
 

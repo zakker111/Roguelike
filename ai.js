@@ -52,6 +52,12 @@ ctx contract (minimal):
 
   function enemiesAct(ctx) {
     const { player, enemies } = ctx;
+    const U = (ctx && ctx.utils) ? ctx.utils : null;
+    const randFloat = U && U.randFloat ? U.randFloat : (ctx.randFloat || ((a,b,dec=1)=>{const v=a+(ctx.rng?ctx.rng():Math.random())*(b-a);const p=Math.pow(10,dec);return Math.round(v*p)/p;}));
+    const randInt = U && U.randInt ? U.randInt : (ctx.randInt || ((min,max)=>Math.floor((ctx.rng?ctx.rng():Math.random())*(max-min+1))+min));
+    const chance = U && U.chance ? U.chance : (ctx.chance || ((p)=>(ctx.rng?ctx.rng():Math.random())<p));
+    const Cap = U && U.capitalize ? U.capitalize : (s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
     const senseRange = 8;
 
     // O(1) occupancy for this turn
@@ -76,7 +82,7 @@ ctx contract (minimal):
           }
           // Blocking uses gear
           ctx.decayBlockingHands();
-          ctx.decayEquipped("hands", ctx.randFloat(0.3, 1.0, 1));
+          ctx.decayEquipped("hands", randFloat(0.3, 1.0, 1));
           continue;
         }
 
@@ -90,8 +96,8 @@ ctx contract (minimal):
         }
         const dmg = ctx.enemyDamageAfterDefense(raw);
         player.hp -= dmg;
-        if (isCrit) ctx.log(`Critical! ${cap(e.type)} hits your ${loc.part} for ${dmg}.`, "crit");
-        else ctx.log(`${cap(e.type)} hits your ${loc.part} for ${dmg}.`);
+        if (isCrit) ctx.log(`Critical! ${Cap(e.type)} hits your ${loc.part} for ${dmg}.`, "crit");
+        else ctx.log(`${Cap(e.type)} hits your ${loc.part} for ${dmg}.`);
         if (ctx.Flavor && typeof ctx.Flavor.logHit === "function") {
           ctx.Flavor.logHit(ctx, { attacker: e, loc, crit: isCrit, dmg });
         }
@@ -99,10 +105,10 @@ ctx contract (minimal):
         // Item decay on being hit (only struck location)
         const critWear = isCrit ? 1.6 : 1.0;
         let wear = 0.5;
-        if (loc.part === "torso") wear = ctx.randFloat(0.8, 2.0, 1);
-        else if (loc.part === "head") wear = ctx.randFloat(0.3, 1.0, 1);
-        else if (loc.part === "legs") wear = ctx.randFloat(0.4, 1.3, 1);
-        else if (loc.part === "hands") wear = ctx.randFloat(0.3, 1.0, 1);
+        if (loc.part === "torso") wear = randFloat(0.8, 2.0, 1);
+        else if (loc.part === "head") wear = randFloat(0.3, 1.0, 1);
+        else if (loc.part === "legs") wear = randFloat(0.4, 1.3, 1);
+        else if (loc.part === "hands") wear = randFloat(0.3, 1.0, 1);
         ctx.decayEquipped(loc.part, wear * critWear);
         if (player.hp <= 0) {
           player.hp = 0;
@@ -144,10 +150,10 @@ ctx contract (minimal):
             }
           }
         }
-      } else if (ctx.chance(0.4)) {
+      } else if (chance(0.4)) {
         // random wander (moderate chance when far away)
         const dirs = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
-        const d = dirs[ctx.randInt(0, dirs.length - 1)];
+        const d = dirs[randInt(0, dirs.length - 1)];
         const nx = e.x + d.x, ny = e.y + d.y;
         if (isFree(nx, ny)) {
           occ.delete(`${e.x},${e.y}`);
