@@ -1067,32 +1067,44 @@
         continue;
       }
 
-      // Otherwise move toward player
-      const sx = dx === 0 ? 0 : (dx > 0 ? 1 : -1);
-      const sy = dy === 0 ? 0 : (dy > 0 ? 1 : -1);
-      const tryDirs = Math.abs(dx) > Math.abs(dy) ? [{x:sx,y:0},{x:0,y:sy}] : [{x:0,y:sy},{x:sx,y:0}];
-      let moved = false;
-      for (const d of tryDirs) {
-        const nx = e.x + d.x, ny = e.y + d.y;
-        if (isFree(nx, ny)) {
-          occ.delete(`${e.x},${e.y}`);
-          e.x = nx; e.y = ny;
-          occ.add(`${e.x},${e.y}`);
-          moved = true;
-          break;
-        }
-      }
-      if (!moved) {
-        // try alternate directions
-        const alt = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
-        for (const d of alt) {
+      // Pursue only if within sense range and in LOS; otherwise occasionally wander
+      const SENSE = 8;
+      if (dist <= SENSE && hasLOS(e.x, e.y, player.x, player.y)) {
+        const sx = dx === 0 ? 0 : (dx > 0 ? 1 : -1);
+        const sy = dy === 0 ? 0 : (dy > 0 ? 1 : -1);
+        const tryDirs = Math.abs(dx) > Math.abs(dy) ? [{x:sx,y:0},{x:0,y:sy}] : [{x:0,y:sy},{x:sx,y:0}];
+        let moved = false;
+        for (const d of tryDirs) {
           const nx = e.x + d.x, ny = e.y + d.y;
           if (isFree(nx, ny)) {
             occ.delete(`${e.x},${e.y}`);
             e.x = nx; e.y = ny;
             occ.add(`${e.x},${e.y}`);
+            moved = true;
             break;
           }
+        }
+        if (!moved) {
+          const alt = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
+          for (const d of alt) {
+            const nx = e.x + d.x, ny = e.y + d.y;
+            if (isFree(nx, ny)) {
+              occ.delete(`${e.x},${e.y}`);
+              e.x = nx; e.y = ny;
+              occ.add(`${e.x},${e.y}`);
+              break;
+            }
+          }
+        }
+      } else if (rng() < 0.3) {
+        // Random wander
+        const dirs = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
+        const d = dirs[randInt(0, dirs.length - 1)];
+        const nx = e.x + d.x, ny = e.y + d.y;
+        if (isFree(nx, ny)) {
+          occ.delete(`${e.x},${e.y}`);
+          e.x = nx; e.y = ny;
+          occ.add(`${e.x},${e.y}`);
         }
       }
     }
