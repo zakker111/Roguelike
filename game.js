@@ -500,25 +500,7 @@
     return t === TILES.FLOOR || t === TILES.DOOR || t === TILES.STAIRS;
   }
 
-  // Simple LOS check for enemy AI (Bresenham-style)
-  function tileTransparent(x, y) {
-    if (!inBounds(x, y)) return false;
-    return map[y][x] !== TILES.WALL;
-  }
-  function hasLOS(x0, y0, x1, y1) {
-    let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-    let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-    let err = dx + dy, e2;
-    while (true) {
-      if (x0 === x1 && y0 === y1) return true;
-      if (!(x0 === player.x && y0 === player.y)) {
-        if (!tileTransparent(x0, y0)) return false;
-      }
-      e2 = 2 * err;
-      if (e2 >= dy) { err += dy; x0 += sx; }
-      if (e2 <= dx) { err += dx; y0 += sy; }
-    }
-  }
+  
 
   
   function createEnemyAt(x, y, depth) {
