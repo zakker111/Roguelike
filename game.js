@@ -80,6 +80,7 @@
       enemyColor, describeItem,
       setFovRadius,
       getPlayerAttack, getPlayerDefense, getPlayerBlockChance,
+      enemyThreatLabel,
       rollHitLocation,
       critMultiplier,
       enemyDamageAfterDefense,
