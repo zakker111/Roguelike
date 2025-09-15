@@ -29,19 +29,19 @@ ctx contract (minimal):
   }
 
   function hasLOS(ctx, x0, y0, x1, y1) {
-    let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-    let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    // Bresenham; check transparency on cells along the line excluding the start, including last step before target.
+    let dx = Math.abs(x1 - x0), sx = x0 &lt; x1 ? 1 : -1;
+    let dy = -Math.abs(y1 - y0), sy = y0 &lt; y1 ? 1 : -1;
     let err = dx + dy, e2;
-    while (true) {
-      if (x0 === x1 && y0 === y1) return true;
-      // allow standing tile (player) without transparency check
-      if (!(x0 === ctx.player.x && y0 === ctx.player.y)) {
-        if (!tileTransparent(ctx, x0, y0)) return false;
-      }
+    while (!(x0 === x1 &amp;&amp; y0 === y1)) {
       e2 = 2 * err;
-      if (e2 >= dy) { err += dy; x0 += sx; }
-      if (e2 <= dx) { err += dx; y0 += sy; }
+      if (e2 &gt;= dy) { err += dy; x0 += sx; }
+      if (e2 &lt;= dx) { err += dx; y0 += sy; }
+      // If we've reached the target, stop (do not require transparency on target cell)
+      if (x0 === x1 &amp;&amp; y0 === y1) break;
+      if (!tileTransparent(ctx, x0, y0)) return false;
     }
+    return true;
   }
 
   function enemiesAct(ctx) {
@@ -139,6 +139,7 @@ ctx contract (minimal):
               occ.delete(`${e.x},${e.y}`);
               e.x = nx; e.y = ny;
               occ.add(`${e.x},${e.y}`);
+              moved = true;
               break;
             }
           }
