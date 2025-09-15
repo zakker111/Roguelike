@@ -145,27 +145,9 @@
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
-  const randInt = (min, max) => {
-    if (window.Ctx && typeof Ctx.create === "function") {
-      const u = Ctx.create({ rng }).utils;
-      if (u && typeof u.randInt === "function") return u.randInt(min, max);
-    }
-    return Math.floor(rng() * (max - min + 1)) + min;
-  };
-  const chance = (p) => {
-    if (window.Ctx && typeof Ctx.create === "function") {
-      const u = Ctx.create({ rng }).utils;
-      if (u && typeof u.chance === "function") return u.chance(p);
-    }
-    return rng() &lt; p;
-  };
-  const capitalize = (s) => {
-    if (window.Ctx && typeof Ctx.create === "function") {
-      const u = Ctx.create({ rng }).utils;
-      if (u && typeof u.capitalize === "function") return u.capitalize(s);
-    }
-    return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-  };
+  const randInt = (min, max) => Math.floor(rng() * (max - min + 1)) + min;
+  const chance = (p) => rng() < p;
+  const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   const enemyColor = (type) => {
     if (window.Enemies && typeof Enemies.colorFor === "function") {
       return Enemies.colorFor(type);
@@ -173,21 +155,11 @@
     return COLORS.enemy;
   };
   const randFloat = (min, max, decimals = 1) => {
-    if (window.Ctx && typeof Ctx.create === "function") {
-      const u = Ctx.create({ rng }).utils;
-      if (u && typeof u.randFloat === "function") return u.randFloat(min, max, decimals);
-    }
     const v = min + rng() * (max - min);
     const p = Math.pow(10, decimals);
     return Math.round(v * p) / p;
   };
-  const round1 = (n) => {
-    if (window.Ctx && typeof Ctx.create === "function") {
-      const u = Ctx.create({ rng }).utils;
-      if (u && typeof u.round1 === "function") return u.round1(n);
-    }
-    return Math.round(n * 10) / 10;
-  };
+  const round1 = (n) => Math.round(n * 10) / 10;
 
   // Decay helpers
   function initialDecay(tier) {
