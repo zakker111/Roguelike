@@ -54,9 +54,9 @@ Behavior:
   }
 
   // --- Player hitting enemies ---
-  const ENEMY_TORSO_STING == [
-    "You jab the goblin's ribs; it wheezes.",
-    "A punch to its ribs knocks the wind from the goblin."
+  const ENEMY_TORSO_STING = [
+    "You jab its ribs; it wheezes.",
+    "A punch to its ribs knocks the wind out."
   ];
 
   /**
