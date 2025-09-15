@@ -69,7 +69,8 @@
     const base = {
       rng,
       ROWS, COLS, MAP_ROWS, MAP_COLS, TILE, TILES,
-      player, enemies, corpses, map, seen, visible, depth,
+      player, enemies, corpses, map, seen, visible,
+      floor, depth: floor,
       fovRadius,
       requestDraw,
       log: Logger.log,
