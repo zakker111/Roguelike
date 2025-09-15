@@ -30,15 +30,15 @@ ctx contract (minimal):
 
   function hasLOS(ctx, x0, y0, x1, y1) {
     // Bresenham; check transparency on cells along the line excluding the start, including last step before target.
-    let dx = Math.abs(x1 - x0), sx = x0 &lt; x1 ? 1 : -1;
-    let dy = -Math.abs(y1 - y0), sy = y0 &lt; y1 ? 1 : -1;
+    let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     let err = dx + dy, e2;
-    while (!(x0 === x1 &amp;&amp; y0 === y1)) {
+    while (!(x0 === x1 && y0 === y1)) {
       e2 = 2 * err;
-      if (e2 &gt;= dy) { err += dy; x0 += sx; }
-      if (e2 &lt;= dx) { err += dx; y0 += sy; }
+      if (e2 >= dy) { err += dy; x0 += sx; }
+      if (e2 <= dx) { err += dx; y0 += sy; }
       // If we've reached the target, stop (do not require transparency on target cell)
-      if (x0 === x1 &amp;&amp; y0 === y1) break;
+      if (x0 === x1 && y0 === y1) break;
       if (!tileTransparent(ctx, x0, y0)) return false;
     }
     return true;
@@ -108,22 +108,20 @@ ctx contract (minimal):
 
       if (dist <= senseRange) {
         // Prefer to chase if LOS; otherwise attempt a cautious step toward the player
-        const canSee = hasLOS(ctx, e.x, e.y, player.x, player.y);
-        const sx = dx === 0 ? 0 : dx > 0 ? 1 : -1;
-        const sy = dy === 0 ? 0 : dy > 0 ? 1 : -1;
-
+        const sx = dx === 0 ? 0 : (dx > 0 ? 1 : -1);
+        const sy = dy === 0 ? 0 : (dy > 0 ? 1 : -1);
         const primary = Math.abs(dx) > Math.abs(dy) ? [{x:sx,y:0},{x:0,y:sy}] : [{x:0,y:sy},{x:sx,y:0}];
-        const tryDirs = canSee ? primary : primary; // same order; LOS just raises certainty
 
         let moved = false;
-        for (const d of tryDirs) {
+        for (const d of primary) {
           const nx = e.x + d.x;
           const ny = e.y + d.y;
           if (isFree(nx, ny)) {
             occ.delete(`${e.x},${e.y}`);
             e.x = nx; e.y = ny;
             occ.add(`${e.x},${e.y}`);
-            moved = true; break;
+            moved = true;
+            break;
           }
         }
         if (!moved) {
@@ -136,13 +134,12 @@ ctx contract (minimal):
               occ.delete(`${e.x},${e.y}`);
               e.x = nx; e.y = ny;
               occ.add(`${e.x},${e.y}`);
-              moved = true;
               break;
             }
           }
         }
-      } else if (ctx.chance(0.6)) {
-        // random wander (more likely when far away)
+      } else if (ctx.chance(0.4)) {
+        // random wander (moderate chance when far away)
         const dirs = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
         const d = dirs[ctx.randInt(0, dirs.length - 1)];
         const nx = e.x + d.x, ny = e.y + d.y;
