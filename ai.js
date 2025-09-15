@@ -112,12 +112,15 @@ ctx contract (minimal):
         continue;
       }
 
-      if (dist <= senseRange && hasLOS(ctx, e.x, e.y, player.x, player.y)) {
-        // try step closer; prefer axis with greater delta
+      if (dist <= senseRange) {
+        // Prefer to chase if LOS; otherwise attempt a cautious step toward the player
+        const canSee = hasLOS(ctx, e.x, e.y, player.x, player.y);
         const sx = dx === 0 ? 0 : dx > 0 ? 1 : -1;
         const sy = dy === 0 ? 0 : dy > 0 ? 1 : -1;
 
-        const tryDirs = Math.abs(dx) > Math.abs(dy) ? [{x:sx,y:0},{x:0,y:sy}] : [{x:0,y:sy},{x:sx,y:0}];
+        const primary = Math.abs(dx) > Math.abs(dy) ? [{x:sx,y:0},{x:0,y:sy}] : [{x:0,y:sy},{x:sx,y:0}];
+        const tryDirs = canSee ? primary : primary; // same order; LOS just raises certainty
+
         let moved = false;
         for (const d of tryDirs) {
           const nx = e.x + d.x;
@@ -144,8 +147,8 @@ ctx contract (minimal):
             }
           }
         }
-      } else if (ctx.chance(0.3)) {
-        // random wander
+      } else if (ctx.chance(0.6)) {
+        // random wander (more likely when far away)
         const dirs = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
         const d = dirs[ctx.randInt(0, dirs.length - 1)];
         const nx = e.x + d.x, ny = e.y + d.y;
