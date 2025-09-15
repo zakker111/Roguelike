@@ -194,6 +194,12 @@
     it.decay = Math.min(100, round1(before + amount));
     if (it.decay >= 100) {
       log(`${capitalize(it.name)} breaks and is destroyed.`, "bad");
+      // Optional flavor for breakage
+      try {
+        if (window.Flavor && typeof Flavor.onBreak === "function") {
+          Flavor.onBreak(getCtx(), { side: "player", slot, item: it });
+        }
+      } catch (_) {}
       player.equipment[slot] = null;
       updateUI();
       rerenderInventoryIfOpen();
