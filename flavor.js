@@ -21,9 +21,9 @@ Behavior:
     "You take a hard hit to the head; your ears ring."
   ];
 
-  const GOBLIN_TORSO = [
-    "The goblin jabs your ribs; you gasp for air.",
-    "A sharp jab to your ribs knocks the wind out."
+  const TORSO_STING_PLAYER = [
+    "A sharp jab to your ribs knocks the wind out.",
+    "You clutch your ribs; the hit steals your breath."
   ];
 
   /**
@@ -45,16 +45,16 @@ Behavior:
       return;
     }
 
-    if ((attacker.type || "") === "goblin" && loc.part === "torso") {
-      if (ctx.rng() < 0.6) {
-        ctx.log(pick(GOBLIN_TORSO, ctx.rng), "info");
+    if (loc.part === "torso") {
+      if (ctx.rng() < 0.5) {
+        ctx.log(pick(TORSO_STING_PLAYER, ctx.rng), "info");
       }
       return;
     }
   }
 
   // --- Player hitting enemies ---
-  const ENEMY_GOBLIN_TORSO = [
+  const ENEMY_TORSO_STING == [
     "You jab the goblin's ribs; it wheezes.",
     "A punch to its ribs knocks the wind from the goblin."
   ];
@@ -99,9 +99,9 @@ Behavior:
       // continue to allow location/type-specific line below with its own chance
     }
 
-    if ((target.type || "") === "goblin" && loc.part === "torso") {
-      if (ctx.rng() < 0.6) {
-        ctx.log(pick(ENEMY_GOBLIN_TORSO, ctx.rng), "info");
+    if (loc.part === "torso") {
+      if (ctx.rng() < 0.5) {
+        ctx.log(pick(ENEMY_TORSO_STING, ctx.rng), "info");
       }
       return;
     }
