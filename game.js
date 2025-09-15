@@ -73,45 +73,65 @@
       floor, depth: floor,
       fovRadius,
       requestDraw,
-      log: Logger.log,
+      log,
       isWalkable, inBounds,
       // Prefer modules to use ctx.utils.*; keep these for backward use and fallbacks.
       round1, randInt, chance, randFloat,
       enemyColor, describeItem,
       setFovRadius,
       getPlayerAttack, getPlayerDefense, getPlayerBlockChance,
-      playerTotalAttack, playerTotalDefense,
-      playerDrinkPotion,
       rollHitLocation,
-      playerTryAttack,
+      critMultiplier,
+      enemyDamageAfterDefense,
+      enemyDamageMultiplier,
       decayBlockingHands,
       decayEquipped,
-      enemyDamageMultiplier, critMultiplier, enemyDamageAfterDefense,
-      onPlayerDied,
       rerenderInventoryIfOpen,
-      enemyFactory
+      onPlayerDied: () => {
+        isDead = true;
+        updateUI();
+        log("You die. Press R or Enter to restart.", "bad");
+        showGameOver();
+      },
     };
-    const ctx = (window.Ctx && typeof Ctx.create === "function") ? Ctx.create(base) : base;
-    if (window.DEV && ctx && ctx.utils) {
-      try {
-        console.debug("[DEV] ctx created:", {
-          utils: Object.keys(ctx.utils),
-          los: !!(ctx.los || ctx.LOS),
-          modules: {
-            Enemies: !!ctx.Enemies, Items: !!ctx.Items, Player: !!ctx.Player,
-            UI: !!ctx.UI, Logger: !!ctx.Logger, Loot: !!ctx.Loot,
-            Dungeon: !!ctx.Dungeon, DungeonItems: !!ctx.DungeonItems,
-            FOV: !!ctx.FOV, AI: !!ctx.AI, Input: !!ctx.Input,
-            Render: !!ctx.Render, Tileset: !!ctx.Tileset, Flavor: !!ctx.Flavor
-          }
-        });
-      } catch (_) {}
+
+    if (window.Ctx && typeof Ctx.create === "function") {
+      const ctx = Ctx.create(base);
+      // enemy factory prefers ctx.Enemies handle, falling back gracefully
+      ctx.enemyFactory = (x, y, depth) => {
+        const EM = ctx.Enemies || (typeof window !== "undefined" ? window.Enemies : null);
+        if (EM && typeof EM.createEnemyAt === "function") {
+          return EM.createEnemyAt(x, y, depth, rng);
+        }
+        return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
+      };
+      if (window.DEV && ctx && ctx.utils) {
+        try {
+          console.debug("[DEV] ctx created:", {
+            utils: Object.keys(ctx.utils),
+            los: !!(ctx.los || ctx.LOS),
+            modules: {
+              Enemies: !!ctx.Enemies, Items: !!ctx.Items, Player: !!ctx.Player,
+              UI: !!ctx.UI, Logger: !!ctx.Logger, Loot: !!ctx.Loot,
+              Dungeon: !!ctx.Dungeon, DungeonItems: !!ctx.DungeonItems,
+              FOV: !!ctx.FOV, AI: !!ctx.AI, Input: !!ctx.Input,
+              Render: !!ctx.Render, Tileset: !!ctx.Tileset, Flavor: !!ctx.Flavor
+            }
+          });
+        } catch (_) {}
+      }
+      return ctx;
     }
-    return ctx;
-  },
-      
-      recomputeFOV: () => recomputeFOV(),
+
+    // Fallback without Ctx: include a local enemyFactory using window.Enemies if present
+    base.enemyFactory = (x, y, depth) => {
+      if (typeof window !== "undefined" && window.Enemies && typeof window.Enemies.createEnemyAt === "function") {
+        return window.Enemies.createEnemyAt(x, y, depth, rng);
+      }
+      return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
     };
+    return base;
+  }
 
     
     if (window.Ctx && typeof Ctx.create === "function") {
