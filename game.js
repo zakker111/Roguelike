@@ -67,47 +67,47 @@
   
   function getCtx() {
     const base = {
-      
-      ROWS, COLS, TILES,
-      MAP_ROWS, MAP_COLS,
-      // state
-      player, map, seen, visible, enemies, corpses,
-      startRoomRect,
-      
+      rng,
+      ROWS, COLS, MAP_ROWS, MAP_COLS, TILE, TILES,
+      player, enemies, corpses, map, seen, visible, depth,
       fovRadius,
-      
-      rng, randInt, chance,
-      inBounds, isWalkable,
-      
-      log, enemyThreatLabel,
-      
-      updateUI: () => updateUI(),
-      renderInventory: () => renderInventoryPanel(),
-      
-      initialDecay: (tier) => initialDecay(tier),
-      
-      describeItem: (it) => describeItem(it),
-      equipIfBetter: (item) => equipIfBetter(item),
-      addPotionToInventory: (heal, name) => addPotionToInventory(heal, name),
-      showLoot: (list) => showLootPanel(list),
-      hideLoot: () => hideLootPanel(),
-      turn: () => turn(),
-      
-      rollHitLocation: () => rollHitLocation(),
-      critMultiplier: () => critMultiplier(),
-      getPlayerBlockChance: (loc) => getPlayerBlockChance(loc),
-      enemyDamageAfterDefense: (raw) => enemyDamageAfterDefense(raw),
-      randFloat: (a,b,c) => randFloat(a,b,c),
-      decayBlockingHands: () => decayBlockingHands(),
-      decayEquipped: (slot, amt) => decayEquipped(slot, amt),
-      enemyDamageMultiplier: (level) => enemyDamageMultiplier(level),
-      
-      onPlayerDied: () => {
-        isDead = true;
-        updateUI();
-        log("You die. Press R or Enter to restart.", "bad");
-        showGameOver();
-      },
+      requestDraw,
+      log: Logger.log,
+      isWalkable, inBounds,
+      // Prefer modules to use ctx.utils.*; keep these for backward use and fallbacks.
+      round1, randInt, chance, randFloat,
+      enemyColor, describeItem,
+      setFovRadius,
+      getPlayerAttack, getPlayerDefense, getPlayerBlockChance,
+      playerTotalAttack, playerTotalDefense,
+      playerDrinkPotion,
+      rollHitLocation,
+      playerTryAttack,
+      decayBlockingHands,
+      decayEquipped,
+      enemyDamageMultiplier, critMultiplier, enemyDamageAfterDefense,
+      onPlayerDied,
+      rerenderInventoryIfOpen,
+      enemyFactory
+    };
+    const ctx = (window.Ctx && typeof Ctx.create === "function") ? Ctx.create(base) : base;
+    if (window.DEV && ctx && ctx.utils) {
+      try {
+        console.debug("[DEV] ctx created:", {
+          utils: Object.keys(ctx.utils),
+          los: !!(ctx.los || ctx.LOS),
+          modules: {
+            Enemies: !!ctx.Enemies, Items: !!ctx.Items, Player: !!ctx.Player,
+            UI: !!ctx.UI, Logger: !!ctx.Logger, Loot: !!ctx.Loot,
+            Dungeon: !!ctx.Dungeon, DungeonItems: !!ctx.DungeonItems,
+            FOV: !!ctx.FOV, AI: !!ctx.AI, Input: !!ctx.Input,
+            Render: !!ctx.Render, Tileset: !!ctx.Tileset, Flavor: !!ctx.Flavor
+          }
+        });
+      } catch (_) {}
+    }
+    return ctx;
+  },
       
       recomputeFOV: () => recomputeFOV(),
     };

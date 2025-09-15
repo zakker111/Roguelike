@@ -61,6 +61,16 @@
     <div class="loot-hint">Press Esc to close</div>
   </div>
 
+  <script>
+    (function () {
+      try {
+        const params = new URLSearchParams(location.search);
+        if (params.get("dev") === "1") { window.DEV = true; localStorage.setItem("DEV", "1"); }
+        if (params.get("dev") === "0") { window.DEV = false; localStorage.removeItem("DEV"); }
+        if (localStorage.getItem("DEV") === "1") window.DEV = true;
+      } catch (_) {}
+    })();
+  </script>
   <script src="ctx.js"></script>
   <script src="los.js"></script>
   <script src="enemies.js"></script>
