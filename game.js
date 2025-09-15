@@ -453,6 +453,12 @@
           seen[player.y][player.x] = true;
         }
       }
+      if (window.DEV) {
+        try {
+          const visCount = enemies.filter(e => inBounds(e.x, e.y) && visible[e.y][e.x]).length;
+          log(`[DEV] Enemies spawned: ${enemies.length}, visible now: ${visCount}.`, "notice");
+        } catch (_) {}
+      }
       updateUI();
       log(`You descend to floor ${depth}.`);
       requestDraw();

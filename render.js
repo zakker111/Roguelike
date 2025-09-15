@@ -25,6 +25,15 @@ Exports (window.Render):
       map, seen, visible, player, enemies, corpses, camera: camMaybe
     } = ctx;
 
+    if (typeof window !== "undefined" && window.DEV) {
+      try {
+        const mapRows = map.length;
+        const mapCols = map[0] ? map[0].length : 0;
+        const visEnemies = (enemies || []).filter(e => visible[e.y] && visible[e.y][e.x]).length;
+        console.debug("[DEV] draw() map:", mapCols, "x", mapRows, "player:", player.x, player.y, "enemies:", (enemies||[]).length, "visible enemies:", visEnemies);
+      } catch (_) {}
+    }
+
     const enemyColor = (t) => (ctx.enemyColor ? ctx.enemyColor(t) : enemyColorFromModule(t, COLORS));
     const TS = (ctx.Tileset || (typeof window !== "undefined" ? window.Tileset : null));
 
