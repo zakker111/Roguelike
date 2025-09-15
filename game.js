@@ -133,31 +133,6 @@
     return base;
   }
 
-    
-    if (window.Ctx && typeof Ctx.create === "function") {
-      const ctx = Ctx.create(base);
-      // enemy factory prefers ctx.Enemies handle, falling back gracefully
-      ctx.enemyFactory = (x, y, depth) => {
-        const EM = ctx.Enemies || (typeof window !== "undefined" ? window.Enemies : null);
-        if (EM && typeof EM.createEnemyAt === "function") {
-          return EM.createEnemyAt(x, y, depth, rng);
-        }
-        return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
-      };
-      return ctx;
-    }
-
-    // Fallback without Ctx: include a local enemyFactory using window.Enemies if present
-    base.enemyFactory = (x, y, depth) => {
-      if (typeof window !== "undefined" && window.Enemies && typeof window.Enemies.createEnemyAt === "function") {
-        return window.Enemies.createEnemyAt(x, y, depth, rng);
-      }
-      return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
-    };
-    return base;
-  }
-
-  
   function mulberry32(a) {
     return function() {
       let t = a += 0x6D2B79F5;
