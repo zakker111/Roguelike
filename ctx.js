@@ -35,6 +35,7 @@ Notes:
       if (window.Tileset) ctx.Tileset = window.Tileset;
       if (window.Flavor) ctx.Flavor = window.Flavor;
       if (window.PlayerUtils) ctx.PlayerUtils = window.PlayerUtils;
+      if (window.LOS) ctx.LOS = window.LOS;
     }
     return ctx;
   }

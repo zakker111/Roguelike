@@ -32,7 +32,11 @@ ctx contract (minimal):
   }
 
   function hasLOS(ctx, x0, y0, x1, y1) {
-    // Bresenham; check transparency on cells along the line excluding the start, including last step before target.
+    // Prefer shared LOS if available
+    if (ctx.los && typeof ctx.los.hasLOS === "function") {
+      return ctx.los.hasLOS(ctx, x0, y0, x1, y1);
+    }
+    // Fallback Bresenham
     let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     let err = dx + dy, e2;
@@ -40,7 +44,6 @@ ctx contract (minimal):
       e2 = 2 * err;
       if (e2 >= dy) { err += dy; x0 += sx; }
       if (e2 <= dx) { err += dx; y0 += sy; }
-      // If we've reached the target, stop (do not require transparency on target cell)
       if (x0 === x1 && y0 === y1) break;
       if (!tileTransparent(ctx, x0, y0)) return false;
     }
