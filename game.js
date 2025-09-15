@@ -506,7 +506,21 @@
 
   
   
+  function ensureVisibilityShape() {
+    const rows = map.length;
+    const cols = map[0] ? map[0].length : 0;
+    const shapeOk = Array.isArray(visible) && visible.length === rows && (rows === 0 || (visible[0] && visible[0].length === cols));
+    if (!shapeOk) {
+      visible = Array.from({ length: rows }, () => Array(cols).fill(false));
+    }
+    const seenOk = Array.isArray(seen) && seen.length === rows && (rows === 0 || (seen[0] && seen[0].length === cols));
+    if (!seenOk) {
+      seen = Array.from({ length: rows }, () => Array(cols).fill(false));
+    }
+  }
+
   function recomputeFOV() {
+    ensureVisibilityShape();
     if (window.FOV && typeof FOV.recomputeFOV === "function") {
       const ctx = getCtx();
       ctx.seen = seen;
@@ -516,7 +530,11 @@
       seen = ctx.seen;
       return;
     }
-    // Fallback: do nothing if module missing
+    // Fallback: reveal player tile at least
+    if (inBounds(player.x, player.y)) {
+      visible[player.y][player.x] = true;
+      seen[player.y][player.x] = true;
+    }
   }
 
   
