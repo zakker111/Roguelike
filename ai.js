@@ -72,12 +72,6 @@ ctx contract (minimal):
           ctx.decayBlockingHands();
           ctx.decayEquipped("hands", ctx.randFloat(0.3, 1.0, 1));
           continue;
-        });
-          }
-          // Blocking uses gear
-          ctx.decayBlockingHands();
-          ctx.decayEquipped("hands", ctx.randFloat(0.3, 1.0, 1));
-          continue;
         }
 
         // Compute damage with location and crit; then reduce by defense
