@@ -1017,6 +1017,40 @@
   function enemiesAct() {
     if (window.AI && typeof AI.enemiesAct === "function") {
       AI.enemiesAct(getCtx());
+      return;
+    }
+    // Fallback: very simple chase/wander if AI module is unavailable
+    const occ = new Set(enemies.map(e => `${e.x},${e.y}`));
+    const isFree = (x, y) => isWalkable(x, y) && !occ.has(`${x},${y}`) && !(player.x === x && player.y === y);
+    for (const e of enemies) {
+      const dx = player.x - e.x;
+      const dy = player.y - e.y;
+      const sx = dx === 0 ? 0 : (dx > 0 ? 1 : -1);
+      const sy = dy === 0 ? 0 : (dy > 0 ? 1 : -1);
+      const tryDirs = Math.abs(dx) > Math.abs(dy) ? [{x:sx,y:0},{x:0,y:sy}] : [{x:0,y:sy},{x:sx,y:0}];
+      let moved = false;
+      for (const d of tryDirs) {
+        const nx = e.x + d.x, ny = e.y + d.y;
+        if (isFree(nx, ny)) {
+          occ.delete(`${e.x},${e.y}`);
+          e.x = nx; e.y = ny;
+          occ.add(`${e.x},${e.y}`);
+          moved = true;
+          break;
+        }
+      }
+      if (!moved) {
+        const alt = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
+        for (const d of alt) {
+          const nx = e.x + d.x, ny = e.y + d.y;
+          if (isFree(nx, ny)) {
+            occ.delete(`${e.x},${e.y}`);
+            e.x = nx; e.y = ny;
+            occ.add(`${e.x},${e.y}`);
+            break;
+          }
+        }
+      }
     }
   }
 
