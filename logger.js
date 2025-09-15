@@ -3,7 +3,7 @@ Logger: simple in-DOM log with capped length.
 
 Exports (window.Logger):
 - init(target = "#log", max = 60), log(message, type = "info")
-Types: info, crit, block, death, good, warn.
+Types: info, crit, block, death, good, warn, flavor.
 */
 (function () {
   const Logger = {

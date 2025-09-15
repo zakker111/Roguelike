@@ -40,7 +40,7 @@ Behavior:
     // Prioritize memorable moments
     if (crit && loc.part === "head") {
       if (ctx.rng() < 0.6) {
-        ctx.log(pick(HEAD_CRIT, ctx.rng), "notice");
+        ctx.log(pick(HEAD_CRIT, ctx.rng), "flavor");
       }
       return;
     }

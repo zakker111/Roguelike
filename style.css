@@ -82,6 +82,7 @@ html, body {
 .log .entry.good { color: var(--success); }
 .log .entry.warn { color: #e0af68; }
 .log .entry.notice { color: #e0af68; } /* yellow notice for spotting */
+.log .entry.flavor { color: #b4f9f8; } /* teal for flavor text */
 
 .loot-panel {
   position: fixed;
