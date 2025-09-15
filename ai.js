@@ -64,6 +64,10 @@ ctx contract (minimal):
         // Player attempts to block with hand/position
         if (ctx.rng() < ctx.getPlayerBlockChance(loc)) {
           ctx.log(`You block the ${e.type || "enemy"}'s attack to your ${loc.part}.`, "block");
+          // Optional flavor for blocks
+          if (ctx.Flavor && typeof ctx.Flavor.onBlock === "function") {
+            ctx.Flavor.onBlock(ctx, { side: "player", attacker: e, defender: player, loc });
+          }
           // Blocking uses gear
           ctx.decayBlockingHands();
           ctx.decayEquipped("hands", ctx.randFloat(0.3, 1.0, 1));
