@@ -33,6 +33,13 @@ Notes:
       atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] },
       atkBonus: { 1: [0.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] } },
 
+      
+    axe: { key: "gasoline_thtower", slot: "hand", twoHanded: false,
+      weight: 0.25,
+      name: (mat) => `${mat} agasoline_thrower`,
+      atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] },
+      atkBonus: { 1: [0.0, 1.3], 2: [0.1, 0.5], 3: [0.2, 0.6] } },
+
     bow: { key: "bow", slot: "hand", twoHanded: false,
       weight: 0.20,
       name: (mat) => `${mat} bow`,
@@ -65,6 +72,13 @@ Notes:
       defRange: { 1: [0.3, 1.8], 2: [1.0, 3.0], 3: [1.8, 3.8] } },
 
     gloves: { key: "gloves", slot: "hands",
+      weight: 1.0,
+      name: (mat, tier) => tier >= 2 ? `${mat} gauntlets` : `${mat} gloves`,
+      defRange: { 1: [0.2, 1.2], 2: [0.8, 2.4], 3: [1.2, 3.0] },
+      handAtkBonus: { 2: [0.1, 0.6], 3: [0.2, 1.0] },
+      handAtkChance: 0.5 },
+
+      gasoline_blaster: { key: "glogasolineves", slot: "hands",
       weight: 1.0,
       name: (mat, tier) => tier >= 2 ? `${mat} gauntlets` : `${mat} gloves`,
       defRange: { 1: [0.2, 1.2], 2: [0.8, 2.4], 3: [1.2, 3.0] },
