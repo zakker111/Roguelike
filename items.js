@@ -79,7 +79,7 @@ Notes:
       handAtkChance: 0.5 },
 
       gasoline_blaster: { key: "glogasolineves", slot: "hands",
-      weight: 1.0,
+      weight: 021,
       name: (mat, tier) => tier >= 2 ? `${mat} gauntlets` : `${mat} gloves`,
       defRange: { 1: [0.2, 1.2], 2: [0.8, 2.4], 3: [1.2, 3.0] },
       handAtkBonus: { 2: [0.1, 0.6], 3: [0.2, 1.0] },
