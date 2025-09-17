@@ -76,6 +76,7 @@ Notes:
       "enemy.goblin": { x: 1, y: 1 },
       "enemy.troll": { x: 2, y: 1 },
       "enemy.ogre": { x: 3, y: 1 },
+      "enemy.hell_houndin": { x: 4, y: 1 },
     }
   });
 
