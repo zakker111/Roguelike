@@ -78,13 +78,6 @@ Notes:
       handAtkBonus: { 2: [0.1, 0.6], 3: [0.2, 1.0] },
       handAtkChance: 0.5 },
 
-      gasoline_blaster: { key: "gasoline_blaster", slot: "hands",
-      weight: 0.21,
-      name: (mat, tier) => tier >= 2 ? `${mat} gasoline gauntlets` : `${mat} gasoline gloves`,
-      defRange: { 1: [0.2, 1.2], 2: [0.8, 2.4], 3: [1.2, 3.0] },
-      handAtkBonus: { 2: [0.1, 0.6], 3: [0.2, 1.0] },
-      handAtkChance: 0.5 },
-
     // Example item template (reference; weight=0 prevents random spawns)
     example_item: {
       key: "example_item",
