@@ -25,6 +25,17 @@
   <div class="log" id="log"></div>
   <!-- Optional right-side live log mirror -->
   <div class="log side" id="log-right"></div>
+  <script>
+    // Apply mirror preference to the side log's visibility
+    (function () {
+      try {
+        var el = document.getElementById("log-right");
+        if (el && window.LOG_MIRROR === false) {
+          el.style.display = "none";
+        }
+      } catch (_) {}
+    })();
+  </script>
 
   <div id="loot-panel" class="loot-panel" hidden>
     <div class="loot-title">Loot acquired</div>
@@ -67,9 +78,20 @@
     (function () {
       try {
         const params = new URLSearchParams(location.search);
+        // DEV flag
         if (params.get("dev") === "1") { window.DEV = true; localStorage.setItem("DEV", "1"); }
         if (params.get("dev") === "0") { window.DEV = false; localStorage.removeItem("DEV"); }
         if (localStorage.getItem("DEV") === "1") window.DEV = true;
+
+        // Log mirror toggle (?mirror=1 or ?mirror=0), persisted
+        if (params.get("mirror") === "1") { window.LOG_MIRROR = true; localStorage.setItem("LOG_MIRROR", "1"); }
+        if (params.get("mirror") === "0") { window.LOG_MIRROR = false; localStorage.setItem("LOG_MIRROR", "0"); }
+        if (typeof window.LOG_MIRROR === "undefined") {
+          const m = localStorage.getItem("LOG_MIRROR");
+          if (m === "1") window.LOG_MIRROR = true;
+          else if (m === "0") window.LOG_MIRROR = false;
+          // default: enabled unless user turned it off
+        }
       } catch (_) {}
     })();
   </script>

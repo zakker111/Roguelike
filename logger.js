@@ -5,7 +5,7 @@ Exports (window.Logger):
 - init(target = "#log", max = 60), log(message, type = "info")
 Types: info, crit, block, death, good, warn, flavor.
 
-If an element with id="log-right" exists, log entries are mirrored there as well.
+If an element with id="log-right" exists and LOG_MIRROR !== false, log entries are mirrored there.
 */
 (function () {
   const Logger = {
@@ -24,9 +24,13 @@ If an element with id="log-right" exists, log entries are mirrored there as well
       } else if (target instanceof HTMLElement) {
         this._el = target;
       }
-      // discover optional right-side mirror
+      // discover optional right-side mirror (honor global toggle)
       try {
-        this._elRight = document.getElementById("log-right") || null;
+        if (window.LOG_MIRROR === false) {
+          this._elRight = null;
+        } else {
+          this._elRight = document.getElementById("log-right") || null;
+        }
       } catch (_) {
         this._elRight = null;
       }

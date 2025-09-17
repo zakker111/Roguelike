@@ -87,6 +87,13 @@ html, body {
   z-index: 12;         /* above canvas */
   opacity: 0.95;
 }
+
+/* Hide side log on smaller screens */
+@media (max-width: 1200px) {
+  .log.side {
+    display: none;
+  }
+}
 .log .entry { margin: 2px 0; }
 .log .entry.crit { color: var(--danger); font-weight: 600; }
 .log .entry.block { color: var(--accent); font-weight: 500; }
