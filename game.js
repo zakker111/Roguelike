@@ -81,10 +81,18 @@
       setFovRadius,
       getPlayerAttack, getPlayerDefense, getPlayerBlockChance,
       enemyThreatLabel,
+      // Needed by loot and UI flows
+      initialDecay: (tier) => initialDecay(tier),
+      equipIfBetter: (item) => equipIfBetter(item),
+      addPotionToInventory: (heal, name) => addPotionToInventory(heal, name),
+      renderInventory: () => renderInventoryPanel(),
+      turn: () => turn(),
+      // Combat helpers
       rollHitLocation,
       critMultiplier,
       enemyDamageAfterDefense,
       enemyDamageMultiplier,
+      // Decay and side effects
       decayBlockingHands,
       decayEquipped,
       rerenderInventoryIfOpen,
