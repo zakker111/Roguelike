@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="https://fav.farm/%F0%9F%8E%B2">
 </head>
 <body>
   <div class="ui">
@@ -16,11 +17,25 @@
       <span id="floor">Floor: 1</span>
     </div>
     <div class="help">
-      Move: Numpad (7/8/9/4/6/1/2/3) or arrows/WASD. Wait: Numpad5/Space. Bump to attack. G to loot. I to inventory. N/Enter to descend (stand on >). Adjust FOV: [ ] or +/-.
+      Move: Numpad (7/8/9/4/6/1/2/3). Wait: Numpad5. Bump to attack. G to loot. I to inventory. N/Enter to descend (stand on >).
     </div>
   </div>
+
   <canvas id="game" width="960" height="640"></canvas>
   <div class="log" id="log"></div>
+  <!-- Optional right-side live log mirror -->
+  <div class="log side" id="log-right"></div>
+  <script>
+    // Apply mirror preference to the side log's visibility
+    (function () {
+      try {
+        var el = document.getElementById("log-right");
+        if (el && window.LOG_MIRROR === false) {
+          el.style.display = "none";
+        }
+      } catch (_) {}
+    })();
+  </script>
 
   <div id="loot-panel" class="loot-panel" hidden>
     <div class="loot-title">Loot acquired</div>
@@ -44,6 +59,44 @@
     <div class="loot-hint">Click an equippable item to equip. Press I or Esc to close.</div>
   </div>
 
+  <div id="god-panel" class="inv-panel" hidden>
+    <div class="inv-title">GOD Mode</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+      <button id="god-heal-btn" class="btn">Fully Heal</button>
+      <button id="god-spawn-btn" class="btn">Spawn Random Items</button>
+      <button id="god-spawn-enemy-btn" class="btn">Spawn Enemy Nearby</button>
+    </div>
+    <div class="inv-subtitle">Field of view (FOV)</div>
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+      <input id="god-fov" type="range" min="3" max="14" step="1" />
+      <span id="god-fov-value" class="help" style="font-size:12px;"></span>
+    </div>
+    <div class="loot-hint">Press Esc to close</div>
+  </div>
+
+  <script>
+    (function () {
+      try {
+        const params = new URLSearchParams(location.search);
+        // DEV flag
+        if (params.get("dev") === "1") { window.DEV = true; localStorage.setItem("DEV", "1"); }
+        if (params.get("dev") === "0") { window.DEV = false; localStorage.removeItem("DEV"); }
+        if (localStorage.getItem("DEV") === "1") window.DEV = true;
+
+        // Log mirror toggle (?mirror=1 or ?mirror=0), persisted
+        if (params.get("mirror") === "1") { window.LOG_MIRROR = true; localStorage.setItem("LOG_MIRROR", "1"); }
+        if (params.get("mirror") === "0") { window.LOG_MIRROR = false; localStorage.setItem("LOG_MIRROR", "0"); }
+        if (typeof window.LOG_MIRROR === "undefined") {
+          const m = localStorage.getItem("LOG_MIRROR");
+          if (m === "1") window.LOG_MIRROR = true;
+          else if (m === "0") window.LOG_MIRROR = false;
+          // default: enabled unless user turned it off
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <script src="ctx.js"></script>
+  <script src="los.js"></script>
   <script src="enemies.js"></script>
   <script src="fov.js"></script>
   <script src="dungeon.js"></script>
@@ -54,6 +107,7 @@
     }
   </script>
   <script src="ui.js"></script>
+  <script src="tileset.js"></script>
   <script src="render.js"></script>
   <script src="player_utils.js"></script>
   <script src="player_equip.js"></script>
@@ -61,6 +115,7 @@
   <script src="items.js"></script>
   <script src="dungeon_items.js"></script>
   <script src="loot.js"></script>
+  <script src="flavor.js"></script>
   <script src="ai.js"></script>
   <script src="input.js"></script>
   <script src="game.js"></script>

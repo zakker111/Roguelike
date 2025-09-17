@@ -24,28 +24,40 @@ ctx contract (minimal):
 */
 (function () {
   function tileTransparent(ctx, x, y) {
-    if (!ctx.inBounds(x, y)) return false;
+    if (ctx.los && typeof ctx.los.tileTransparent === "function") {
+      return ctx.los.tileTransparent(ctx, x, y);
+    }
+    if (!ctx.inBounds || !ctx.inBounds(x, y)) return false;
     return ctx.map[y][x] !== ctx.TILES.WALL;
   }
 
   function hasLOS(ctx, x0, y0, x1, y1) {
+    // Prefer shared LOS if available
+    if (ctx.los && typeof ctx.los.hasLOS === "function") {
+      return ctx.los.hasLOS(ctx, x0, y0, x1, y1);
+    }
+    // Fallback Bresenham
     let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     let err = dx + dy, e2;
-    while (true) {
-      if (x0 === x1 && y0 === y1) return true;
-      // allow standing tile (player) without transparency check
-      if (!(x0 === ctx.player.x && y0 === ctx.player.y)) {
-        if (!tileTransparent(ctx, x0, y0)) return false;
-      }
+    while (!(x0 === x1 && y0 === y1)) {
       e2 = 2 * err;
       if (e2 >= dy) { err += dy; x0 += sx; }
       if (e2 <= dx) { err += dx; y0 += sy; }
+      if (x0 === x1 && y0 === y1) break;
+      if (!tileTransparent(ctx, x0, y0)) return false;
     }
+    return true;
   }
 
   function enemiesAct(ctx) {
     const { player, enemies } = ctx;
+    const U = (ctx && ctx.utils) ? ctx.utils : null;
+    const randFloat = U && U.randFloat ? U.randFloat : (ctx.randFloat || ((a,b,dec=1)=>{const v=a+(ctx.rng?ctx.rng():Math.random())*(b-a);const p=Math.pow(10,dec);return Math.round(v*p)/p;}));
+    const randInt = U && U.randInt ? U.randInt : (ctx.randInt || ((min,max)=>Math.floor((ctx.rng?ctx.rng():Math.random())*(max-min+1))+min));
+    const chance = U && U.chance ? U.chance : (ctx.chance || ((p)=>(ctx.rng?ctx.rng():Math.random())<p));
+    const Cap = U && U.capitalize ? U.capitalize : (s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
     const senseRange = 8;
 
     // O(1) occupancy for this turn
@@ -64,9 +76,13 @@ ctx contract (minimal):
         // Player attempts to block with hand/position
         if (ctx.rng() < ctx.getPlayerBlockChance(loc)) {
           ctx.log(`You block the ${e.type || "enemy"}'s attack to your ${loc.part}.`, "block");
+          // Optional flavor for blocks
+          if (ctx.Flavor && typeof ctx.Flavor.onBlock === "function") {
+            ctx.Flavor.onBlock(ctx, { side: "player", attacker: e, defender: player, loc });
+          }
           // Blocking uses gear
           ctx.decayBlockingHands();
-          ctx.decayEquipped("hands", ctx.randFloat(0.3, 1.0, 1));
+          ctx.decayEquipped("hands", randFloat(0.3, 1.0, 1));
           continue;
         }
 
@@ -80,16 +96,19 @@ ctx contract (minimal):
         }
         const dmg = ctx.enemyDamageAfterDefense(raw);
         player.hp -= dmg;
-        if (isCrit) ctx.log(`Critical! ${cap(e.type)} hits your ${loc.part} for ${dmg}.`, "crit");
-        else ctx.log(`${cap(e.type)} hits your ${loc.part} for ${dmg}.`);
+        if (isCrit) ctx.log(`Critical! ${Cap(e.type)} hits your ${loc.part} for ${dmg}.`, "crit");
+        else ctx.log(`${Cap(e.type)} hits your ${loc.part} for ${dmg}.`);
+        if (ctx.Flavor && typeof ctx.Flavor.logHit === "function") {
+          ctx.Flavor.logHit(ctx, { attacker: e, loc, crit: isCrit, dmg });
+        }
 
         // Item decay on being hit (only struck location)
         const critWear = isCrit ? 1.6 : 1.0;
         let wear = 0.5;
-        if (loc.part === "torso") wear = ctx.randFloat(0.8, 2.0, 1);
-        else if (loc.part === "head") wear = ctx.randFloat(0.3, 1.0, 1);
-        else if (loc.part === "legs") wear = ctx.randFloat(0.4, 1.3, 1);
-        else if (loc.part === "hands") wear = ctx.randFloat(0.3, 1.0, 1);
+        if (loc.part === "torso") wear = randFloat(0.8, 2.0, 1);
+        else if (loc.part === "head") wear = randFloat(0.3, 1.0, 1);
+        else if (loc.part === "legs") wear = randFloat(0.4, 1.3, 1);
+        else if (loc.part === "hands") wear = randFloat(0.3, 1.0, 1);
         ctx.decayEquipped(loc.part, wear * critWear);
         if (player.hp <= 0) {
           player.hp = 0;
@@ -99,21 +118,27 @@ ctx contract (minimal):
         continue;
       }
 
-      if (dist <= senseRange && hasLOS(ctx, e.x, e.y, player.x, player.y)) {
-        // try step closer; prefer axis with greater delta
-        const sx = dx === 0 ? 0 : dx > 0 ? 1 : -1;
-        const sy = dy === 0 ? 0 : dy > 0 ? 1 : -1;
+      // movement/approach
+      if (e.immobileTurns && e.immobileTurns > 0) {
+        // crippled legs: cannot move this turn (but still allowed to attack when adjacent above)
+        e.immobileTurns -= 1;
+        continue;
+      } else if (dist <= senseRange) {
+        // Prefer to chase if LOS; otherwise attempt a cautious step toward the player
+        const sx = dx === 0 ? 0 : (dx > 0 ? 1 : -1);
+        const sy = dy === 0 ? 0 : (dy > 0 ? 1 : -1);
+        const primary = Math.abs(dx) > Math.abs(dy) ? [{x:sx,y:0},{x:0,y:sy}] : [{x:0,y:sy},{x:sx,y:0}];
 
-        const tryDirs = Math.abs(dx) > Math.abs(dy) ? [{x:sx,y:0},{x:0,y:sy}] : [{x:0,y:sy},{x:sx,y:0}];
         let moved = false;
-        for (const d of tryDirs) {
+        for (const d of primary) {
           const nx = e.x + d.x;
           const ny = e.y + d.y;
           if (isFree(nx, ny)) {
             occ.delete(`${e.x},${e.y}`);
             e.x = nx; e.y = ny;
             occ.add(`${e.x},${e.y}`);
-            moved = true; break;
+            moved = true;
+            break;
           }
         }
         if (!moved) {
@@ -130,10 +155,10 @@ ctx contract (minimal):
             }
           }
         }
-      } else if (ctx.chance(0.3)) {
-        // random wander
+      } else if (chance(0.4)) {
+        // random wander (moderate chance when far away)
         const dirs = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
-        const d = dirs[ctx.randInt(0, dirs.length - 1)];
+        const d = dirs[randInt(0, dirs.length - 1)];
         const nx = e.x + d.x, ny = e.y + d.y;
         if (isFree(nx, ny)) {
           occ.delete(`${e.x},${e.y}`);

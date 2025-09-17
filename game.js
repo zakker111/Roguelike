@@ -1,16 +1,27 @@
-/*
-Main game orchestrator: state, turns, combat, loot, UI hooks, level generation and rendering.
-*/
+
 
 (() => {
-  // Constants
+  
   const TILE = 32;
+  
   const COLS = 30;
   const ROWS = 20;
+  
+  const MAP_COLS = 60;
+  const MAP_ROWS = 40;
+
   const FOV_DEFAULT = 8;
   let fovRadius = FOV_DEFAULT;
 
-  // Tile enums
+  
+  const camera = {
+    x: 0,
+    y: 0,
+    width: COLS * TILE,
+    height: ROWS * TILE,
+  };
+
+  
   const TILES = {
     WALL: 0,
     FLOOR: 1,
@@ -34,14 +45,14 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     dim: "rgba(13, 16, 24, 0.75)"
   };
 
-  // DOM
+  
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
 
-  // State
+  
   let map = [];
-  let seen = []; // explored tiles
-  let visible = []; // currently visible
+  let seen = [];
+  let visible = [];
   let player = (window.Player && typeof Player.createInitial === "function")
     ? Player.createInitial()
     : { x: 0, y: 0, hp: 40, maxHp: 40, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null } };
@@ -53,62 +64,87 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   let isDead = false;
   let startRoomRect = null;
 
-  // Build a lightweight context object for modules
+  
   function getCtx() {
-    return {
-      // dims and enums
-      ROWS, COLS, TILES,
-      // state
-      player, map, seen, visible, enemies, corpses,
-      startRoomRect,
-      // visibility
+    const base = {
+      rng,
+      ROWS, COLS, MAP_ROWS, MAP_COLS, TILE, TILES,
+      player, enemies, corpses, map, seen, visible,
+      floor, depth: floor,
       fovRadius,
-      // utils
-      rng, randInt, chance,
-      inBounds, isWalkable,
-      // hooks/log
-      log, enemyThreatLabel,
-      // UI helpers
+      requestDraw,
+      log,
+      isWalkable, inBounds,
+      // Prefer modules to use ctx.utils.*; keep these for backward use and fallbacks.
+      round1, randInt, chance, randFloat,
+      enemyColor, describeItem,
+      setFovRadius,
+      getPlayerAttack, getPlayerDefense, getPlayerBlockChance,
+      enemyThreatLabel,
+      // Needed by loot and UI flows
       updateUI: () => updateUI(),
-      renderInventory: () => renderInventoryPanel(),
-      // Items-related helper (for fallback decay)
       initialDecay: (tier) => initialDecay(tier),
-      // Delegations for loot
-      describeItem: (it) => describeItem(it),
       equipIfBetter: (item) => equipIfBetter(item),
       addPotionToInventory: (heal, name) => addPotionToInventory(heal, name),
+      renderInventory: () => renderInventoryPanel(),
       showLoot: (list) => showLootPanel(list),
       hideLoot: () => hideLootPanel(),
       turn: () => turn(),
-      // Combat helpers needed by AI
-      rollHitLocation: () => rollHitLocation(),
-      critMultiplier: () => critMultiplier(),
-      getPlayerBlockChance: (loc) => getPlayerBlockChance(loc),
-      enemyDamageAfterDefense: (raw) => enemyDamageAfterDefense(raw),
-      randFloat: (a,b,c) => randFloat(a,b,c),
-      decayBlockingHands: () => decayBlockingHands(),
-      decayEquipped: (slot, amt) => decayEquipped(slot, amt),
-      enemyDamageMultiplier: (level) => enemyDamageMultiplier(level),
-      // lifecycle
+      // Combat helpers
+      rollHitLocation,
+      critMultiplier,
+      enemyDamageAfterDefense,
+      enemyDamageMultiplier,
+      // Decay and side effects
+      decayBlockingHands,
+      decayEquipped,
+      rerenderInventoryIfOpen,
       onPlayerDied: () => {
         isDead = true;
         updateUI();
         log("You die. Press R or Enter to restart.", "bad");
         showGameOver();
       },
-      // module callbacks
-      recomputeFOV: () => recomputeFOV(),
-      // enemy factory
-      enemyFactory: (x, y, depth) => {
-        if (window.Enemies && Enemies.createEnemyAt) {
-          return Enemies.createEnemyAt(x, y, depth, rng);
+    };
+
+    if (window.Ctx && typeof Ctx.create === "function") {
+      const ctx = Ctx.create(base);
+      // enemy factory prefers ctx.Enemies handle, falling back gracefully
+      ctx.enemyFactory = (x, y, depth) => {
+        const EM = ctx.Enemies || (typeof window !== "undefined" ? window.Enemies : null);
+        if (EM && typeof EM.createEnemyAt === "function") {
+          return EM.createEnemyAt(x, y, depth, rng);
         }
         return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
+      };
+      if (window.DEV && ctx && ctx.utils) {
+        try {
+          console.debug("[DEV] ctx created:", {
+            utils: Object.keys(ctx.utils),
+            los: !!(ctx.los || ctx.LOS),
+            modules: {
+              Enemies: !!ctx.Enemies, Items: !!ctx.Items, Player: !!ctx.Player,
+              UI: !!ctx.UI, Logger: !!ctx.Logger, Loot: !!ctx.Loot,
+              Dungeon: !!ctx.Dungeon, DungeonItems: !!ctx.DungeonItems,
+              FOV: !!ctx.FOV, AI: !!ctx.AI, Input: !!ctx.Input,
+              Render: !!ctx.Render, Tileset: !!ctx.Tileset, Flavor: !!ctx.Flavor
+            }
+          });
+        } catch (_) {}
       }
+      return ctx;
+    }
+
+    // Fallback without Ctx: include a local enemyFactory using window.Enemies if present
+    base.enemyFactory = (x, y, depth) => {
+      if (typeof window !== "undefined" && window.Enemies && typeof window.Enemies.createEnemyAt === "function") {
+        return window.Enemies.createEnemyAt(x, y, depth, rng);
+      }
+      return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
     };
+    return base;
   }
 
-  // Utils
   function mulberry32(a) {
     return function() {
       let t = a += 0x6D2B79F5;
@@ -118,7 +154,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     };
   }
   const randInt = (min, max) => Math.floor(rng() * (max - min + 1)) + min;
-  const chance = p => rng() < p;
+  const chance = (p) => rng() < p;
   const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   const enemyColor = (type) => {
     if (window.Enemies && typeof Enemies.colorFor === "function") {
@@ -138,10 +174,10 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     if (window.Items && typeof Items.initialDecay === "function") {
       return Items.initialDecay(tier);
     }
-    // Start items with some wear; higher tiers start in better condition
+    
     if (tier <= 1) return randFloat(10, 35, 0);
     if (tier === 2) return randFloat(5, 20, 0);
-    return randFloat(0, 10, 0); // tier 3 (steel)
+    return randFloat(0, 10, 0);
   }
 
   function rerenderInventoryIfOpen() {
@@ -159,13 +195,19 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       });
       return;
     }
-    // fallback minimal behavior
+    
     const it = player.equipment?.[slot];
     if (!it) return;
     const before = it.decay || 0;
     it.decay = Math.min(100, round1(before + amount));
     if (it.decay >= 100) {
       log(`${capitalize(it.name)} breaks and is destroyed.`, "bad");
+      // Optional flavor for breakage
+      try {
+        if (window.Flavor && typeof Flavor.onBreak === "function") {
+          Flavor.onBreak(getCtx(), { side: "player", slot, item: it });
+        }
+      } catch (_) {}
       player.equipment[slot] = null;
       updateUI();
       rerenderInventoryIfOpen();
@@ -174,7 +216,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  /* Total player attack (base + level + equipment), rounded to 1 decimal */
+  
   function getPlayerAttack() {
     if (window.Player && typeof Player.getAttack === "function") {
       return Player.getAttack(player);
@@ -188,7 +230,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return round1(player.atk + bonus + levelBonus);
   }
 
-  /* Total player defense from equipment, rounded to 1 decimal */
+  
   function getPlayerDefense() {
     if (window.Player && typeof Player.getDefense === "function") {
       return Player.getDefense(player);
@@ -205,29 +247,19 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   }
 
   function describeItem(item) {
+    // Single source of truth: prefer Player.describeItem, then Items.describe
     if (window.Player && typeof Player.describeItem === "function") {
       return Player.describeItem(item);
     }
     if (window.Items && typeof Items.describe === "function") {
       return Items.describe(item);
     }
+    // Minimal fallback
     if (!item) return "";
-    if (item.kind === "equip") {
-      const parts = [];
-      if ("atk" in item) parts.push(`+${Number(item.atk).toFixed(1)} atk`);
-      if ("def" in item) parts.push(`+${Number(item.def).toFixed(1)} def`);
-      return `${item.name}${parts.length ? " (" + parts.join(", ") + ")" : ""}`;
-    }
-    if (item.kind === "potion") {
-      const heal = item.heal ?? 3;
-      const base = item.name || `potion (+${heal} HP)`;
-      const count = item.count && item.count > 1 ? ` x${item.count}` : "";
-      return `${base}${count}`;
-    }
     return item.name || "item";
   }
 
-  // Combat helpers: hit locations, crits, blocks
+  
   function rollHitLocation() {
     const r = rng();
     if (r < 0.50) return { part: "torso", mult: 1.0, blockMod: 1.0, critBonus: 0.00 };
@@ -237,7 +269,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
   }
 
   function critMultiplier() {
-    // 1.6 - 2.0x
+    
     return 1.6 + rng() * 0.4;
   }
 
@@ -254,20 +286,20 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     const leftDef = (eq.left && typeof eq.left.def === "number") ? eq.left.def : 0;
     const rightDef = (eq.right && typeof eq.right.def === "number") ? eq.right.def : 0;
     const handDef = Math.max(leftDef, rightDef);
-    const base = 0.08 + handDef * 0.06; // a shield or defensive hand item helps a lot
+    const base = 0.08 + handDef * 0.06;
     return Math.max(0, Math.min(0.6, base * (loc?.blockMod || 1.0)));
   }
 
   // Enemy damage after applying player's defense with diminishing returns and a chip-damage floor
   function enemyDamageAfterDefense(raw) {
     const def = getPlayerDefense();
-    // Diminishing returns: as defense grows, reduction approaches a cap
-    const DR = Math.max(0, Math.min(0.85, def / (def + 6))); // cap at 85% reduction
+    
+    const DR = Math.max(0, Math.min(0.85, def / (def + 6)));
     const reduced = raw * (1 - DR);
-    return Math.max(0.1, round1(reduced)); // always at least 0.1 damage if not blocked
+    return Math.max(0.1, round1(reduced));
   }
 
-  // Enemy level and danger helpers
+  
   function enemyLevelFor(type, depth) {
     if (window.Enemies && typeof Enemies.levelFor === "function") {
       return Enemies.levelFor(type, depth, rng);
@@ -297,7 +329,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return { label, tone, diff };
   }
 
-  // FOV adjustment helpers
+  
   function setFovRadius(r) {
     const clamped = Math.max(3, Math.min(14, r));
     if (clamped !== fovRadius) {
@@ -311,7 +343,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     setFovRadius(fovRadius + delta);
   }
 
-  // Potion helpers (stacking + consumption)
+  
   function addPotionToInventory(heal = 3, name = `potion (+${heal} HP)`) {
     if (window.Player && typeof Player.addPotion === "function") {
       Player.addPotion(player, heal, name);
@@ -357,11 +389,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     renderInventoryPanel();
   }
 
-  /*
-   Auto-equip helper used on loot:
-   - Compares new item to current slot via a simple score (atk + def)
-   - Equips if strictly better; logs the change
-  */
+  
   function equipIfBetter(item) {
     if (window.Player && typeof Player.equipIfBetter === "function") {
       return Player.equipIfBetter(player, item, {
@@ -392,7 +420,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return false;
   }
 
-  /* Log a message to the UI (types: info, crit, block, death, good, warn) */
+  
   function log(msg, type = "info") {
     if (window.Logger && typeof Logger.log === "function") {
       Logger.log(msg, type);
@@ -411,8 +439,8 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  // Map generation: random rooms + corridors
-  /* Generate a new floor, reset visibility and repopulate enemies/corpses */
+  
+  
   function generateLevel(depth = 1) {
     if (window.Dungeon && typeof Dungeon.generateLevel === "function") {
       const ctx = getCtx();
@@ -425,25 +453,49 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       enemies = ctx.enemies;
       corpses = ctx.corpses;
       startRoomRect = ctx.startRoomRect;
-      // Now run post-gen steps in this orchestrator
+      
       recomputeFOV();
+      updateCamera();
+      
+      if (inBounds(player.x, player.y) && !visible[player.y][player.x]) {
+        try { log("FOV sanity check: player tile not visible after gen; recomputing.", "warn"); } catch (_) {}
+        recomputeFOV();
+        if (inBounds(player.x, player.y)) {
+          visible[player.y][player.x] = true;
+          seen[player.y][player.x] = true;
+        }
+      }
+      if (window.DEV) {
+        try {
+          const visCount = enemies.filter(e => inBounds(e.x, e.y) && visible[e.y][e.x]).length;
+          log(`[DEV] Enemies spawned: ${enemies.length}, visible now: ${visCount}.`, "notice");
+        } catch (_) {}
+      }
       updateUI();
       log(`You descend to floor ${depth}.`);
       requestDraw();
       return;
     }
-    // Fallback simple level if module missing
-    map = Array.from({ length: ROWS }, () => Array(COLS).fill(TILES.FLOOR));
+    
+    map = Array.from({ length: MAP_ROWS }, () => Array(MAP_COLS).fill(TILES.FLOOR));
+    // Ensure a staircase exists in the fallback map
+    const sy = Math.max(1, MAP_ROWS - 2), sx = Math.max(1, MAP_COLS - 2);
+    if (map[sy] && typeof map[sy][sx] !== "undefined") {
+      map[sy][sx] = TILES.STAIRS;
+    }
     enemies = [];
     corpses = [];
     recomputeFOV();
+    updateCamera();
     updateUI();
     log(`You descend to floor ${depth}.`);
     requestDraw();
   }
 
   function inBounds(x, y) {
-    return x >= 0 && y >= 0 && x < COLS && y < ROWS;
+    const mh = map.length || MAP_ROWS;
+    const mw = map[0] ? map[0].length : MAP_COLS;
+    return x >= 0 && y >= 0 && x < mw && y < mh;
   }
 
   function isWalkable(x, y) {
@@ -452,31 +504,9 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return t === TILES.FLOOR || t === TILES.DOOR || t === TILES.STAIRS;
   }
 
-  // Simple LOS check for enemy AI (Bresenham-style)
-  function tileTransparent(x, y) {
-    if (!inBounds(x, y)) return false;
-    return map[y][x] !== TILES.WALL;
-  }
-  function hasLOS(x0, y0, x1, y1) {
-    let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-    let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-    let err = dx + dy, e2;
-    while (true) {
-      if (x0 === x1 && y0 === y1) return true;
-      if (!(x0 === player.x && y0 === player.y)) {
-        if (!tileTransparent(x0, y0)) return false;
-      }
-      e2 = 2 * err;
-      if (e2 >= dy) { err += dy; x0 += sx; }
-      if (e2 <= dx) { err += dx; y0 += sy; }
-    }
-  }
+  
 
-  /*
-   Factory for enemies at (x,y) for a given depth.
-   - Chooses type based on depth (weighted goblin/troll/ogre)
-   - Sets glyph, hp/atk and XP reward
-  */
+  
   function createEnemyAt(x, y, depth) {
     if (window.Enemies && typeof Enemies.createEnemyAt === "function") {
       return Enemies.createEnemyAt(x, y, depth, rng);
@@ -487,34 +517,67 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return { x, y, type, glyph: "g", hp: 3, atk: 1, xp: 5, level, announced: false };
   }
 
-  // Field of view using simple ray casting within radius
-  /* Recompute visibility around the player and update explored memory */
+  
+  
+  function ensureVisibilityShape() {
+    const rows = map.length;
+    const cols = map[0] ? map[0].length : 0;
+    const shapeOk = Array.isArray(visible) && visible.length === rows && (rows === 0 || (visible[0] && visible[0].length === cols));
+    if (!shapeOk) {
+      visible = Array.from({ length: rows }, () => Array(cols).fill(false));
+    }
+    const seenOk = Array.isArray(seen) && seen.length === rows && (rows === 0 || (seen[0] && seen[0].length === cols));
+    if (!seenOk) {
+      seen = Array.from({ length: rows }, () => Array(cols).fill(false));
+    }
+  }
+
   function recomputeFOV() {
+    ensureVisibilityShape();
     if (window.FOV && typeof FOV.recomputeFOV === "function") {
       const ctx = getCtx();
       ctx.seen = seen;
       ctx.visible = visible;
       FOV.recomputeFOV(ctx);
-      // pull back arrays (replaced in module)
       visible = ctx.visible;
       seen = ctx.seen;
       return;
     }
-    // Fallback: do nothing if module missing
+    // Fallback: reveal player tile at least
+    if (inBounds(player.x, player.y)) {
+      visible[player.y][player.x] = true;
+      seen[player.y][player.x] = true;
+    }
   }
 
-  // Rendering
+  
+  function updateCamera() {
+    // Center camera on player
+    const mapCols = map[0] ? map[0].length : COLS;
+    const mapRows = map ? map.length : ROWS;
+    const mapWidth = mapCols * TILE;
+    const mapHeight = mapRows * TILE;
+
+    const targetX = player.x * TILE + TILE / 2 - camera.width / 2;
+    const targetY = player.y * TILE + TILE / 2 - camera.height / 2;
+
+    camera.x = Math.max(0, Math.min(targetX, Math.max(0, mapWidth - camera.width)));
+    camera.y = Math.max(0, Math.min(targetY, Math.max(0, mapHeight - camera.height)));
+  }
+
+  
   function getRenderCtx() {
     return {
       ctx2d: ctx,
       TILE, ROWS, COLS, COLORS, TILES,
       map, seen, visible,
       player, enemies, corpses,
+      camera,
       enemyColor: (t) => enemyColor(t),
     };
   }
 
-  // Draw-on-demand
+  
   let needsDraw = true;
   function requestDraw() { needsDraw = true; }
   function draw() {
@@ -525,7 +588,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     needsDraw = false;
   }
 
-  /* Input wiring (delegated to input.js) */
+  
 
   function descendIfPossible() {
     hideLootPanel();
@@ -547,11 +610,20 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         isDead: () => isDead,
         isInventoryOpen: () => !!(window.UI && UI.isInventoryOpen && UI.isInventoryOpen()),
         isLootOpen: () => !!(window.UI && UI.isLootOpen && UI.isLootOpen()),
+        isGodOpen: () => !!(window.UI && UI.isGodOpen && UI.isGodOpen()),
         // actions
         onRestart: () => restartGame(),
         onShowInventory: () => showInventoryPanel(),
         onHideInventory: () => hideInventoryPanel(),
         onHideLoot: () => hideLootPanel(),
+        onHideGod: () => { if (window.UI && UI.hideGod) UI.hideGod(); requestDraw(); },
+        onShowGod: () => {
+          if (window.UI) {
+            if (typeof UI.setGodFov === "function") UI.setGodFov(fovRadius);
+            if (typeof UI.showGod === "function") UI.showGod();
+          }
+          requestDraw();
+        },
         onMove: (dx, dy) => tryMovePlayer(dx, dy),
         onWait: () => turn(),
         onLoot: () => lootCorpse(),
@@ -561,29 +633,29 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  /* Try to move the player or attack if an enemy is in the target tile */
+  
   function tryMovePlayer(dx, dy) {
     if (isDead) return;
     const nx = player.x + dx;
     const ny = player.y + dy;
     if (!inBounds(nx, ny)) return;
 
-    // attack if enemy there
+    
     const enemy = enemies.find(e => e.x === nx && e.y === ny);
     if (enemy) {
       const loc = rollHitLocation();
 
-      // Enemy attempts to block
+      
       if (rng() < getEnemyBlockChance(enemy, loc)) {
         log(`${capitalize(enemy.type || "enemy")} blocks your attack to the ${loc.part}.`, "block");
-        // Still incur a bit of wear on your gear
+        
         decayAttackHands(true);
         decayEquipped("hands", randFloat(0.2, 0.7, 1));
         turn();
         return;
       }
 
-      // Compute damage with location/crit
+      
       let dmg = getPlayerAttack() * loc.mult;
       let isCrit = false;
       const critChance = Math.max(0, Math.min(0.6, 0.12 + loc.critBonus));
@@ -599,6 +671,12 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
       } else {
         log(`You hit the ${enemy.type || "enemy"}'s ${loc.part} for ${dmg}.`);
       }
+      { const ctx = getCtx(); if (ctx.Flavor && typeof ctx.Flavor.logPlayerHit === "function") ctx.Flavor.logPlayerHit(ctx, { target: enemy, loc, crit: isCrit, dmg }); }
+      // Leg crippling effect: critical hits to legs prevent movement for a couple of turns
+      if (isCrit && loc.part === "legs" && enemy.hp > 0) {
+        enemy.immobileTurns = Math.max(enemy.immobileTurns || 0, 2);
+        log(`${capitalize(enemy.type || "enemy")} staggers; its legs are crippled and it can't move for 2 turns.`, "notice");
+      }
 
       if (enemy.hp <= 0) {
         log(`${capitalize(enemy.type || "enemy")} dies.`, "bad");
@@ -610,7 +688,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         enemies = enemies.filter(e => e !== enemy);
       }
 
-      // Item decay on use (hands)
+      
       decayAttackHands();
       decayEquipped("hands", randFloat(0.3, 1.0, 1));
       turn();
@@ -620,11 +698,12 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     if (isWalkable(nx, ny) && !enemies.some(e => e.x === nx && e.y === ny)) {
       player.x = nx;
       player.y = ny;
+      updateCamera();
       turn();
     }
   }
 
-  /* Generate loot: gold, potions, and sometimes equipment (tier-biased) */
+  
   function generateLoot(source) {
     if (window.Loot && typeof Loot.generate === "function") {
       return Loot.generate(getCtx(), source);
@@ -632,7 +711,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return [];
   }
 
-  /* Loot a corpse on the current tile; consuming a turn */
+  
   function lootCorpse() {
     if (isDead) return;
     if (window.Loot && typeof Loot.lootHere === "function") {
@@ -660,7 +739,117 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     requestDraw();
   }
 
-  /* Inventory & Equipment panel */
+  // GOD mode actions
+  function godHeal() {
+    const prev = player.hp;
+    player.hp = player.maxHp;
+    if (player.hp > prev) {
+      log(`GOD: You are fully healed (${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)} HP).`, "good");
+    } else {
+      log(`GOD: HP already full (${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}).`, "warn");
+    }
+    updateUI();
+    requestDraw();
+  }
+
+  function godSpawnItems(count = 3) {
+    const created = [];
+    for (let i = 0; i < count; i++) {
+      let it = null;
+      
+      if (window.Items && typeof Items.createEquipment === "function") {
+        const tier = Math.min(3, Math.max(1, Math.floor((floor + 1) / 2)));
+        it = Items.createEquipment(tier, rng);
+      } else if (window.DungeonItems && DungeonItems.lootFactories && typeof DungeonItems.lootFactories === "object") {
+        
+        const keys = Object.keys(DungeonItems.lootFactories);
+        if (keys.length > 0) {
+          const k = keys[randInt(0, keys.length - 1)];
+          try { it = DungeonItems.lootFactories[k](getCtx(), { tier: 2 }); } catch (_) {}
+        }
+      }
+      if (!it) {
+        
+        if (rng() < 0.5) it = { kind: "equip", slot: "hand", name: "debug sword", atk: 1.5, tier: 2, decay: initialDecay(2) };
+        else it = { kind: "equip", slot: "torso", name: "debug armor", def: 1.0, tier: 2, decay: initialDecay(2) };
+      }
+      player.inventory.push(it);
+      created.push(describeItem(it));
+    }
+    if (created.length) {
+      log(`GOD: Spawned ${created.length} item${created.length > 1 ? "s" : ""}:`);
+      created.forEach(n => log(`- ${n}`));
+      updateUI();
+      renderInventoryPanel();
+      requestDraw();
+    }
+  }
+
+  /**
+   * Spawn one or more enemies near the player (debug/GOD).
+   * - Chooses a free FLOOR tile within a small radius; falls back to any free floor tile.
+   * - Creates enemy via ctx.enemyFactory or Enemies.createEnemyAt.
+   * - Applies small randomized jitters to hp/atk for variety (deterministic via rng).
+   */
+  function godSpawnEnemyNearby(count = 1) {
+    const isFreeFloor = (x, y) => {
+      if (!inBounds(x, y)) return false;
+      if (map[y][x] !== TILES.FLOOR) return false;
+      if (player.x === x && player.y === y) return false;
+      if (enemies.some(e => e.x === x && e.y === y)) return false;
+      return true;
+    };
+
+    const pickNearby = () => {
+      const maxAttempts = 60;
+      for (let i = 0; i < maxAttempts; i++) {
+        const dx = randInt(-5, 5);
+        const dy = randInt(-5, 5);
+        const x = player.x + dx;
+        const y = player.y + dy;
+        if (isFreeFloor(x, y)) return { x, y };
+      }
+      // fallback: any free floor
+      const free = [];
+      for (let y = 0; y < map.length; y++) {
+        for (let x = 0; x < (map[0] ? map[0].length : 0); x++) {
+          if (isFreeFloor(x, y)) free.push({ x, y });
+        }
+      }
+      if (free.length === 0) return null;
+      return free[randInt(0, free.length - 1)];
+    };
+
+    const ctx = getCtx();
+    const spawned = [];
+    for (let i = 0; i < count; i++) {
+      const spot = pickNearby();
+      if (!spot) break;
+      const makeEnemy = (ctx.enemyFactory || ((x, y, depth) => createEnemyAt(x, y, depth)));
+      const e = makeEnemy(spot.x, spot.y, floor);
+
+      // Jitter stats a bit for flavor
+      if (typeof e.hp === "number" && rng() < 0.7) {
+        const mult = 0.85 + rng() * 0.5; // 0.85..1.35
+        e.hp = Math.max(1, Math.round(e.hp * mult));
+      }
+      if (typeof e.atk === "number" && rng() < 0.7) {
+        const multA = 0.85 + rng() * 0.5;
+        e.atk = Math.max(0.1, round1(e.atk * multA));
+      }
+      e.announced = false;
+      enemies.push(e);
+      spawned.push(e);
+      log(`GOD: Spawned ${capitalize(e.type || "enemy")} Lv ${e.level || 1} at (${e.x},${e.y}).`, "notice");
+    }
+    if (spawned.length > 0) {
+      requestDraw();
+    } else {
+      log("GOD: No free space to spawn an enemy nearby.", "warn");
+    }
+  }
+
+  
   function renderInventoryPanel() {
     if (window.UI && typeof UI.renderInventory === "function") {
       // Keep totals in sync
@@ -799,11 +988,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     generateLevel(floor);
   }
 
-  /*
-   XP and leveling:
-   - Gain XP on kills; when threshold reached, level up
-   - Level up: +Max HP, full heal, +Atk every other level, next threshold increases
-  */
+  
   function gainXP(amount) {
     if (window.Player && typeof Player.gainXP === "function") {
       Player.gainXP(player, amount, { log, updateUI });
@@ -823,10 +1008,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     updateUI();
   }
 
-  /*
-   Refreshes small UI labels in the top panel:
-   - HP and Gold on the left, Floor / Level / XP on the right
-  */
+  
   function updateUI() {
     if (window.UI && typeof UI.updateStats === "function") {
       UI.updateStats(player, floor, getPlayerAttack, getPlayerDefense);
@@ -840,16 +1022,12 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     if (floorEl) floorEl.textContent = `Floor: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
   }
 
-  /*
-   Enemy AI:
-   - If adjacent: attack (damage reduced by your total defense)
-   - If within sense range: greedy step toward player with simple fallback wiggle
-   - Otherwise: small chance to wander
-  */
+  
   function enemiesAct() {
     if (window.AI && typeof AI.enemiesAct === "function") {
       AI.enemiesAct(getCtx());
     }
+    // No fallback here: AI behavior is defined in ai.js
   }
 
   function occupied(x, y) {
@@ -857,22 +1035,23 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     return enemies.some(e => e.x === x && e.y === y);
   }
 
-  /* One full game turn: enemies act, FOV updates, UI redraw */
+  
   function turn() {
     enemiesAct();
     recomputeFOV();
+    updateCamera();
     updateUI();
     requestDraw();
   }
 
-  // Game loop (only needed for animations; we redraw on each turn anyway)
-  /* Lightweight animation loop to keep canvas responsive */
+  
+  
   function loop() {
     draw();
     requestAnimationFrame(loop);
   }
 
-  // Initialize modules
+  
   if (window.UI && typeof UI.init === "function") {
     UI.init();
     if (typeof UI.setHandlers === "function") {
@@ -882,6 +1061,10 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
         onUnequip: (slot) => unequipSlot(slot),
         onDrink: (idx) => drinkPotionByIndex(idx),
         onRestart: () => restartGame(),
+        onGodHeal: () => godHeal(),
+        onGodSpawn: () => godSpawnItems(),
+        onGodSetFov: (v) => setFovRadius(v),
+        onGodSpawnEnemy: () => godSpawnEnemyNearby(),
       });
     }
   }
@@ -934,7 +1117,7 @@ Main game orchestrator: state, turns, combat, loot, UI hooks, level generation a
     }
   }
 
-  // Start
+  
   generateLevel(floor);
   setupInput();
   loop();

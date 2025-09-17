@@ -33,8 +33,9 @@ Chest representation:
       const rng = ctx.rng || Math.random;
       const slots = ["head", "torso", "legs", "hands"];
       const slot = slots[Math.floor(rng() * slots.length)];
-      if (window.Items && typeof Items.createEquipmentOfSlot === "function") {
-        return setDecayIfEquip(Items.createEquipmentOfSlot(slot, tier, rng), opts.decayAll ?? 99);
+      const ItemsMod = (ctx.Items || (typeof window !== "undefined" ? window.Items : null));
+      if (ItemsMod && typeof ItemsMod.createEquipmentOfSlot === "function") {
+        return setDecayIfEquip(ItemsMod.createEquipmentOfSlot(slot, tier, rng), opts.decayAll ?? 99);
       }
       // fallback
       const nameBy = { head: "helmet", torso: "leather armor", legs: "leg armor", hands: "gloves" };
@@ -44,12 +45,13 @@ Chest representation:
     handWeapon: (ctx, opts = {}) => {
       const tier = opts.tier ?? 2;
       const rng = ctx.rng || Math.random;
-      if (window.Items && typeof Items.createByKey === "function") {
+      const ItemsMod = (ctx.Items || (typeof window !== "undefined" ? window.Items : null));
+      if (ItemsMod && typeof ItemsMod.createByKey === "function") {
         const keys = ["sword", "axe", "bow"];
         // allow two-handed at higher tiers with small chance
         if (tier >= 2 && rng() < 0.2) keys.push("two_handed_axe");
         const key = keys[Math.floor(rng() * keys.length)];
-        return setDecayIfEquip(Items.createByKey(key, tier, rng), opts.decayAll ?? 99);
+        return setDecayIfEquip(ItemsMod.createByKey(key, tier, rng), opts.decayAll ?? 99);
       }
       // fallback
       return setDecayIfEquip({ kind: "equip", slot: "hand", name: "iron sword", atk: 1.5, tier, decay: 8 }, opts.decayAll ?? 99);
@@ -59,8 +61,9 @@ Chest representation:
       const tier = opts.tier ?? 2;
       const slot = opts.slot || "hand";
       const rng = ctx.rng || Math.random;
-      if (window.Items && typeof Items.createEquipmentOfSlot === "function") {
-        return setDecayIfEquip(Items.createEquipmentOfSlot(slot, tier, rng), opts.decayAll ?? 99);
+      const ItemsMod = (ctx.Items || (typeof window !== "undefined" ? window.Items : null));
+      if (ItemsMod && typeof ItemsMod.createEquipmentOfSlot === "function") {
+        return setDecayIfEquip(ItemsMod.createEquipmentOfSlot(slot, tier, rng), opts.decayAll ?? 99);
       }
       // fallback simple
       if (slot === "hand") return setDecayIfEquip({ kind: "equip", slot: "hand", name: "iron sword", atk: 1.5, tier, decay: 8 }, opts.decayAll ?? 99);

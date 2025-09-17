@@ -6,43 +6,45 @@ Exports (window.Dungeon):
 */
 (function () {
   function generateLevel(ctx, depth) {
-    const { ROWS, COLS, TILES, player } = ctx;
+    const { ROWS, COLS, MAP_ROWS, MAP_COLS, TILES, player } = ctx;
+    const rRows = (typeof MAP_ROWS === "number" && MAP_ROWS > 0) ? MAP_ROWS : ROWS;
+    const rCols = (typeof MAP_COLS === "number" && MAP_COLS > 0) ? MAP_COLS : COLS;
 
     // Init arrays/state
-    ctx.map = Array.from({ length: ROWS }, () => Array(COLS).fill(TILES.WALL));
-    ctx.seen = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
-    ctx.visible = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+    ctx.map = Array.from({ length: rRows }, () => Array(rCols).fill(TILES.WALL));
+    ctx.seen = Array.from({ length: rRows }, () => Array(rCols).fill(false));
+    ctx.visible = Array.from({ length: rRows }, () => Array(rCols).fill(false));
     ctx.enemies = [];
     ctx.corpses = [];
     ctx.isDead = false;
 
-    // Carve rooms
+    
     const rooms = [];
     const roomAttempts = 80;
     for (let i = 0; i < roomAttempts; i++) {
       const w = ctx.randInt(4, 9);
       const h = ctx.randInt(3, 7);
-      const x = ctx.randInt(1, COLS - w - 2);
-      const y = ctx.randInt(1, ROWS - h - 2);
+      const x = ctx.randInt(1, rCols - w - 2);
+      const y = ctx.randInt(1, rRows - h - 2);
       const rect = { x, y, w, h };
       if (rooms.every(r => !intersect(rect, r))) {
         rooms.push(rect);
         carveRoom(ctx.map, TILES, rect);
       }
     }
-    // Fallback: ensure at least one room exists
+    
     if (rooms.length === 0) {
-      const w = Math.min(9, Math.max(4, Math.floor(COLS / 5) || 6));
-      const h = Math.min(7, Math.max(3, Math.floor(ROWS / 5) || 4));
-      const x = Math.max(1, Math.min(COLS - w - 2, Math.floor(COLS / 2 - w / 2)));
-      const y = Math.max(1, Math.min(ROWS - h - 2, Math.floor(ROWS / 2 - h / 2)));
+      const w = Math.min(9, Math.max(4, Math.floor(rCols / 5) || 6));
+      const h = Math.min(7, Math.max(3, Math.floor(rRows / 5) || 4));
+      const x = Math.max(1, Math.min(rCols - w - 2, Math.floor(rCols / 2 - w / 2)));
+      const y = Math.max(1, Math.min(rRows - h - 2, Math.floor(rRows / 2 - h / 2)));
       const rect = { x, y, w, h };
       rooms.push(rect);
       carveRoom(ctx.map, TILES, rect);
     }
     rooms.sort((a, b) => a.x - b.x);
 
-    // Connect with corridors in a primary chain
+    
     for (let i = 1; i < rooms.length; i++) {
       const a = center(rooms[i - 1]);
       const b = center(rooms[i]);
@@ -55,7 +57,7 @@ Exports (window.Dungeon):
       }
     }
 
-    // Add a few extra connections to create loops/spurs
+    
     const extra = Math.max(0, Math.floor(rooms.length * 0.3));
     for (let n = 0; n < extra; n++) {
       const i = ctx.randInt(0, rooms.length - 1);
@@ -72,16 +74,17 @@ Exports (window.Dungeon):
       }
     }
 
-    // Place player at first room center
+    
     const start = center(rooms[0] || { x: 2, y: 2, w: 1, h: 1 });
     ctx.startRoomRect = rooms[0] || { x: start.x, y: start.y, w: 1, h: 1 };
 
-    // Reset player at floor 1 using Player.resetFromDefaults (or fallback)
+    
     if (depth === 1) {
-      if (window.Player && typeof Player.resetFromDefaults === "function") {
-        Player.resetFromDefaults(ctx.player);
-      } else if (window.Player && typeof Player.createInitial === "function") {
-        const init = Player.createInitial();
+      const PlayerMod = (ctx.Player || (typeof window !== "undefined" ? window.Player : null));
+      if (PlayerMod && typeof PlayerMod.resetFromDefaults === "function") {
+        PlayerMod.resetFromDefaults(ctx.player);
+      } else if (PlayerMod && typeof PlayerMod.createInitial === "function") {
+        const init = PlayerMod.createInitial();
         Object.assign(ctx.player, init);
       } else {
         Object.assign(ctx.player, {
@@ -92,23 +95,24 @@ Exports (window.Dungeon):
       ctx.player.x = start.x;
       ctx.player.y = start.y;
 
-      // Place a starter chest in the spawn room (once)
-      if (window.DungeonItems && typeof DungeonItems.placeChestInStartRoom === "function") {
-        DungeonItems.placeChestInStartRoom(ctx);
+      
+      const DI = (ctx.DungeonItems || (typeof window !== "undefined" ? window.DungeonItems : null));
+      if (DI && typeof DI.placeChestInStartRoom === "function") {
+        DI.placeChestInStartRoom(ctx);
       }
     } else {
-      // For subsequent floors, keep current stats, just move player to start
+      
       player.x = start.x;
       player.y = start.y;
     }
 
-    // Place staircase (prefer STAIRS tile if available), ensure not in the start room when possible
+    
     let endRoomIndex = rooms.length - 1;
     if (rooms.length > 1 && ctx.startRoomRect) {
       const sc = center(ctx.startRoomRect);
       const endC = center(rooms[endRoomIndex]);
       if (inRect(endC.x, endC.y, ctx.startRoomRect)) {
-        // pick farthest room from start that isn't the start room itself
+        
         let best = endRoomIndex;
         let bestD = -1;
         for (let k = 0; k < rooms.length; k++) {
@@ -120,16 +124,43 @@ Exports (window.Dungeon):
         endRoomIndex = best;
       }
     }
-    const end = center(rooms[endRoomIndex] || { x: COLS - 3, y: ROWS - 3, w: 1, h: 1 });
+    const end = center(rooms[endRoomIndex] || { x: rCols - 3, y: rRows - 3, w: 1, h: 1 });
     const STAIRS = typeof TILES.STAIRS === "number" ? TILES.STAIRS : TILES.DOOR;
     ctx.map[end.y][end.x] = STAIRS;
 
-    // Spawn enemies
-    const enemyCount = 8 + Math.floor(depth * 1.5);
+    // Ensure at least one staircase exists as a safety net
+    let stairsCount = 0;
+    for (let yy = 1; yy < rRows - 1; yy++) {
+      for (let xx = 1; xx < rCols - 1; xx++) {
+        if (ctx.map[yy][xx] === STAIRS) stairsCount++;
+      }
+    }
+    if (stairsCount === 0) {
+      // Place fallback stairs far from the player and outside the start room when possible
+      let best = null, bestD = -1;
+      for (let yy = 1; yy < rRows - 1; yy++) {
+        for (let xx = 1; xx < rCols - 1; xx++) {
+          if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
+          if (ctx.startRoomRect && inRect(xx, yy, ctx.startRoomRect)) continue;
+          const d = Math.abs(xx - ctx.player.x) + Math.abs(yy - ctx.player.y);
+          if (d > bestD) { bestD = d; best = { x: xx, y: yy }; }
+        }
+      }
+      if (!best) best = { x: Math.max(1, rCols - 2), y: Math.max(1, rRows - 2) };
+      ctx.map[best.y][best.x] = STAIRS;
+    }
+
+    
+    const enemyCount = 12 + Math.floor(depth * 2);
     const makeEnemy = ctx.enemyFactory || defaultEnemyFactory;
     for (let i = 0; i < enemyCount; i++) {
       const p = randomFloor(ctx, rooms);
       ctx.enemies.push(makeEnemy(p.x, p.y, depth, ctx.rng));
+    }
+    // Announce total enemies on this floor via flavor module (optional)
+    const FlavorMod = (ctx.Flavor || (typeof window !== "undefined" ? window.Flavor : null));
+    if (FlavorMod && typeof FlavorMod.announceFloorEnemyCount === "function") {
+      try { FlavorMod.announceFloorEnemyCount(ctx); } catch (_) {}
     }
   }
 
@@ -172,17 +203,19 @@ Exports (window.Dungeon):
   }
 
   function randomFloor(ctx, rooms) {
-    const { COLS, ROWS, TILES, player } = ctx;
+    const { MAP_COLS, MAP_ROWS, COLS, ROWS, TILES, player } = ctx;
+    const rCols = (typeof MAP_COLS === "number" && MAP_COLS > 0) ? MAP_COLS : COLS;
+    const rRows = (typeof MAP_ROWS === "number" && MAP_ROWS > 0) ? MAP_ROWS : ROWS;
     let x, y;
     let tries = 0;
     do {
-      x = ctx.randInt(1, COLS - 2);
-      y = ctx.randInt(1, ROWS - 2);
+      x = ctx.randInt(1, rCols - 2);
+      y = ctx.randInt(1, rRows - 2);
       tries++;
       if (tries > 500) {
         // Scan for any suitable floor tile as a safe fallback
-        for (let yy = 1; yy < ROWS - 1; yy++) {
-          for (let xx = 1; xx < COLS - 1; xx++) {
+        for (let yy = 1; yy < rRows - 1; yy++) {
+          for (let xx = 1; xx < rCols - 1; xx++) {
             if (!ctx.inBounds(xx, yy)) continue;
             if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
             if ((xx === player.x && yy === player.y)) continue;
@@ -202,8 +235,8 @@ Exports (window.Dungeon):
           return { x: xx, y: yy };
         }
         // Final fallback: any floor tile that's not the player's tile
-        for (let yy = 1; yy < ROWS - 1; yy++) {
-          for (let xx = 1; xx < COLS - 1; xx++) {
+        for (let yy = 1; yy < rRows - 1; yy++) {
+          for (let xx = 1; xx < rCols - 1; xx++) {
             if (!ctx.inBounds(xx, yy)) continue;
             if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
             if ((xx === player.x && yy === player.y)) continue;
@@ -211,7 +244,7 @@ Exports (window.Dungeon):
           }
         }
         // Give up: place one step to the right if in bounds
-        return { x: Math.min(COLS - 2, Math.max(1, player.x + 1)), y: Math.min(ROWS - 2, Math.max(1, player.y)) };
+        return { x: Math.min(rCols - 2, Math.max(1, player.x + 1)), y: Math.min(rRows - 2, Math.max(1, player.y)) };
       }
     } while (!(ctx.inBounds(x, y) && ctx.map[y][x] === TILES.FLOOR) ||
              (x === player.x && y === player.y) ||
@@ -221,8 +254,9 @@ Exports (window.Dungeon):
   }
 
   function defaultEnemyFactory(x, y, depth, rng) {
-    if (window.Enemies && Enemies.createEnemyAt) {
-      return Enemies.createEnemyAt(x, y, depth, rng);
+    const EM = (typeof window !== "undefined" ? window.Enemies : null);
+    if (EM && typeof EM.createEnemyAt === "function") {
+      return EM.createEnemyAt(x, y, depth, rng);
     }
     return { x, y, type: "goblin", glyph: "g", hp: 3, atk: 1, xp: 5, level: depth, announced: false };
   }

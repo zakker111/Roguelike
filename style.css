@@ -74,6 +74,26 @@ html, body {
   line-height: 1.5;
   white-space: pre-wrap;
 }
+
+/* Right-side log mirror */
+.log.side {
+  position: fixed;
+  right: 10px;
+  top: 80px;
+  width: 300px;
+  max-height: calc(100% - 120px);
+  overflow: auto;
+  margin: 0;           /* override centered layout */
+  z-index: 12;         /* above canvas */
+  opacity: 0.95;
+}
+
+/* Hide side log on smaller screens */
+@media (max-width: 1200px) {
+  .log.side {
+    display: none;
+  }
+}
 .log .entry { margin: 2px 0; }
 .log .entry.crit { color: var(--danger); font-weight: 600; }
 .log .entry.block { color: var(--accent); font-weight: 500; }
@@ -82,6 +102,7 @@ html, body {
 .log .entry.good { color: var(--success); }
 .log .entry.warn { color: #e0af68; }
 .log .entry.notice { color: #e0af68; } /* yellow notice for spotting */
+.log .entry.flavor { color: #b4f9f8; } /* teal for flavor text */
 
 .loot-panel {
   position: fixed;

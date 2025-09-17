@@ -1,13 +1,16 @@
 /*
-Logger: simple in-DOM log with capped length.
+Logger: simple in-DOM log with capped length and optional right-side mirror.
 
 Exports (window.Logger):
 - init(target = "#log", max = 60), log(message, type = "info")
-Types: info, crit, block, death, good, warn.
+Types: info, crit, block, death, good, warn, flavor.
+
+If an element with id="log-right" exists and LOG_MIRROR !== false, log entries are mirrored there.
 */
 (function () {
   const Logger = {
     _el: null,
+    _elRight: null,
     _max: 60,
 
     init(target, max) {
@@ -21,6 +24,16 @@ Types: info, crit, block, death, good, warn.
       } else if (target instanceof HTMLElement) {
         this._el = target;
       }
+      // discover optional right-side mirror (honor global toggle)
+      try {
+        if (window.LOG_MIRROR === false) {
+          this._elRight = null;
+        } else {
+          this._elRight = document.getElementById("log-right") || null;
+        }
+      } catch (_) {
+        this._elRight = null;
+      }
       return this._el != null;
     },
 
@@ -29,15 +42,24 @@ Types: info, crit, block, death, good, warn.
       const el = this._el;
       if (!el) return;
 
+      // main log
       const div = document.createElement("div");
       div.className = `entry ${type}`;
       div.textContent = String(msg);
-      // Most recent on top
       el.prepend(div);
-
-      // Cap entries
       while (el.childNodes.length > this._max) {
         el.removeChild(el.lastChild);
+      }
+
+      // optional right mirror
+      if (this._elRight) {
+        const div2 = document.createElement("div");
+        div2.className = `entry ${type}`;
+        div2.textContent = String(msg);
+        this._elRight.prepend(div2);
+        while (this._elRight.childNodes.length > this._max) {
+          this._elRight.removeChild(this._elRight.lastChild);
+        }
       }
     }
   };

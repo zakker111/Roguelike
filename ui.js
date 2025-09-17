@@ -17,6 +17,10 @@ Exports (window.UI):
       onUnequip: null,
       onDrink: null,
       onRestart: null,
+      onGodHeal: null,
+      onGodSpawn: null,
+      onGodSetFov: null,
+      onGodSpawnEnemy: null,
     },
 
     init() {
@@ -32,6 +36,15 @@ Exports (window.UI):
       this.els.invList = document.getElementById("inv-list");
       this.els.equipSlotsEl = document.getElementById("equip-slots");
       this.els.invStatsEl = document.getElementById("inv-stats");
+
+      // GOD mode elements
+      this.els.godOpenBtn = document.getElementById("god-open-btn");
+      this.els.godPanel = document.getElementById("god-panel");
+      this.els.godHealBtn = document.getElementById("god-heal-btn");
+      this.els.godSpawnBtn = document.getElementById("god-spawn-btn");
+      this.els.godSpawnEnemyBtn = document.getElementById("god-spawn-enemy-btn");
+      this.els.godFov = document.getElementById("god-fov");
+      this.els.godFovValue = document.getElementById("god-fov-value");
 
       // transient hand-chooser element
       this.els.handChooser = document.createElement("div");
@@ -58,6 +71,27 @@ Exports (window.UI):
       this.els.restartBtn?.addEventListener("click", () => {
         if (typeof this.handlers.onRestart === "function") this.handlers.onRestart();
       });
+      // GOD panel open + actions
+      this.els.godOpenBtn?.addEventListener("click", () => this.showGod());
+      this.els.godHealBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodHeal === "function") this.handlers.onGodHeal();
+      });
+      this.els.godSpawnBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodSpawn === "function") this.handlers.onGodSpawn();
+      });
+      this.els.godSpawnEnemyBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodSpawnEnemy === "function") this.handlers.onGodSpawnEnemy();
+      });
+      if (this.els.godFov) {
+        const updateFov = () => {
+          const val = parseInt(this.els.godFov.value, 10);
+          this.setGodFov(val);
+          if (typeof this.handlers.onGodSetFov === "function") this.handlers.onGodSetFov(val);
+        };
+        this.els.godFov.addEventListener("input", updateFov);
+        this.els.godFov.addEventListener("change", updateFov);
+      }
+
       // Delegate equip slot clicks (unequip)
       this.els.equipSlotsEl?.addEventListener("click", (ev) => {
         const span = ev.target.closest("span.name[data-slot]");
@@ -133,12 +167,16 @@ Exports (window.UI):
       return true;
     },
 
-    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart } = {}) {
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
       if (typeof onDrink === "function") this.handlers.onDrink = onDrink;
       if (typeof onRestart === "function") this.handlers.onRestart = onRestart;
+      if (typeof onGodHeal === "function") this.handlers.onGodHeal = onGodHeal;
+      if (typeof onGodSpawn === "function") this.handlers.onGodSpawn = onGodSpawn;
+      if (typeof onGodSetFov === "function") this.handlers.onGodSetFov = onGodSetFov;
+      if (typeof onGodSpawnEnemy === "function") this.handlers.onGodSpawnEnemy = onGodSpawnEnemy;
     },
 
     updateStats(player, floor, getAtk, getDef) {
@@ -267,6 +305,28 @@ Exports (window.UI):
 
     isLootOpen() {
       return !!(this.els.lootPanel && !this.els.lootPanel.hidden);
+    },
+
+    // GOD mode modal
+    showGod() {
+      if (this.isLootOpen()) this.hideLoot();
+      if (this.isInventoryOpen()) this.hideInventory();
+      if (this.els.godPanel) this.els.godPanel.hidden = false;
+    },
+
+    hideGod() {
+      if (this.els.godPanel) this.els.godPanel.hidden = true;
+    },
+
+    isGodOpen() {
+      return !!(this.els.godPanel && !this.els.godPanel.hidden);
+    },
+
+    setGodFov(val) {
+      if (!this.els.godFov) return;
+      const v = Math.max(parseInt(this.els.godFov.min || "3", 10), Math.min(parseInt(this.els.godFov.max || "14", 10), parseInt(val, 10) || 0));
+      this.els.godFov.value = String(v);
+      if (this.els.godFovValue) this.els.godFovValue.textContent = `FOV: ${v}`;
     },
 
     showGameOver(player, floor) {
