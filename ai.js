@@ -118,7 +118,12 @@ ctx contract (minimal):
         continue;
       }
 
-      if (dist <= senseRange) {
+      // movement/approach
+      if (e.immobileTurns && e.immobileTurns > 0) {
+        // crippled legs: cannot move this turn (but still allowed to attack when adjacent above)
+        e.immobileTurns -= 1;
+        continue;
+      } else if (dist <= senseRange) {
         // Prefer to chase if LOS; otherwise attempt a cautious step toward the player
         const sx = dx === 0 ? 0 : (dx > 0 ? 1 : -1);
         const sy = dy === 0 ? 0 : (dy > 0 ? 1 : -1);

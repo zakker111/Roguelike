@@ -672,6 +672,11 @@
         log(`You hit the ${enemy.type || "enemy"}'s ${loc.part} for ${dmg}.`);
       }
       { const ctx = getCtx(); if (ctx.Flavor && typeof ctx.Flavor.logPlayerHit === "function") ctx.Flavor.logPlayerHit(ctx, { target: enemy, loc, crit: isCrit, dmg }); }
+      // Leg crippling effect: critical hits to legs prevent movement for a couple of turns
+      if (isCrit && loc.part === "legs" && enemy.hp > 0) {
+        enemy.immobileTurns = Math.max(enemy.immobileTurns || 0, 2);
+        log(`${capitalize(enemy.type || "enemy")} staggers; its legs are crippled and it can't move for 2 turns.`, "notice");
+      }
 
       if (enemy.hp <= 0) {
         log(`${capitalize(enemy.type || "enemy")} dies.`, "bad");
