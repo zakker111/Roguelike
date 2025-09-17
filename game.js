@@ -82,10 +82,13 @@
       getPlayerAttack, getPlayerDefense, getPlayerBlockChance,
       enemyThreatLabel,
       // Needed by loot and UI flows
+      updateUI: () => updateUI(),
       initialDecay: (tier) => initialDecay(tier),
       equipIfBetter: (item) => equipIfBetter(item),
       addPotionToInventory: (heal, name) => addPotionToInventory(heal, name),
       renderInventory: () => renderInventoryPanel(),
+      showLoot: (list) => showLootPanel(list),
+      hideLoot: () => hideLootPanel(),
       turn: () => turn(),
       // Combat helpers
       rollHitLocation,
