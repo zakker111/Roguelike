@@ -26,6 +26,20 @@ Exports (window.Enemies):
       equipChance: 0.35,
     },
 
+    mime_ghost: {
+      key: "mime_ghost",
+      glyph: "m",
+      color: "#e6eec7",
+      tier: 1,
+      blockBase: 0.06,
+      weight(depth) { return depth <= 2 ? 0.70 : 0.50; },
+      hp(depth) { return 3 + Math.floor(depth / 2); },
+      atk(depth) { return 1 + Math.floor(depth / 4); },
+      xp(depth) { return 5 + Math.floor(depth / 2); },
+      potionWeights: { lesser: 0.60, average: 0.30, strong: 0.10 },
+      equipChance: 0.65,
+    },
+
     hell_houndin: {
       key: "hell_houndin",
       glyph: "h",
