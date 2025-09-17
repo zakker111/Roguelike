@@ -69,6 +69,85 @@ ctx contract (minimal):
       const dy = player.y - e.y;
       const dist = Math.abs(dx) + Math.abs(dy);
 
+      // Special behavior: mime_ghost tends to flee, shouts "Argh!", and only sometimes attacks
+      if (e.type === "mime_ghost") {
+        // lightweight shout cooldown to avoid spam
+        if (typeof e._arghCd === "number" && e._arghCd > 0) e._arghCd -= 1;
+        if ((e._arghCd | 0) <= 0 && chance(0.15)) {
+          try { ctx.log("Argh!", "flavor"); } catch (_) {}
+          e._arghCd = 3;
+        }
+
+        // Compute away-from-player preferred directions
+        const sxAway = dx === 0 ? 0 : (dx > 0 ? -1 : 1);
+        const syAway = dy === 0 ? 0 : (dy > 0 ? -1 : 1);
+        const primaryAway = Math.abs(dx) > Math.abs(dy)
+          ? [{ x: sxAway, y: 0 }, { x: 0, y: syAway }]
+          : [{ x: 0, y: syAway }, { x: sxAway, y: 0 }];
+
+        // If adjacent: 35% chance to attack; otherwise try to step away
+        if (dist === 1) {
+          if (!chance(0.35)) {
+            let moved = false;
+            for (const d of primaryAway) {
+              const nx = e.x + d.x, ny = e.y + d.y;
+              if (isFree(nx, ny)) {
+                occ.delete(`${e.x},${e.y}`);
+                e.x = nx; e.y = ny;
+                occ.add(`${e.x},${e.y}`);
+                moved = true;
+                break;
+              }
+            }
+            if (!moved) {
+              const alt = [{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 1 }];
+              for (const d of alt) {
+                const nx = e.x + d.x, ny = e.y + d.y;
+                if (isFree(nx, ny)) {
+                  occ.delete(`${e.x},${e.y}`);
+                  e.x = nx; e.y = ny;
+                  occ.add(`${e.x},${e.y}`);
+                  moved = true;
+                  break;
+                }
+              }
+            }
+            if (moved) continue; // skipped attack this turn
+          }
+          // else fall through to default adjacent attack below
+        } else {
+          // Not adjacent: if senses the player with LOS, try to move away
+          if (dist <= senseRange && hasLOS(ctx, e.x, e.y, player.x, player.y)) {
+            let moved = false;
+            for (const d of primaryAway) {
+              const nx = e.x + d.x, ny = e.y + d.y;
+              if (isFree(nx, ny)) {
+                occ.delete(`${e.x},${e.y}`);
+                e.x = nx; e.y = ny;
+                occ.add(`${e.x},${e.y}`);
+                moved = true;
+                break;
+              }
+            }
+            if (!moved) {
+              const alt = [{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 1 }];
+              for (const d of alt) {
+                const nx = e.x + d.x, ny = e.y + d.y;
+                if (isFree(nx, ny)) {
+                  occ.delete(`${e.x},${e.y}`);
+                  e.x = nx; e.y = ny;
+                  occ.add(`${e.x},${e.y}`);
+                  moved = true;
+                  break;
+                }
+              }
+            }
+            if (moved) continue; // handled movement; next enemy
+          }
+          // otherwise let default wander logic later handle it
+        }
+      }
+
       // attack if adjacent
       if (Math.abs(dx) + Math.abs(dy) === 1) {
         const loc = ctx.rollHitLocation();
