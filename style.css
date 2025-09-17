@@ -74,6 +74,19 @@ html, body {
   line-height: 1.5;
   white-space: pre-wrap;
 }
+
+/* Right-side log mirror */
+.log.side {
+  position: fixed;
+  right: 10px;
+  top: 80px;
+  width: 300px;
+  max-height: calc(100% - 120px);
+  overflow: auto;
+  margin: 0;           /* override centered layout */
+  z-index: 12;         /* above canvas */
+  opacity: 0.95;
+}
 .log .entry { margin: 2px 0; }
 .log .entry.crit { color: var(--danger); font-weight: 600; }
 .log .entry.block { color: var(--accent); font-weight: 500; }
