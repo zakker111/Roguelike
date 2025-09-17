@@ -1,5 +1,5 @@
 Future Development TODOs (not wired to runtime; planning notes only)
-
+a
 1) Enrich combat logs (flavorful, context-aware)
 - Enemy-specific lines:
   - Goblin: "The goblin jabs your ribs; you gasp for air."
