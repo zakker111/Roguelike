@@ -32,7 +32,8 @@ Exports (window.Enemies):
       color: "#e6eec7",
       tier: 1,
       blockBase: 0.06,
-      weight(depth) { return depth <= 2 ? 0.70 : 0.50; },
+      // Make mime_ghost significantly rarer than goblins
+      weight(depth) { return depth <= 2 ? 0.15 : 0.20; },
       hp(depth) { return 3 + Math.floor(depth / 2); },
       atk(depth) { return 1 + Math.floor(depth / 4); },
       xp(depth) { return 5 + Math.floor(depth / 2); },
