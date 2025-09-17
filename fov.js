@@ -22,6 +22,9 @@ Exports (window.FOV):
     }
 
     const radius = Math.max(1, fovRadius);
+    const Cap = (ctx.utils && typeof ctx.utils.capitalize === "function")
+      ? ctx.utils.capitalize
+      : (s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
     function isTransparent(x, y) {
       if (!ctx.inBounds(x, y)) return false;
@@ -107,7 +110,7 @@ Exports (window.FOV):
       const toSolo = newly.slice(0, maxSolo);
       for (const e of toSolo) {
         const { label } = ctx.enemyThreatLabel(e);
-        ctx.log(`You spot a ${capitalize(e.type || "enemy")} Lv ${e.level || 1} (${label}).`, "notice");
+        ctx.log(`You spot a ${Cap(e.type || "enemy")} Lv ${e.level || 1} (${label}).`, "notice");
       }
       const rest = newly.length - toSolo.length;
       if (rest > 0) {
@@ -116,11 +119,6 @@ Exports (window.FOV):
       // Mark all newly seen enemies as announced
       for (const e of newly) e.announced = true;
     }
-  }
-
-  // local helper for message formatting
-  function capitalize(s) {
-    return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   }
 
   window.FOV = { recomputeFOV };

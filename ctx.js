@@ -64,6 +64,17 @@ Notes:
   }
 
   function ensureLOS(ctx) {
+    // Prefer shared LOS module if present (attached via attachModules or on window)
+    if (ctx.LOS && typeof ctx.LOS.tileTransparent === "function" && typeof ctx.LOS.hasLOS === "function") {
+      ctx.los = ctx.LOS;
+      return ctx;
+    }
+    if (typeof window !== "undefined" && window.LOS && typeof window.LOS.tileTransparent === "function" && typeof window.LOS.hasLOS === "function") {
+      ctx.los = window.LOS;
+      return ctx;
+    }
+
+    // Fallback lightweight LOS
     function tileTransparent(c, x, y) {
       if (!c.inBounds || !c.inBounds(x, y)) return false;
       return c.map[y][x] !== c.TILES.WALL;
@@ -81,7 +92,7 @@ Notes:
       }
       return true;
     }
-    ctx.los = ctx.los || { tileTransparent, hasLOS };
+    if (!ctx.los) ctx.los = { tileTransparent, hasLOS };
     return ctx;
   }
 
