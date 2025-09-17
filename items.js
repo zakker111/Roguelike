@@ -33,11 +33,11 @@ Notes:
       atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] },
       atkBonus: { 1: [0.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] } },
 
-axe: { key: "swich_blade", slot: "hand", twoHanded: false,
-      weight: 0.25,
-      name: (mat) => `${mat} swich_blade`,
-      atkRange: { 1: [0.6, 1.4], 2: [1.3, 3.4], 3: [2.2, 4.0] },
-      atkBonus: { 1: [1.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] } },
+switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
+      weight: 0.12,
+      name: (mat) => `${mat} switch blade`,
+      atkRange: { 1: [0.6, 1.4], 2: [1.3, 2.6], 3: [2.0, 3.2] },
+      atkBonus: { 1: [0.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] } },
 
       
     gasoline_thrower: { key: "gasoline_thrower", slot: "hand", twoHanded: false,

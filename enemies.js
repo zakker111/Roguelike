@@ -26,18 +26,18 @@ Exports (window.Enemies):
       equipChance: 0.35,
     },
 
-    goblin: {
+    hell_houndin: {
       key: "hell_houndin",
       glyph: "h",
-      color: "#000000",
+      color: "#d65d5d",
       tier: 3,
-      blockBase: 0.06,
-      weight(depth) { return depth <= 2 ? 0.70 : 0.50; },
-      hp(depth) { return 4 + Math.floor(depth / 2); },
-      atk(depth) { return 2 + Math.floor(depth / 4); },
-      xp(depth) { return 6 + Math.floor(depth / 2); },
-      potionWeights: { lesser: 0.60, average: 0.30, strong: 0.10 },
-      equipChance: 0.35,
+      blockBase: 0.07,
+      weight(depth) { return depth <= 2 ? 0.02 : 0.08; },
+      hp(depth) { return 5 + Math.floor(depth * 0.9); },
+      atk(depth) { return 2 + Math.floor(depth / 3); },
+      xp(depth) { return 14 + Math.floor(depth); },
+      potionWeights: { lesser: 0.45, average: 0.35, strong: 0.20 },
+      equipChance: 0.60,
     },
 
     troll: {
