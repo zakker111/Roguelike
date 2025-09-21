@@ -1154,7 +1154,10 @@
   
   function turn() {
     if (isDead) return;
-    decayEquippedOverTime();
+    // If you have a timed equipment decay helper, call it; otherwise skip
+    if (typeof decayEquippedOverTime === "function") {
+      try { decayEquippedOverTime(); } catch (_) {}
+    }
     enemiesAct();
     // Visual: decals fade each turn (keep deterministic, no randomness here)
     if (decals && decals.length) {
@@ -1168,6 +1171,12 @@
     requestDraw();
     // decay corpse flags
     if (corpses.length > 50) corpses = corpses.slice(-50);
+  }
+
+  // Main animation loop
+  function loop() {
+    draw();
+    requestAnimationFrame(loop);
   }
 
   
