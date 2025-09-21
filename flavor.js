@@ -23,9 +23,14 @@
     "You take a hard hit to the head; your ears ring."
   ];
 
-  const TORSO_STING_PLAYER = [
-    "A sharp jab to your ribs knocks the wind out.",
-    "You clutch your ribs; the hit steals your breath."
+  const TORSO_STING_PLAYER = [     "A sharp jab to your ribs knocks the wind out.",    " You clutch your ribs; the hit steals your breath." . ];
+  const BLOOD_SPILL = [    "Blood spills across the floor.",
+    "Dark blood splashes on the stone.",    "A stain spreads underfoot.",
+_code  new]</;
+
+
+
+"
   ];
 
   /**
@@ -73,6 +78,14 @@
     const crit = !!(opts && opts.crit);
     const dmg = (opts && typeof opts.dmg === "number") ? opts.dmg : null;
 
+    // Blood spill flavor (pairs with decals). Keep brief and not on every hit.
+    if (dmg != null && dmg > 0) {
+      const p = crit ? 0.5 : 0.25; // higher chance on crits
+      if (ctx.rng() < p) {
+        ctx.log(pick(BLOOD_SPILL, ctx.rng), "flavor");
+      }
+    }
+
     // Strong crit to head -> yellow notice, include enemy and location
     if (crit && loc.part === "head") {
       if (ctx.rng() < 0.6) {
@@ -83,6 +96,8 @@
         ];
         ctx.log(pick(variants, ctx.rng), "notice");
       }
+      return;
+    }
       return;
     }
 
