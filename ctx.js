@@ -1,14 +1,17 @@
-/*
-Ctx: shared context factory so modules consume a single ctx object
-instead of importing each other via window.*.
-
-Exports (window.Ctx):
-- create(base): returns a normalized ctx with consistent shape and optional module handles attached
-- attachModules(ctx): attaches discovered module handles to the ctx (Enemies, Items, Player, UI, Logger, Loot, Dungeon, DungeonItems, FOV, AI, Input, Render)
-Notes:
-- This is a thin layer. It does not mutate the provided base, it returns a new object.
-- Modules should read from ctx only; no direct window.* lookups are required if ctx is used consistently.
-*/
+/**
+ * @file ctx.js
+ * @description Context factory so modules consume a single ctx object rather than importing via window.*.
+ * Provides attached module handles, shared utils, and a LOS implementation on ctx.
+ *
+ * @exports Ctx
+ * @property {function(Object):Object} create - Returns a normalized ctx with consistent shape and optional module handles.
+ * @property {function(Object):Object} attachModules - Attaches discovered module handles to the ctx (Enemies, Items, Player, UI, Logger, Loot, Dungeon, DungeonItems, FOV, AI, Input, Render, Tileset, Flavor, PlayerUtils, LOS).
+ *
+ * @remarks
+ * - Thin layer: does not mutate the provided base, returns a new object.
+ * - Modules should read from ctx only; avoid direct window.* lookups when using ctx.
+ * - Utilities on ctx.utils are deterministic when ctx.rng is provided.
+ */
 (function () {
   function shallowClone(obj) {
     const out = {};
