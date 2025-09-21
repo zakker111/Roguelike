@@ -295,11 +295,12 @@
         const statuses = [];
         if (player.bleedTurns && player.bleedTurns > 0) statuses.push(`Bleeding (${player.bleedTurns})`);
         if (player.dazedTurns && player.dazedTurns > 0) statuses.push(`Dazed (${player.dazedTurns})`);
-        if (statuses.length) parts.push(`  Status: ${statuses.join(", ")}`);
+        parts.push(`  Status: ${statuses.length ? statuses.join(", ") : "None"}`);
         this.els.hpEl.textContent = parts.join("");
       }
       if (this.els.floorEl) {
-        this.els.floorEl.textContent = `Floor: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
+        // Shorter labels to fit better on small screens
+        this.els.floorEl.textContent = `F: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
       }
       if (this.els.invStatsEl && typeof getAtk === "function" && typeof getDef === "function") {
         this.els.invStatsEl.textContent = `Attack: ${getAtk().toFixed(1)}   Defense: ${getDef().toFixed(1)}`;
