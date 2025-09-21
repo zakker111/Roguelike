@@ -277,6 +277,9 @@
 
   
   function rollHitLocation() {
+    if (window.Combat && typeof Combat.rollHitLocation === "function") {
+      return Combat.rollHitLocation(rng);
+    }
     const r = rng();
     if (r < 0.50) return { part: "torso", mult: 1.0, blockMod: 1.0, critBonus: 0.00 };
     if (r < 0.65) return { part: "head",  mult: 1.1, blockMod: 0.85, critBonus: 0.15 };
@@ -285,7 +288,9 @@
   }
 
   function critMultiplier() {
-    
+    if (window.Combat && typeof Combat.critMultiplier === "function") {
+      return Combat.critMultiplier(rng);
+    }
     return 1.6 + rng() * 0.4;
   }
 
@@ -652,9 +657,16 @@
   
   function tryMovePlayer(dx, dy) {
     if (isDead) return;
+    // Dazed: skip action if dazedTurns > 0
+    if (player.dazedTurns && player.dazedTurns > 0) {
+      player.dazedTurns -= 1;
+      log("You are dazed and lose your action this turn.", "warn");
+      turn();
+      return;
+    }
     const nx = player.x + dx;
     const ny = player.y + dy;
-    if (!inBounds(nx, ny)) return;
+    if (!inBounds(nx, ny)) ret_codeurnewn</;
 
     
     const enemy = enemies.find(e => e.x === nx && e.y === ny);
@@ -698,10 +710,14 @@
         log(`You hit the ${enemy.type || "enemy"}'s ${loc.part} for ${dmg}.`);
       }
       { const ctx = getCtx(); if (ctx.Flavor && typeof ctx.Flavor.logPlayerHit === "function") ctx.Flavor.logPlayerHit(ctx, { target: enemy, loc, crit: isCrit, dmg }); }
-      // Leg crippling effect: critical hits to legs prevent movement for a couple of turns
+      // Leg crippling: apply Limp on leg crits to slow enemy movement
       if (isCrit && loc.part === "legs" && enemy.hp > 0) {
-        enemy.immobileTurns = Math.max(enemy.immobileTurns || 0, 2);
-        log(`${capitalize(enemy.type || "enemy")} staggers; its legs are crippled and it can't move for 2 turns.`, "notice");
+        if (window.Status && typeof Status.applyLimpToEnemy === "function") {
+          Status.applyLimpToEnemy(getCtx(), enemy, 2);
+        } else {
+          enemy.immobileTurns = Math.max(enemy.immobileTurns || 0, 2);
+          log(`${capitalize(enemy.type || "enemy")} staggers; its legs are crippled and it can't move for 2 turns.`, "notice");
+        }
       }
 
       if (enemy.hp <= 0) {

@@ -179,6 +179,11 @@
         player.hp -= dmg;
         if (isCrit) ctx.log(`Critical! ${Cap(e.type)} hits your ${loc.part} for ${dmg}.`, "crit");
         else ctx.log(`${Cap(e.type)} hits your ${loc.part} for ${dmg}.`);
+        // Apply status effects
+        if (isCrit && loc.part === "head" && typeof window !== "undefined" && window.Status && typeof Status.applyDazedToPlayer === "function") {
+          const dur = (ctx.rng ? (1 + Math.floor(ctx.rng() * 2)) : 1); // 1-2 turns
+          try { Status.applyDazedToPlayer(ctx, dur); } catch (_) {}
+        }
         if (ctx.Flavor && typeof ctx.Flavor.logHit === "function") {
           ctx.Flavor.logHit(ctx, { attacker: e, loc, crit: isCrit, dmg });
         }
