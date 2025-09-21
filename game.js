@@ -65,6 +65,7 @@
   let startRoomRect = null;
   // GOD toggles
   let alwaysCrit = (typeof window !== "undefined" && typeof window.ALWAYS_CRIT === "boolean") ? !!window.ALWAYS_CRIT : false;
+  let forcedCritPart = (typeof window !== "undefined" && typeof window.ALWAYS_CRIT_PART === "string") ? window.ALWAYS_CRIT_PART : (typeof localStorage !== "undefined" ? (localStorage.getItem("ALWAYS_CRIT_PART") || "") : "");
 
   
   function getCtx() {
@@ -645,7 +646,18 @@
     
     const enemy = enemies.find(e => e.x === nx && e.y === ny);
     if (enemy) {
-      const loc = rollHitLocation();
+      let loc = rollHitLocation();
+      if (alwaysCrit && forcedCritPart) {
+        // Normalize to known location profile
+        const profiles = {
+          torso: { part: "torso", mult: 1.0, blockMod: 1.0, critBonus: 0.00 },
+          head:  { part: "head",  mult: 1.1, blockMod: 0.85, critBonus: 0.15 },
+          hands: { part: "hands", mult: 0.9, blockMod: 0.75, critBonus: -0.05 },
+          legs:  { part: "legs",  mult: 0.95, blockMod: 0.75, critBonus: -0.03 },
+        };
+        if (profiles[forcedCritPart]) loc = profiles[forcedCritPart];
+   _code  new </}
+;
 
       
       if (rng() < getEnemyBlockChance(enemy, loc)) {
@@ -978,6 +990,20 @@
     alwaysCrit = !!v;
     try { window.ALWAYS_CRIT = alwaysCrit; localStorage.setItem("ALWAYS_CRIT", alwaysCrit ? "1" : "0"); } catch (_) {}
     log(`GOD: Always Crit ${alwaysCrit ? "enabled" : "disabled"}.`, alwaysCrit ? "good" : "warn");
+  }
+
+  // GOD: set forced crit body part for player attacks
+  function setCritPart(part) {
+    const valid = new Set(["torso","head","hands","legs",""]);
+    const p = valid.has(part) ? part : "";
+    forcedCritPart = p;
+    try {
+      window.ALWAYS_CRIT_PART = p;
+      if (p) localStorage.setItem("ALWAYS_CRIT_PART", p);
+      else localStorage.removeItem("ALWAYS_CRIT_PART");
+    } catch (_) {}
+    if (p) log(`GOD: Forcing crit hit location: ${p}.`, "notice");
+    else log("GOD: Cleared forced crit hit location.", "notice");
   }
 
   function hideGameOver() {

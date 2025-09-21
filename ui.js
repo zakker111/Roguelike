@@ -68,6 +68,28 @@ Exports (window.UI):
       `;
       document.body.appendChild(this.els.handChooser);
 
+      // transient crit-hit-part chooser
+      this.els.hitChooser = document.createElement("div");
+      this.els.hitChooser.style.position = "fixed";
+      this.els.hitChooser.style.display = "none";
+      this.els.hitChooser.style.zIndex = "50000";
+      this.els.hitChooser.style.background = "rgba(20,24,33,0.98)";
+      this.els.hitChooser.style.border = "1px solid rgba(80,90,120,0.6)";
+      this.els.hitChooser.style.borderRadius = "6px";
+      this.els.hitChooser.style.padding = "8px";
+      this.els.hitChooser.style.boxShadow = "0 8px 28px rgba(0,0,0,0.4)";
+      this.els.hitChooser.innerHTML = `
+        <div style="color:#cbd5e1; font-size:12px; margin-bottom:6px;">Force crit to:</div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; max-width:280px;">
+          <button data-part="torso" style="padding:6px 10px; background:#1f2937; color:#e5e7eb; border:1px solid #334155; border-radius:4px; cursor:pointer;">Torso</button>
+          <button data-part="head" style="padding:6px 10px; background:#1f2937; color:#e5e7eb; border:1px solid #334155; border-radius:4px; cursor:pointer;">Head</button>
+          <button data-part="hands" style="padding:6px 10px; background:#1f2937; color:#e5e7eb; border:1px solid #334155; border-radius:4px; cursor:pointer;">Hands</button>
+          <button data-part="legs" style="padding:6px 10px; background:#1f2937; color:#e5e7eb; border:1px solid #334155; border-radius:4px; cursor:pointer;">Legs</button>
+          <button data-part="cancel" style="padding:6px 10px; background:#111827; color:#9ca3af; border:1px solid #374151; border-radius:4px; cursor:pointer;">Cancel</button>
+        </div>
+      `;
+      document.body.appendChild(this.els.hitChooser);
+
       // Bind static events
       this.els.lootPanel?.addEventListener("click", () => this.hideLoot());
       this.els.restartBtn?.addEventListener("click", () => {
@@ -101,11 +123,24 @@ Exports (window.UI):
         this.updateSideLogButton();
       }
       if (this.els.godToggleCritBtn) {
-        this.els.godToggleCritBtn.addEventListener("click", () => {
+        this.els.godToggleCritBtn.addEventListener("click", (ev) => {
+          const btn = ev.currentTarget;
           const next = !this.getAlwaysCritState();
           this.setAlwaysCritState(next);
           if (typeof this.handlers.onGodSetAlwaysCrit === "function") {
             this.handlers.onGodSetAlwaysCrit(next);
+          }
+          // When enabling, ask for preferred hit location
+          if (next) {
+            const rect = btn.getBoundingClientRect();
+            this.showHitChooser(rect.left, rect.bottom + 6, (part) => {
+              if (part && part !== "cancel") {
+                this.setCritPartState(part);
+                if (typeof this.handlers.onGodSetCritPart === "function") {
+                  this.handlers.onGodSetCritPart(part);
+                }
+              }
+            });
           }
         });
         this.updateAlwaysCritButton();
@@ -175,19 +210,32 @@ Exports (window.UI):
         if (typeof cb === "function") cb(hand);
       });
 
-      // Hide chooser on any outside click (not in capture phase)
+      // Hit chooser click
+      this.els.hitChooser.addEventListener("click", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        e.stopPropagation();
+        const part = btn.dataset.part;
+        const cb = this._hitChooserCb;
+        this.hideHitChooser();
+        if (typeof cb === "function") cb(part);
+      });
+
+      // Hide choosers on any outside click (not in capture phase)
       document.addEventListener("click", (e) => {
-        if (!this.els.handChooser) return;
-        if (this.els.handChooser.style.display === "none") return;
-        if (this.els.handChooser.contains(e.target)) return;
-        this.hideHandChooser();
+        if (this.els.handChooser && this.els.handChooser.style.display !== "none" && !this.els.handChooser.contains(e.target)) {
+          this.hideHandChooser();
+        }
+        if (this.els.hitChooser && this.els.hitChooser.style.display !== "none" && !this.els.hitChooser.contains(e.target)) {
+          this.hideHitChooser();
+        }
       });
 
       return true;
     },
 
-    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy } = {}) {
-      if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSetAlwaysCrit, onGodSetCritPart } = {}) {
+      if (typeof onEquip === "quip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
       if (typeof onDrink === "function") this.handlers.onDrink = onDrink;
@@ -306,6 +354,20 @@ Exports (window.UI):
       this._handChooserCb = null;
     },
 
+    showHitChooser(x, y, cb) {
+      if (!this.els.hitChooser) return;
+      this._hitChooserCb = cb;
+      this.els.hitChooser.style.left = `${Math.round(x)}px`;
+      this.els.hitChooser.style.top = `${Math.round(y)}px`;
+      this.els.hitChooser.style.display = "block";
+    },
+
+    hideHitChooser() {
+      if (!this.els.hitChooser) return;
+      this.els.hitChooser.style.display = "none";
+      this._hitChooserCb = null;
+    },
+
     showLoot(list) {
       if (!this.els.lootPanel || !this.els.lootList) return;
       this.els.lootList.innerHTML = "";
@@ -408,10 +470,29 @@ Exports (window.UI):
       this.updateAlwaysCritButton();
     },
 
+    getCritPartState() {
+      try {
+        if (typeof window.ALWAYS_CRIT_PART === "string" && window.ALWAYS_CRIT_PART) return window.ALWAYS_CRIT_PART;
+        const v = localStorage.getItem("ALWAYS_CRIT_PART");
+        if (v) return v;
+      } catch (_) {}
+      return "";
+    },
+
+    setCritPartState(part) {
+      try {
+        window.ALWAYS_CRIT_PART = part || "";
+        if (part) localStorage.setItem("ALWAYS_CRIT_PART", part);
+        else localStorage.removeItem("ALWAYS_CRIT_PART");
+      } catch (_) {}
+      this.updateAlwaysCritButton();
+    },
+
     updateAlwaysCritButton() {
       if (!this.els.godToggleCritBtn) return;
       const on = this.getAlwaysCritState();
-      this.els.godToggleCritBtn.textContent = `Always Crit: ${on ? "On" : "Off"}`;
+      const part = this.getCritPartState();
+      this.els.godToggleCritBtn.textContent = `Always Crit: ${on ? "On" : "Off"}${on && part ? ` (${part})` : ""}`;
     },
 
     showGameOver(player, floor) {
