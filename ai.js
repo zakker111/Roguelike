@@ -1,27 +1,29 @@
-/*
-AI: enemy perception and movement + attack routine.
-
-Exports (window.AI):
-- enemiesAct(ctx): runs one AI turn for all enemies
-
-ctx contract (minimal):
-{
-  // state
-  player, enemies, map, TILES,
-  // geometry
-  ROWS, COLS, inBounds, isWalkable,
-  // rng utils
-  rng, randInt, chance,
-  // combat helpers and effects
-  rollHitLocation(), critMultiplier(), getPlayerBlockChance(loc),
-  enemyDamageAfterDefense(raw), randFloat(min,max,dec),
-  decayBlockingHands(), decayEquipped(slot, amt),
-  // UI/log
-  log(msg, type?), updateUI(),
-  // lifecycle
-  onPlayerDied(), // called when HP <= 0
-}
-*/
+/**
+ * AI: enemy perception, movement, and attack routine.
+ *
+ * Exports (window.AI):
+ * - enemiesAct(ctx): runs one AI turn for all enemies on the map
+ *
+ * ctx (expected subset):
+ * {
+ *   // state
+ *   player, enemies, map, TILES,
+ *   // geometry
+ *   inBounds(x,y), isWalkable(x,y),
+ *   // randomness
+ *   rng(), utils?: { randInt, randFloat, chance, capitalize },
+ *   // combat helpers and effects
+ *   rollHitLocation(), critMultiplier(), getPlayerBlockChance(loc),
+ *   enemyDamageAfterDefense(raw), randFloat(min,max,dec),
+ *   decayBlockingHands(), decayEquipped(slot, amt),
+ *   // UI/log
+ *   log(msg, type?), updateUI?,
+ *   // lifecycle
+ *   onPlayerDied?(), // called when HP <= 0
+ *   // LOS
+ *   los?: { tileTransparent(ctx,x,y), hasLOS(ctx,x0,y0,x1,y1) }
+ * }
+ */
 (function () {
   function tileTransparent(ctx, x, y) {
     if (ctx.los && typeof ctx.los.tileTransparent === "function") {

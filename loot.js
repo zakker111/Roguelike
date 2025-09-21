@@ -1,34 +1,23 @@
-/*
-Loot subsystem: enemy drops and player looting.
-
-Exports (window.Loot):
-- generate(ctx, source): build an array of drop items for a defeated enemy (gold, optional potion, optional equipment)
-- lootHere(ctx): resolve looting interaction at the player's position (corpses and chests). Handles
-  - auto-equip if the item is strictly better (via ctx.equipIfBetter)
-  - gold stacking
-  - potions: drink immediately if missing HP, otherwise add to inventory
-  - UI side effects: logs, top HUD update, and a small \"Loot acquired\" panel
-
-Design goals:
-- Keep this module UI-agnostic: it uses small hooks provided by ctx (log/updateUI/renderInventory/showLoot/hideLoot),
-  falling back to simple DOM manipulation when UI module is absent.
-- Prefer data-driven equipment via Items module when available; otherwise generate sensible fallbacks with ctx.rng
-- Be deterministic with ctx.rng when present (important for seeded runs / replays)
-
-Minimal ctx contract (soft):
-{
-  // state
-  player, corpses,
-  // RNG utils
-  rng, randInt, chance,
-  // item helpers
-  describeItem(item), equipIfBetter(item), addPotionToInventory(heal, name), initialDecay(tier),
-  // ui/log/turn
-  log(msg, type?), updateUI(), renderInventory(), showLoot(list), hideLoot(), turn(),
-  // optional modules
-  Items, Enemies
-}
-*/
+/**
+ * Loot subsystem: enemy drops and player looting.
+ *
+ * Exports (window.Loot):
+ * - generate(ctx, source): returns an array of drop items for a defeated enemy (gold, maybe potion, maybe equipment)
+ * - lootHere(ctx): resolve looting on the player's tile (corpses and chests); applies auto-equip and UI hooks.
+ *
+ * Design:
+ * - UI-agnostic; uses small hooks on ctx (log/updateUI/renderInventory/showLoot/hideLoot), with DOM fallbacks if UI is absent.
+ * - Prefers Items module for data-driven equipment; otherwise generates sensible fallbacks.
+ * - Deterministic when ctx.rng is provided.
+ *
+ * ctx (expected subset):
+ * {
+ *   player, corpses, rng, randInt, chance,
+ *   describeItem(), equipIfBetter(), addPotionToInventory(), initialDecay(),
+ *   log(), updateUI(), renderInventory(), showLoot(list), hideLoot(), turn(),
+ *   Items?, Enemies?
+ * }
+ */
 (function () {
   /**
    * Choose a potion tier based on enemy type.

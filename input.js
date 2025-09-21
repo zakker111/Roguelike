@@ -1,3 +1,15 @@
+/**
+ * Input: keyboard bindings and dispatch to game handlers.
+ *
+ * Exports (window.Input):
+ * - init(handlers): installs keydown listener. `handlers` can include:
+ *   { isDead, isInventoryOpen, isLootOpen, isGodOpen, onRestart, onShowInventory, onHideInventory,
+ *     onHideLoot, onHideGod, onShowGod, onMove(dx,dy), onWait, onLoot, onDescend, adjustFov(delta) }
+ * - destroy(): removes listener.
+ *
+ * Movement: Arrow keys (4-dir) and Numpad (8-dir). Wait: Numpad5. Inventory: I. Loot: G. Descend: N or Enter.
+ * GOD panel: P to open; Esc to close when open. FOV adjust: [-] and [+]/[=] (also Numpad +/-).
+ */
 (() => {
   const KEY_DIRS = {
     // Numpad

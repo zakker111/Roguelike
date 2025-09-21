@@ -1,12 +1,16 @@
-/*
-Enemies: registry and helpers.
-
-Exports (window.Enemies):
-- TYPES, pickType(depth, rng), createEnemyAt(x, y, depth, rng)
-- colorFor(type), glyphFor(type)
-- equipTierFor(type), equipChanceFor(type), potionWeightsFor(type)
-- levelFor(type, depth, rng), damageMultiplier(level), enemyBlockChance(enemy, loc)
-*/
+/**
+ * Enemies: registry and helpers.
+ *
+ * Exports (window.Enemies):
+ * - TYPES, pickType(depth, rng), createEnemyAt(x, y, depth, rng)
+ * - colorFor(type), glyphFor(type)
+ * - equipTierFor(type), equipChanceFor(type), potionWeightsFor(type)
+ * - levelFor(type, depth, rng), damageMultiplier(level), enemyBlockChance(enemy, loc)
+ *
+ * Notes:
+ * - Weighted spawn selection with depth-dependent weights.
+ * - All randomness accepts an rng() for determinism.
+ */
 (function () {
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 

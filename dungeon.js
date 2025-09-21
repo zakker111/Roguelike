@@ -1,9 +1,15 @@
-/*
-Dungeon: rooms, corridors, player/exit placement, enemy spawns.
-
-Exports (window.Dungeon):
-- generateLevel(ctx, depth): mutates ctx.map/seen/visible/enemies/corpses/startRoomRect and positions player.
-*/
+/**
+ * Dungeon: rooms, corridors, player/exit placement, enemy spawns.
+ *
+ * Exports (window.Dungeon):
+ * - generateLevel(ctx, depth): mutates ctx.map/seen/visible/enemies/corpses/startRoomRect and positions player.
+ *
+ * ctx (expected subset):
+ * {
+ *   ROWS,COLS,MAP_ROWS,MAP_COLS,TILES, player, rng(), utils?:{randInt,chance},
+ *   inBounds(x,y), enemyFactory(x,y,depth), Flavor?, DungeonItems?
+ * }
+ */
 (function () {
   function generateLevel(ctx, depth) {
     const { ROWS, COLS, MAP_ROWS, MAP_COLS, TILES, player } = ctx;

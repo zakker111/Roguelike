@@ -1,15 +1,16 @@
-/*
-Items: data-driven equipment registry with deterministic RNG.
-
-Exports (window.Items):
-- createEquipment(tier, rng), createEquipmentOfSlot(slot, tier, rng)
-- createByKey(key, tier, rng, overrides?), createNamed(config, rng)
-- addType(slot, def), describe(item), initialDecay(tier, rng?), MATERIALS, TYPES
-
-Notes:
-- TYPES is a flat registry keyed by item key (similar to Enemies).
-- weight can be a number or a function of tier.
-*/
+/**
+ * Items: data-driven equipment registry with deterministic RNG.
+ *
+ * Exports (window.Items):
+ * - createEquipment(tier, rng), createEquipmentOfSlot(slot, tier, rng)
+ * - createByKey(key, tier, rng, overrides?), createNamed(config, rng)
+ * - addType(slot, def), describe(item), initialDecay(tier, rng?), MATERIALS, TYPES
+ *
+ * Notes:
+ * - TYPES is a flat registry keyed by item key (similar to Enemies).
+ * - Per-type .weight can be a number or a function of tier.
+ * - All random rolls use the supplied rng() when provided for determinism.
+ */
 (function () {
   const round1 = (n) => Math.round(n * 10) / 10;
 

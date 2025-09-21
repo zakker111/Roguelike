@@ -1,9 +1,12 @@
-/*
-Render: draws tiles, glyph overlays, corpses, enemies, and player with camera support.
-
-Exports (window.Render):
-- draw(ctx) where ctx contains ctx2d, TILE/ROWS/COLS/COLORS/TILES, map/seen/visible, player/enemies/corpses, camera?
-*/
+/**
+ * Render: draws tiles, corpses, enemies, and player with camera support.
+ *
+ * Exports (window.Render):
+ * - draw(ctx): where ctx contains { ctx2d, TILE, ROWS, COLS, COLORS, TILES, map, seen, visible, player, enemies, corpses, camera? }
+ *
+ * Notes:
+ * - Uses Tileset when available; falls back to colored rectangles and glyphs.
+ */
 (function () {
   function enemyColorFromModule(type, COLORS) {
     if (window.Enemies && typeof Enemies.colorFor === "function") {

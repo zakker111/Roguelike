@@ -1,18 +1,18 @@
-/*
-DungeonItems: scripted dungeon props such as chests.
-
-Exports (window.DungeonItems):
-- placeChestInStartRoom(ctx): backward compatible convenience for a starter chest
-- spawnChest(ctx, options): generic chest spawner with configurable loot/tier/position/decay
-- registerLoot(name, fn): add custom loot generators
-- lootFactories: bundled loot generator functions (potion, armor, handWeapon, equipment(slot), anyEquipment)
-
-Chest representation:
-- Stored in ctx.corpses as { kind: "chest", x, y, loot, looted: false }
-- Loot items are standard { kind: "equip" | "potion" | ... }
-*/
+/**
+ * DungeonItems: scripted dungeon props such as chests.
+ *
+ * Exports (window.DungeonItems):
+ * - placeChestInStartRoom(ctx): convenience for a starter chest in the start room
+ * - spawnChest(ctx, options): generic chest spawner with configurable loot/tier/position/decay
+ * - registerLoot(name, fn): add custom loot generators
+ * - lootFactories: bundled loot generator functions (potion, armor, handWeapon, equipment(slot), anyEquipment)
+ *
+ * Chest representation:
+ * - Stored in ctx.corpses as { kind: "chest", x, y, loot, looted: false }
+ * - Loot items are standard { kind: "equip" | "potion" | ... }
+ */
 (function () {
-  // --- Utilities ---
+  // Utilities
   function setDecayIfEquip(item, decay = 99) {
     if (item && item.kind === "equip") item.decay = decay;
     return item;

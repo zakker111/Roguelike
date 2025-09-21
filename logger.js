@@ -1,12 +1,14 @@
-/*
-Logger: simple in-DOM log with capped length and optional right-side mirror.
-
-Exports (window.Logger):
-- init(target = "#log", max = 60), log(message, type = "info")
-Types: info, crit, block, death, good, warn, flavor.
-
-If an element with id="log-right" exists and LOG_MIRROR !== false, log entries are mirrored there.
-*/
+/**
+ * Logger: in-DOM log with capped length and optional right-side mirror.
+ *
+ * Exports (window.Logger):
+ * - init(target = "#log", max = 60): boolean
+ * - log(message, type = "info")
+ * Types: info, crit, block, death, good, warn, flavor.
+ *
+ * Notes:
+ * - If an element with id="log-right" exists and LOG_MIRROR !== false, entries are mirrored there.
+ */
 (function () {
   const Logger = {
     _el: null,

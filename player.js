@@ -1,13 +1,17 @@
-/*
-Player: creation, stats, inventory/equipment, decay, potions, XP/leveling.
-
-Exports (window.Player):
-- createInitial, getAttack, getDefense, describeItem
-- addPotion, drinkPotionByIndex
-- equipIfBetter, equipItemByIndex, unequipSlot
-- decayEquipped, gainXP
-- defaults/setDefaults, normalize, resetFromDefaults, forceUpdate
-*/
+/**
+ * Player: creation, stats, inventory/equipment, decay, potions, XP/leveling.
+ *
+ * Exports (window.Player):
+ * - createInitial, getAttack, getDefense, describeItem
+ * - addPotion, drinkPotionByIndex
+ * - equipIfBetter, equipItemByIndex, unequipSlot
+ * - decayEquipped, gainXP
+ * - defaults/setDefaults, normalize, resetFromDefaults, forceUpdate
+ *
+ * Notes:
+ * - Equipment operations delegate to PlayerEquip.
+ * - round1 and other helpers prefer PlayerUtils where present.
+ */
 (function () {
   const round1 = (window.PlayerUtils && typeof PlayerUtils.round1 === "function")
     ? PlayerUtils.round1

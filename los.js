@@ -1,16 +1,15 @@
-/*
-los.js
-Lightweight line-of-sight helpers.
-
-Exports (window.LOS):
-- tileTransparent(ctx, x, y)
-- hasLOS(ctx, x0, y0, x1, y1)
-
-Notes:
-- Functions expect a ctx with { inBounds(x,y), map, TILES }.
-- hasLOS uses a Bresenham-style step; it checks transparency on the
-  cells along the segment, excluding the start and the exact target tile.
-*/
+/**
+ * LOS: Lightweight line-of-sight helpers.
+ *
+ * Exports (window.LOS):
+ * - tileTransparent(ctx, x, y)
+ * - hasLOS(ctx, x0, y0, x1, y1)
+ *
+ * Notes:
+ * - Expects a ctx with { inBounds(x,y), map, TILES }.
+ * - hasLOS uses a Bresenham-style step; checks transparency along the segment,
+ *   excluding the start and exact target tile.
+ */
 (function () {
   function tileTransparent(ctx, x, y) {
     if (!ctx || typeof ctx.inBounds !== "function") return false;

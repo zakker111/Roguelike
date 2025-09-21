@@ -1,10 +1,10 @@
 /**
- * @file ctx.js
- * @description Context factory so modules consume a single ctx object rather than importing via window.*.
- * Provides attached module handles, shared utils, and a LOS implementation on ctx.
+ * Ctx: shared context factory so modules consume a single ctx object
+ * instead of importing each other via window.*.
  *
- * @exports Ctx
- * @property {function(Object):Object} create - Returns a normalized ctx with consistent shape and optional module handles.
+ * Exports (window.Ctx):
+ * - create(base): returns a normalized ctx with consistent shape and optional module handles attached
+ * -t):Object} create - Returns a normalized ctx with consistent shape and optional module handles.
  * @property {function(Object):Object} attachModules - Attaches discovered module handles to the ctx (Enemies, Items, Player, UI, Logger, Loot, Dungeon, DungeonItems, FOV, AI, Input, Render, Tileset, Flavor, PlayerUtils, LOS).
  *
  * @remarks

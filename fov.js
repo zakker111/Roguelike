@@ -1,9 +1,16 @@
-/*
-FOV: symmetrical shadowcasting with explored memory.
-
-Exports (window.FOV):
-- recomputeFOV(ctx) mutates ctx.visible and ctx.seen and announces newly seen enemies.
-*/
+/**
+ * FOV: symmetrical shadowcasting with explored memory.
+ *
+ * Exports (window.FOV):
+ * - recomputeFOV(ctx): mutates ctx.visible and ctx.seen and announces newly seen enemies.
+ *
+ * ctx (expected subset):
+ * {
+ *   fovRadius:number, player:{x,y}, map:number[][], TILES:{WALL:number},
+ *   inBounds(x,y):boolean, seen:boolean[][], visible:boolean[][],
+ *   enemies:Array, enemyThreatLabel(e), log(msg,type?)
+ * }
+ */
 (function () {
   function recomputeFOV(ctx) {
     const { fovRadius, player, map, TILES } = ctx;

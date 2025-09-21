@@ -1,14 +1,16 @@
-/*
-Flavor: lightweight combat flavor messages.
-
-Exports (window.Flavor):
-- logHit(ctx, { attacker, loc, crit })
-
-Behavior:
-- Occasionally logs an extra flavor line when the player is hit by an enemy,
-  based on hit location and whether it was a critical.
-- Uses ctx.rng for determinism and ctx.log for output.
-*/
+/**
+ * Flavor: lightweight combat flavor messages.
+ *
+ * Exports (window.Flavor):
+ * - logHit(ctx, { attacker, loc, crit })
+ * - logPlayerHit(ctx, { target, loc, crit, dmg })
+ * - announceFloorEnemyCount(ctx)
+ *
+ * Behavior:
+ * - Occasionally logs an extra flavor line when the player is hit or when the player hits an enemy,
+ *   based on hit location and whether it was a critical.
+ * - Uses ctx.rng for determinism and ctx.log for output.
+ */
 (function () {
   function pick(arr, rng) {
     const r = rng || Math.random;

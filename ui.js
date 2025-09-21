@@ -1,13 +1,19 @@
-/*
-UI: updates HUD, inventory/equipment panel, loot panel, and game over panel.
-
-Exports (window.UI):
-- init(), setHandlers({...}), updateStats(player, floor, getAtk, getDef),
-  renderInventory(player, describeItem),
-  showInventory()/hideInventory()/isInventoryOpen(),
-  showLoot(list)/hideLoot()/isLootOpen(),
-  showGameOver(player, floor)/hideGameOver()
-*/
+/**
+ * UI: HUD, inventory/equipment panel, loot panel, game over panel, and GOD panel.
+ *
+ * Exports (window.UI):
+ * - init()
+ * - setHandlers({...})
+ * - updateStats(player, floor, getAtk, getDef)
+ * - renderInventory(player, describeItem)
+ * - showInventory()/hideInventory()/isInventoryOpen()
+ * - showLoot(list)/hideLoot()/isLootOpen()
+ * - showGameOver(player, floor)/hideGameOver()
+ *
+ * Notes:
+ * - GOD panel includes: Heal, spawn items/enemy, FOV slider, side log toggle, Always Crit toggle with body-part chooser.
+ * - Persists user toggles in localStorage (LOG_MIRROR, ALWAYS_CRIT, ALWAYS_CRIT_PART).
+ */
 (function () {
   const UI = {
     els: {},

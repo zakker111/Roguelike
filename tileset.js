@@ -1,15 +1,16 @@
-/*
-Tileset: optional sprite atlas support with graceful fallback.
-
-Exports (window.Tileset):
-- configure({ imageUrl?, tileSize?, map? }): set image URL, tile size and key->frame mapping
-- isReady(): boolean
-- draw(ctx2d, key, x, y, size): draws the tile at screen position; returns true if drawn via atlas
-- getTileSize(): current atlas tile size
-Notes:
-- If no image is configured/loaded or key is unmapped, draw() returns false so callers can fallback.
-- Coordinates in map are in tile units: { x: col, y: row }.
-*/
+/**
+ * Tileset: optional sprite atlas support with graceful fallback.
+ *
+ * Exports (window.Tileset):
+ * - configure({ imageUrl?, tileSize?, map? }): set image URL, tile size and key->frame mapping
+ * - isReady(): boolean
+ * - draw(ctx2d, key, x, y, size): draws the tile at screen position; returns true if drawn via atlas
+ * - getTileSize(): current atlas tile size
+ *
+ * Notes:
+ * - If no image is configured/loaded or key is unmapped, draw() returns false so callers can fallback.
+ * - Coordinates in map are tile coordinates: { x: col, y: row }.
+ */
 (function () {
   const Tileset = {
     _img: null,
