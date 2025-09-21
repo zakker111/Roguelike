@@ -49,6 +49,7 @@
       this.els.godHealBtn = document.getElementById("god-heal-btn");
       this.els.godSpawnBtn = document.getElementById("god-spawn-btn");
       this.els.godSpawnEnemyBtn = document.getElementById("god-spawn-enemy-btn");
+      this.els.godSpawnStairsBtn = document.getElementById("god-spawn-stairs-btn");
       this.els.godFov = document.getElementById("god-fov");
       this.els.godFovValue = document.getElementById("god-fov-value");
       this.els.godToggleMirrorBtn = document.getElementById("god-toggle-mirror-btn");
@@ -116,6 +117,9 @@
       });
       this.els.godSpawnEnemyBtn?.addEventListener("click", () => {
         if (typeof this.handlers.onGodSpawnEnemy === "function") this.handlers.onGodSpawnEnemy();
+      });
+      this.els.godSpawnStairsBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodSpawnStairs === "function") this.handlers.onGodSpawnStairs();
       });
       if (this.els.godFov) {
         const updateFov = () => {
@@ -273,7 +277,7 @@
       return true;
     },
 
-    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed } = {}) {
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSpawnStairs, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
@@ -283,6 +287,7 @@
       if (typeof onGodSpawn === "function") this.handlers.onGodSpawn = onGodSpawn;
       if (typeof onGodSetFov === "function") this.handlers.onGodSetFov = onGodSetFov;
       if (typeof onGodSpawnEnemy === "function") this.handlers.onGodSpawnEnemy = onGodSpawnEnemy;
+      if (typeof onGodSpawnStairs === "function") this.handlers.onGodSpawnStairs = onGodSpawnStairs;
       if (typeof onGodSetAlwaysCrit === "function") this.handlers.onGodSetAlwaysCrit = onGodSetAlwaysCrit;
       if (typeof onGodSetCritPart === "function") this.handlers.onGodSetCritPart = onGodSetCritPart;
       if (typeof onGodApplySeed === "function") this.handlers.onGodApplySeed = onGodApplySeed;

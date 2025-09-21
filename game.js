@@ -822,6 +822,18 @@
     requestDraw();
   }
 
+  function godSpawnStairsHere() {
+    if (!inBounds(player.x, player.y)) {
+      log("GOD: Cannot place stairs out of bounds.", "warn");
+      return;
+    }
+    map[player.y][player.x] = TILES.STAIRS;
+    seen[player.y][player.x] = true;
+    visible[player.y][player.x] = true;
+    log("GOD: Stairs appear beneath your feet.", "notice");
+    requestDraw();
+  }
+
   function godSpawnItems(count = 3) {
     const created = [];
     for (let i = 0; i < count; i++) {
@@ -1209,6 +1221,7 @@
         onGodSpawn: () => godSpawnItems(),
         onGodSetFov: (v) => setFovRadius(v),
         onGodSpawnEnemy: () => godSpawnEnemyNearby(),
+        onGodSpawnStairs: () => godSpawnStairsHere(),
         onGodSetAlwaysCrit: (v) => setAlwaysCrit(v),
         onGodSetCritPart: (part) => setCritPart(part),
         onGodApplySeed: (seed) => applySeed(seed),
