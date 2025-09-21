@@ -15,7 +15,6 @@
  */
 (() => {
   const TILE = 32;
-  const ROWS = 20;
   const COLS = 30;
   const ROWS = 20;
   
