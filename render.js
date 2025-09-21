@@ -125,17 +125,27 @@
         // Only show where the tile has been seen (avoid revealing map)
         const everSeen = seen[d.y] && seen[d.y][d.x];
         if (!everSeen) continue;
-        // Use globalAlpha for fade, and draw a soft blob
+        // Use globalAlpha for fade
         const alpha = Math.max(0, Math.min(1, d.a || 0.2));
         if (alpha <= 0) continue;
         ctx2d.globalAlpha = alpha;
-        ctx2d.fillStyle = "#7a1717"; // deep red
-        const r = Math.max(4, Math.min(TILE - 2, d.r || Math.floor(TILE * 0.4)));
-        const cx = sx + TILE / 2;
-        const cy = sy + TILE / 2;
-        ctx2d.beginPath();
-        ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx2d.fill();
+
+        // If tileset has a decal sprite, prefer it; otherwise draw a soft blob
+        let usedTile = false;
+        if (tilesetReady && TS && typeof TS.draw === "function") {
+          const variant = ((d.x + d.y) % 3) + 1; // 1..3
+          const key = `decal.blood${variant}`;
+          usedTile = TS.draw(ctx2d, key, sx, sy, TILE);
+        }
+        if (!usedTile) {
+          ctx2d.fillStyle = "#7a1717"; // deep red
+          const r = Math.max(4, Math.min(TILE - 2, d.r || Math.floor(TILE * 0.4)));
+          const cx = sx + TILE / 2;
+          const cy = sy + TILE / 2;
+          ctx2d.beginPath();
+          ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx2d.fill();
+        }
       }
       ctx2d.restore();
     }

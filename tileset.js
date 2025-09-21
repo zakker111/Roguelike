@@ -78,6 +78,11 @@
       "enemy.troll": { x: 2, y: 1 },
       "enemy.ogre": { x: 3, y: 1 },
       "enemy.hell_houndin": { x: 4, y: 1 },
+
+      // Optional decal frames (if present in atlas). Fallback drawing used otherwise.
+      "decal.blood1": { x: 5, y: 1 },
+      "decal.blood2": { x: 6, y: 1 },
+      "decal.blood3": { x: 7, y: 1 },
     }
   });
 
