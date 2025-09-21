@@ -53,14 +53,21 @@
         el.removeChild(el.lastChild);
       }
 
-      // optional right mirror
+      // optional right mirror (skip if hidden by CSS or toggle)
       if (this._elRight) {
-        const div2 = document.createElement("div");
-        div2.className = `entry ${type}`;
-        div2.textContent = String(msg);
-        this._elRight.prepend(div2);
-        while (this._elRight.childNodes.length > this._max) {
-          this._elRight.removeChild(this._elRight.lastChild);
+        let visible = true;
+        try {
+          const cs = window.getComputedStyle(this._elRight);
+          if (cs && cs.display === "none" || cs && cs.visibility === "hidden") visible = false;
+        } catch (_) {}
+        if (visible) {
+          const div2 = document.createElement("div");
+          div2.className = `entry ${type}`;
+          div2.textContent = String(msg);
+          this._elRight.prepend(div2);
+          while (this._elRight.childNodes.length > this._max) {
+            this._elRight.removeChild(this._elRight.lastChild);
+          }
         }
       }
     }

@@ -53,6 +53,7 @@
       this.els.godFovValue = document.getElementById("god-fov-value");
       this.els.godToggleMirrorBtn = document.getElementById("god-toggle-mirror-btn");
       this.els.godToggleCritBtn = document.getElementById("god-toggle-crit-btn");
+      this.els.godToggleGridBtn = document.getElementById("god-toggle-grid-btn");
 
       // transient hand-chooser element
       this.els.handChooser = document.createElement("div");
@@ -152,6 +153,14 @@
           }
         });
         this.updateAlwaysCritButton();
+      }
+      if (this.els.godToggleGridBtn) {
+        this.els.godToggleGridBtn.addEventListener("click", () => {
+          const next = !this.getGridState();
+          this.setGridState(next);
+          this.updateGridButton();
+        });
+        this.updateGridButton();
       }
 
       // Delegate equip slot clicks (unequip)
@@ -459,6 +468,31 @@
       if (!this.els.godToggleMirrorBtn) return;
       const on = this.getSideLogState();
       this.els.godToggleMirrorBtn.textContent = `Side Log: ${on ? "On" : "Off"}`;
+    },
+
+    // --- Render grid controls ---
+    getGridState() {
+      try {
+        if (typeof window.DRAW_GRID === "boolean") return window.DRAW_GRID;
+        const v = localStorage.getItem("DRAW_GRID");
+        if (v === "1") return true;
+        if (v === "0") return false;
+      } catch (_) {}
+      return true; // default on
+    },
+
+    setGridState(enabled) {
+      try {
+        window.DRAW_GRID = !!enabled;
+        localStorage.setItem("DRAW_GRID", enabled ? "1" : "0");
+      } catch (_) {}
+      this.updateGridButton();
+    },
+
+    updateGridButton() {
+      if (!this.els.godToggleGridBtn) return;
+      const on = this.getGridState();
+      this.els.godToggleGridBtn.textContent = `Grid: ${on ? "On" : "Off"}`;
     },
 
     // --- Always Crit controls ---
