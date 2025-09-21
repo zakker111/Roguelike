@@ -295,7 +295,7 @@
         const statuses = [];
         if (player.bleedTurns && player.bleedTurns > 0) statuses.push(`Bleeding (${player.bleedTurns})`);
         if (player.dazedTurns && player.dazedTurns > 0) statuses.push(`Dazed (${player.dazedTurns})`);
-        parts.push(`  Status: ${statuses.length ? statuses.join(", ") : "None"}`);
+        parts.push(`  Status Effect: ${statuses.length ? statuses.join(", ") : "None"}`);
         this.els.hpEl.textContent = parts.join("");
       }
       if (this.els.floorEl) {

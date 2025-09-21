@@ -27,6 +27,7 @@ html, body {
   gap: 16px;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap; /* allow wrapping on small widths */
   background: linear-gradient(180deg, rgba(122,162,247,0.08), rgba(21,22,27,0.8));
   border: 1px solid rgba(122,162,247,0.2);
   border-radius: 10px;
@@ -43,6 +44,8 @@ html, body {
 .stats {
   display: flex;
   gap: 16px;
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 .stats #health { color: var(--success); }
 .stats #floor { color: var(--accent); }
@@ -50,6 +53,10 @@ html, body {
 .help {
   color: var(--muted);
   font-size: 12px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #game {
@@ -59,6 +66,14 @@ html, body {
   border-radius: 12px;
   border: 1px solid rgba(122,162,247,0.2);
   box-shadow: 0 10px 40px rgba(0,0,0,0.5), inset 0 0 60px rgba(122,162,247,0.05);
+}
+
+/* Responsive tweaks for very small screens */
+@media (max-width: 900px) {
+  .title { font-size: 14px; }
+  .stats { gap: 10px; }
+  .stats #health, .stats #floor { font-size: 12px; }
+  .help { font-size: 11px; }
 }
 
 .log {
