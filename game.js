@@ -125,6 +125,7 @@
         log("You die. Press R or Enter to restart.", "bad");
         showGameOver();
       },
+      onEnemyDied: (enemy) => killEnemy(enemy),
     };
 
     if (window.Ctx && typeof Ctx.create === "function") {
@@ -748,15 +749,13 @@
           log(`${capitalize(enemy.type || "enemy")} staggers; its legs are crippled and it can't move for 2 turns.`, "notice");
         }
       }
+      // Bleed on critical hits (short duration)
+      if (isCrit && enemy.hp > 0 && window.Status && typeof Status.applyBleedToEnemy === "function") {
+        Status.applyBleedToEnemy(getCtx(), enemy, 2);
+      }
 
       if (enemy.hp <= 0) {
-        log(`${capitalize(enemy.type || "enemy")} dies.`, "bad");
-        // leave corpse with loot
-        const loot = generateLoot(enemy);
-        corpses.push({ x: enemy.x, y: enemy.y, loot, looted: loot.length === 0 });
-        // award xp
-        gainXP(enemy.xp || 5);
-        enemies = enemies.filter(e => e !== enemy);
+        killEnemy(enemy);
       }
 
       
@@ -1126,6 +1125,15 @@
     updateUI();
   }
 
+  function killEnemy(enemy) {
+    const name = capitalize(enemy.type || "enemy");
+    log(`${name} dies.`, "bad");
+    const loot = generateLoot(enemy);
+    corpses.push({ x: enemy.x, y: enemy.y, loot, looted: loot.length === 0 });
+    gainXP(enemy.xp || 5);
+    enemies = enemies.filter(e => e !== enemy);
+  }
+
   
   function updateUI() {
     if (window.UI && typeof UI.updateStats === "function") {
@@ -1161,6 +1169,12 @@
       try { decayEquippedOverTime(); } catch (_) {}
     }
     enemiesAct();
+    // Status effects tick (bleed, dazed, etc.)
+    try {
+      if (window.Status && typeof Status.tick === "function") {
+        Status.tick(getCtx());
+      }
+    } catch (_) {}
     // Visual: decals fade each turn (keep deterministic, no randomness here)
     if (decals && decals.length) {
       for (let i = 0; i < decals.length; i++) {
