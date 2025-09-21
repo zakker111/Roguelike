@@ -113,6 +113,8 @@
       critMultiplier,
       enemyDamageAfterDefense,
       enemyDamageMultiplier,
+      // Visual decals
+      addBloodDecal: (x, y, mult) => addBloodDecal(x, y, mult),
       // Decay and side effects
       decayBlockingHands,
       decayEquipped,

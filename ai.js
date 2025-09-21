@@ -184,6 +184,12 @@
         }
         const dmg = ctx.enemyDamageAfterDefense(raw);
         player.hp -= dmg;
+        // Blood decal on the player's tile when damaged
+        try {
+          if (dmg > 0 && typeof ctx.addBloodDecal === "function") {
+            ctx.addBloodDecal(player.x, player.y, isCrit ? 1.4 : 1.0);
+          }
+        } catch (_) {}
         if (isCrit) ctx.log(`Critical! ${Cap(e.type)} hits your ${loc.part} for ${dmg}.`, "crit");
         else ctx.log(`${Cap(e.type)} hits your ${loc.part} for ${dmg}.`);
         // Apply status effects
