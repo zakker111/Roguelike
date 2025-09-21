@@ -80,6 +80,49 @@
       const dy = player.y - e.y;
       const dist = Math.abs(dx) + Math.abs(dy);
 
+      // Low-HP panic/flee (generic for all enemies)
+      // If enemy HP is very low, small chance to enter a short panic state and try to flee,
+      // occasionally yelling they don't want to die.
+      if (typeof e.hp === "number" && e.hp <= 2) {
+        // start or refresh panic with small chance
+        if (!(e._panicTurns > 0) && chance(0.2)) {
+          e._panicTurns = 3;
+        }
+        // yell occasionally with cooldown
+        if (typeof e._panicYellCd === "number" && e._panicYellCd > 0) e._panicYellCd -= 1;
+        if ((e._panicYellCd | 0) <= 0 && (e._panicTurns | 0) > 0 && chance(0.35)) {
+          try { ctx.log("I don't want to die!", "flavor"); } catch (_) {}
+          e._panicYellCd = 6;
+        }
+      }
+
+      // Compute away-from-player preferred directions (used by panic and mime_ghost)
+      const sxAway = dx === 0 ? 0 : (dx > 0 ? -1 : 1);
+      const syAway = dy === 0 ? 0 : (dy > 0 ? -1 : 1);
+      const primaryAway = Math.abs(dx) > Math.abs(dy)
+        ? [{ x: sxAway, y: 0 }, { x: 0, y: syAway }]
+        : [{ x: 0, y: syAway }, { x: sxAway, y: 0 }];
+
+      // If panicking, prefer to flee instead of fighting when possible
+      if ((e._panicTurns | 0) > 0) {
+        let fled = false;
+        // If adjacent, strong preference to step away instead of attacking
+        const tryDirs = primaryAway.concat(ALT_DIRS);
+        for (const d of tryDirs) {
+          const nx = e.x + d.x, ny = e.y + d.y;
+          if (isFree(nx, ny)) {
+            occ.delete(occKey(e.x, e.y));
+            e.x = nx; e.y = ny;
+            occ.add(occKey(e.x, e.y));
+            fled = true;
+            break;
+          }
+        }
+        e._panicTurns -= 1;
+        if (fled) continue; // used turn to flee
+        // If couldn't flee, fall through to normal behavior (may attack if adjacent)
+      }
+
       // Special behavior: mime_ghost tends to flee, shouts "Argh!", and only sometimes attacks
       if (e.type === "mime_ghost") {
         // lightweight shout cooldown to avoid spam
@@ -88,13 +131,6 @@
           try { ctx.log("Argh!", "flavor"); } catch (_) {}
           e._arghCd = 3;
         }
-
-        // Compute away-from-player preferred directions
-        const sxAway = dx === 0 ? 0 : (dx > 0 ? -1 : 1);
-        const syAway = dy === 0 ? 0 : (dy > 0 ? -1 : 1);
-        const primaryAway = Math.abs(dx) > Math.abs(dy)
-          ? [{ x: sxAway, y: 0 }, { x: 0, y: syAway }]
-          : [{ x: 0, y: syAway }, { x: sxAway, y: 0 }];
 
         // If adjacent: 35% chance to attack; otherwise try to step away
         if (dist === 1) {
