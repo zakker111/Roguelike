@@ -60,6 +60,19 @@
         return false;
       }
     },
+
+    // Draw with temporary alpha applied; restores previous alpha afterward.
+    drawAlpha(ctx2d, key, x, y, size, alpha) {
+      if (!this.isReady()) return false;
+      const prev = ctx2d.globalAlpha;
+      if (typeof alpha === "number") {
+        const a = Math.max(0, Math.min(1, alpha));
+        ctx2d.globalAlpha = a;
+      }
+      const ok = this.draw(ctx2d, key, x, y, size);
+      ctx2d.globalAlpha = prev;
+      return ok;
+    },
   };
 
   // Provide a minimal default mapping; can be extended via configure()

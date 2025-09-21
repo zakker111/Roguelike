@@ -125,19 +125,28 @@
         // Only show where the tile has been seen (avoid revealing map)
         const everSeen = seen[d.y] && seen[d.y][d.x];
         if (!everSeen) continue;
-        // Use globalAlpha for fade
+        // Use alpha for fade
         const alpha = Math.max(0, Math.min(1, d.a || 0.2));
         if (alpha <= 0) continue;
-        ctx2d.globalAlpha = alpha;
 
-        // If tileset has a decal sprite, prefer it; otherwise draw a soft blob
+        // If tileset has a decal sprite, prefer it with alpha; otherwise draw a soft blob
         let usedTile = false;
-        if (tilesetReady && TS && typeof TS.draw === "function") {
+        if (tilesetReady && TS) {
           const variant = ((d.x + d.y) % 3) + 1; // 1..3
           const key = `decal.blood${variant}`;
-          usedTile = TS.draw(ctx2d, key, sx, sy, TILE);
+          if (typeof TS.drawAlpha === "function") {
+            usedTile = TS.drawAlpha(ctx2d, key, sx, sy, TILE, alpha);
+          } else if (typeof TS.draw === "function") {
+            // fallback to manual alpha around draw()
+            const prev = ctx2d.globalAlpha;
+            ctx2d.globalAlpha = alpha;
+            usedTile = TS.draw(ctx2d, key, sx, sy, TILE);
+            ctx2d.globalAlpha = prev;
+          }
         }
         if (!usedTile) {
+          const prev = ctx2d.globalAlpha;
+          ctx2d.globalAlpha = alpha;
           ctx2d.fillStyle = "#7a1717"; // deep red
           const r = Math.max(4, Math.min(TILE - 2, d.r || Math.floor(TILE * 0.4)));
           const cx = sx + TILE / 2;
@@ -145,6 +154,7 @@
           ctx2d.beginPath();
           ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
           ctx2d.fill();
+          ctx2d.globalAlpha = prev;
         }
       }
       ctx2d.restore();
