@@ -656,8 +656,7 @@
           legs:  { part: "legs",  mult: 0.95, blockMod: 0.75, critBonus: -0.03 },
         };
         if (profiles[forcedCritPart]) loc = profiles[forcedCritPart];
-   _code  new </}
-;
+      }
 
       
       if (rng() < getEnemyBlockChance(enemy, loc)) {
@@ -1101,6 +1100,7 @@
         onGodSetFov: (v) => setFovRadius(v),
         onGodSpawnEnemy: () => godSpawnEnemyNearby(),
         onGodSetAlwaysCrit: (v) => setAlwaysCrit(v),
+        onGodSetCritPart: (part) => setCritPart(part),
       });
     }
   }

@@ -235,7 +235,7 @@ Exports (window.UI):
     },
 
     setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSetAlwaysCrit, onGodSetCritPart } = {}) {
-      if (typeof onEquip === "quip;
+      if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
       if (typeof onDrink === "function") this.handlers.onDrink = onDrink;
@@ -244,6 +244,8 @@ Exports (window.UI):
       if (typeof onGodSpawn === "function") this.handlers.onGodSpawn = onGodSpawn;
       if (typeof onGodSetFov === "function") this.handlers.onGodSetFov = onGodSetFov;
       if (typeof onGodSpawnEnemy === "function") this.handlers.onGodSpawnEnemy = onGodSpawnEnemy;
+      if (typeof onGodSetAlwaysCrit === "function") this.handlers.onGodSetAlwaysCrit = onGodSetAlwaysCrit;
+      if (typeof onGodSetCritPart === "function") this.handlers.onGodSetCritPart = onGodSetCritPart;
     },
 
     updateStats(player, floor, getAtk, getDef) {
