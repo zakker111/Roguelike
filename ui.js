@@ -45,6 +45,7 @@ Exports (window.UI):
       this.els.godSpawnEnemyBtn = document.getElementById("god-spawn-enemy-btn");
       this.els.godFov = document.getElementById("god-fov");
       this.els.godFovValue = document.getElementById("god-fov-value");
+      this.els.godToggleMirrorBtn = document.getElementById("god-toggle-mirror-btn");
 
       // transient hand-chooser element
       this.els.handChooser = document.createElement("div");
@@ -90,6 +91,13 @@ Exports (window.UI):
         };
         this.els.godFov.addEventListener("input", updateFov);
         this.els.godFov.addEventListener("change", updateFov);
+      }
+      if (this.els.godToggleMirrorBtn) {
+        this.els.godToggleMirrorBtn.addEventListener("click", () => {
+          this.toggleSideLog();
+        });
+        // initialize label
+        this.updateSideLogButton();
       }
 
       // Delegate equip slot clicks (unequip)
@@ -327,6 +335,47 @@ Exports (window.UI):
       const v = Math.max(parseInt(this.els.godFov.min || "3", 10), Math.min(parseInt(this.els.godFov.max || "14", 10), parseInt(val, 10) || 0));
       this.els.godFov.value = String(v);
       if (this.els.godFovValue) this.els.godFovValue.textContent = `FOV: ${v}`;
+    },
+
+    // --- Side log mirror controls ---
+    getSideLogState() {
+      try {
+        if (typeof window.LOG_MIRROR === "boolean") return window.LOG_MIRROR;
+        const m = localStorage.getItem("LOG_MIRROR");
+        if (m === "1") return true;
+        if (m === "0") return false;
+      } catch (_) {}
+      return true; // default on
+    },
+
+    setSideLogState(enabled) {
+      try {
+        window.LOG_MIRROR = !!enabled;
+        localStorage.setItem("LOG_MIRROR", enabled ? "1" : "0");
+      } catch (_) {}
+      // Apply immediately
+      try {
+        if (window.Logger && typeof Logger.init === "function") {
+          Logger.init();
+        }
+      } catch (_) {}
+      // Ensure DOM reflects the state even without reinit
+      const el = document.getElementById("log-right");
+      if (el) {
+        el.style.display = enabled ? "" : "none";
+      }
+      this.updateSideLogButton();
+    },
+
+    toggleSideLog() {
+      const cur = this.getSideLogState();
+      this.setSideLogState(!cur);
+    },
+
+    updateSideLogButton() {
+      if (!this.els.godToggleMirrorBtn) return;
+      const on = this.getSideLogState();
+      this.els.godToggleMirrorBtn.textContent = `Side Log: ${on ? "On" : "Off"}`;
     },
 
     showGameOver(player, floor) {
