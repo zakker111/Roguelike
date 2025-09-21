@@ -666,7 +666,7 @@
     }
     const nx = player.x + dx;
     const ny = player.y + dy;
-    if (!inBounds(nx, ny)) ret_codeurnewn</;
+    if (!inBounds(nx, ny)) return;
 
     
     const enemy = enemies.find(e => e.x === nx && e.y === ny);
