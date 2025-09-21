@@ -46,6 +46,7 @@ Exports (window.UI):
       this.els.godFov = document.getElementById("god-fov");
       this.els.godFovValue = document.getElementById("god-fov-value");
       this.els.godToggleMirrorBtn = document.getElementById("god-toggle-mirror-btn");
+      this.els.godToggleCritBtn = document.getElementById("god-toggle-crit-btn");
 
       // transient hand-chooser element
       this.els.handChooser = document.createElement("div");
@@ -98,6 +99,16 @@ Exports (window.UI):
         });
         // initialize label
         this.updateSideLogButton();
+      }
+      if (this.els.godToggleCritBtn) {
+        this.els.godToggleCritBtn.addEventListener("click", () => {
+          const next = !this.getAlwaysCritState();
+          this.setAlwaysCritState(next);
+          if (typeof this.handlers.onGodSetAlwaysCrit === "function") {
+            this.handlers.onGodSetAlwaysCrit(next);
+          }
+        });
+        this.updateAlwaysCritButton();
       }
 
       // Delegate equip slot clicks (unequip)
@@ -376,6 +387,31 @@ Exports (window.UI):
       if (!this.els.godToggleMirrorBtn) return;
       const on = this.getSideLogState();
       this.els.godToggleMirrorBtn.textContent = `Side Log: ${on ? "On" : "Off"}`;
+    },
+
+    // --- Always Crit controls ---
+    getAlwaysCritState() {
+      try {
+        if (typeof window.ALWAYS_CRIT === "boolean") return window.ALWAYS_CRIT;
+        const v = localStorage.getItem("ALWAYS_CRIT");
+        if (v === "1") return true;
+        if (v === "0") return false;
+      } catch (_) {}
+      return false;
+    },
+
+    setAlwaysCritState(enabled) {
+      try {
+        window.ALWAYS_CRIT = !!enabled;
+        localStorage.setItem("ALWAYS_CRIT", enabled ? "1" : "0");
+      } catch (_) {}
+      this.updateAlwaysCritButton();
+    },
+
+    updateAlwaysCritButton() {
+      if (!this.els.godToggleCritBtn) return;
+      const on = this.getAlwaysCritState();
+      this.els.godToggleCritBtn.textContent = `Always Crit: ${on ? "On" : "Off"}`;
     },
 
     showGameOver(player, floor) {

@@ -63,6 +63,8 @@
   let rng = mulberry32(Date.now() % 0xffffffff);
   let isDead = false;
   let startRoomRect = null;
+  // GOD toggles
+  let alwaysCrit = (typeof window !== "undefined" && typeof window.ALWAYS_CRIT === "boolean") ? !!window.ALWAYS_CRIT : false;
 
   
   function getCtx() {
@@ -659,7 +661,7 @@
       let dmg = getPlayerAttack() * loc.mult;
       let isCrit = false;
       const critChance = Math.max(0, Math.min(0.6, 0.12 + loc.critBonus));
-      if (rng() < critChance) {
+      if (alwaysCrit || rng() < critChance) {
         isCrit = true;
         dmg *= critMultiplier();
       }
@@ -971,6 +973,13 @@
     requestDraw();
   }
 
+  // GOD: always-crit toggle
+  function setAlwaysCrit(v) {
+    alwaysCrit = !!v;
+    try { window.ALWAYS_CRIT = alwaysCrit; localStorage.setItem("ALWAYS_CRIT", alwaysCrit ? "1" : "0"); } catch (_) {}
+    log(`GOD: Always Crit ${alwaysCrit ? "enabled" : "disabled"}.`, alwaysCrit ? "good" : "warn");
+  }
+
   function hideGameOver() {
     if (window.UI && typeof UI.hideGameOver === "function") {
       UI.hideGameOver();
@@ -1065,6 +1074,7 @@
         onGodSpawn: () => godSpawnItems(),
         onGodSetFov: (v) => setFovRadius(v),
         onGodSpawnEnemy: () => godSpawnEnemyNearby(),
+        onGodSetAlwaysCrit: (v) => setAlwaysCrit(v),
       });
     }
   }
