@@ -69,6 +69,8 @@
     : { x: 0, y: 0, hp: 40, maxHp: 40, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null } };
   let enemies = [];
   let corpses = [];
+  // Visual decals like blood stains on the floor; array of { x, y, a (alpha 0..1), r (radius px) }
+  let decals = [];
   let floor = 1;
   window.floor = floor;
   // RNG: allow persisted seed for reproducibility; default to time-based if none
@@ -85,7 +87,7 @@
     const base = {
       rng,
       ROWS, COLS, MAP_ROWS, MAP_COLS, TILE, TILES,
-      player, enemies, corpses, map, seen, visible,
+      player, enemies, corpses, decals, map, seen, visible,
       floor, depth: floor,
       fovRadius,
       requestDraw,
@@ -474,6 +476,8 @@
       enemies = ctx.enemies;
       corpses = ctx.corpses;
       startRoomRect = ctx.startRoomRect;
+      // Clear decals on new floor
+      decals = [];
       
       recomputeFOV();
       updateCamera();
@@ -506,6 +510,7 @@
     }
     enemies = [];
     corpses = [];
+    decals = [];
     recomputeFOV();
     updateCamera();
     updateUI();
@@ -592,7 +597,7 @@
       ctx2d: ctx,
       TILE, ROWS, COLS, COLORS, TILES,
       map, seen, visible,
-      player, enemies, corpses,
+      player, enemies, corpses, decals,
       camera,
       enemyColor: (t) => enemyColor(t),
     };
@@ -655,6 +660,23 @@
   }
 
   
+  // Visual: add or strengthen a blood decal at tile (x,y)
+  function addBloodDecal(x, y, mult = 1.0) {
+    if (!inBounds(x, y)) return;
+    // Merge on same tile
+    const d = decals.find(d => d.x === x && d.y === y);
+    const baseA = 0.16 + rng() * 0.18; // 0.16..0.34
+    const baseR = Math.floor(TILE * (0.32 + rng() * 0.20)); // radius px
+    if (d) {
+      d.a = Math.min(0.9, d.a + baseA * mult);
+      d.r = Math.max(d.r, baseR);
+    } else {
+      decals.push({ x, y, a: Math.min(0.9, baseA * mult), r: baseR });
+      // Cap total decals to avoid unbounded growth
+      if (decals.length > 240) decals.splice(0, decals.length - 240);
+    }
+  }
+
   function tryMovePlayer(dx, dy) {
     if (isDead) return;
     // Dazed: skip action if dazedTurns > 0
@@ -703,6 +725,11 @@
       }
       dmg = Math.max(0, round1(dmg));
       enemy.hp -= dmg;
+
+      // Add a blood decal on the enemy tile when damage is dealt
+      if (dmg > 0) {
+        addBloodDecal(enemy.x, enemy.y, isCrit ? 1.6 : 1.0);
+      }
 
       if (isCrit) {
         log(`Critical! You hit the ${enemy.type || "enemy"}'s ${loc.part} for ${dmg}.`, "crit");
@@ -1126,18 +1153,21 @@
 
   
   function turn() {
+    if (isDead) return;
+    decayEquippedOverTime();
     enemiesAct();
+    // Visual: decals fade each turn (keep deterministic, no randomness here)
+    if (decals && decals.length) {
+      for (let i = 0; i < decals.length; i++) {
+        decals[i].a *= 0.92; // exponential fade
+      }
+      decals = decals.filter(d => d.a > 0.04);
+    }
     recomputeFOV();
-    updateCamera();
     updateUI();
     requestDraw();
-  }
-
-  
-  
-  function loop() {
-    draw();
-    requestAnimationFrame(loop);
+    // decay corpse flags
+    if (corpses.length > 50) corpses = corpses.slice(-50);
   }
 
   

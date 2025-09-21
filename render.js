@@ -25,7 +25,7 @@
   function draw(ctx) {
     const {
       ctx2d, TILE, ROWS, COLS, COLORS, TILES,
-      map, seen, visible, player, enemies, corpses, camera: camMaybe
+      map, seen, visible, player, enemies, corpses, decals, camera: camMaybe
     } = ctx;
 
     const enemyColor = (t) => (ctx.enemyColor ? ctx.enemyColor(t) : enemyColorFromModule(t, COLORS));
@@ -110,6 +110,34 @@
           drawGlyphScreen(ctx2d, screenX, screenY, ">", "#d7ba7d", TILE);
         }
       }
+    }
+
+    // decals (e.g., blood stains) - draw before corpses/enemies so they appear under them
+    if (decals && decals.length) {
+      ctx2d.save();
+      for (let i = 0; i < decals.length; i++) {
+        const d = decals[i];
+        // helper to check in-view
+        const inView = (x, y) => x >= startX && x <= endX && y >= startY && y <= endY;
+        if (!inView(d.x, d.y)) continue;
+        const sx = (d.x - startX) * TILE - tileOffsetX;
+        const sy = (d.y - startY) * TILE - tileOffsetY;
+        // Only show where the tile has been seen (avoid revealing map)
+        const everSeen = seen[d.y] && seen[d.y][d.x];
+        if (!everSeen) continue;
+        // Use globalAlpha for fade, and draw a soft blob
+        const alpha = Math.max(0, Math.min(1, d.a || 0.2));
+        if (alpha <= 0) continue;
+        ctx2d.globalAlpha = alpha;
+        ctx2d.fillStyle = "#7a1717"; // deep red
+        const r = Math.max(4, Math.min(TILE - 2, d.r || Math.floor(TILE * 0.4)));
+        const cx = sx + TILE / 2;
+        const cy = sy + TILE / 2;
+        ctx2d.beginPath();
+        ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx2d.fill();
+      }
+      ctx2d.restore();
     }
 
     // corpses and chests
