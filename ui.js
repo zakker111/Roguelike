@@ -132,6 +132,8 @@ Exports (window.UI):
           }
           // When enabling, ask for preferred hit location
           if (next) {
+            // Prevent this click from triggering the global document click handler that hides choosers
+            ev.stopPropagation();
             const rect = btn.getBoundingClientRect();
             this.showHitChooser(rect.left, rect.bottom + 6, (part) => {
               if (part && part !== "cancel") {
