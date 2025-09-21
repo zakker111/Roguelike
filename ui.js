@@ -292,7 +292,12 @@
     updateStats(player, floor, getAtk, getDef) {
       if (this.els.hpEl) {
         const gold = (player.inventory.find(i => i.kind === "gold")?.amount) || 0;
-        this.els.hpEl.textContent = `HP: ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}  Gold: ${gold}`;
+        const parts = [`HP: ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}  Gold: ${gold}`];
+        const statuses = [];
+        if (player.bleedTurns && player.bleedTurns > 0) statuses.push(`Bleeding (${player.bleedTurns})`);
+        if (player.dazedTurns && player.dazedTurns > 0) statuses.push(`Dazed (${player.dazedTurns})`);
+        if (statuses.length) parts.push(` | Status: ${statuses.join(", ")}`);
+        this.els.hpEl.textContent = parts.join("");
       }
       if (this.els.floorEl) {
         this.els.floorEl.textContent = `Floor: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
