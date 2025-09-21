@@ -71,7 +71,9 @@
   let corpses = [];
   let floor = 1;
   window.floor = floor;
-  let rng = mulberry32(Date.now() % 0xffffffff);
+  // RNG: allow persisted seed for reproducibility; default to time-based if none
+  let currentSeed = (typeof localStorage !== "undefined" && localStorage.getItem("SEED")) ? Number(localStorage.getItem("SEED")) >>> 0 : null;
+  let rng = mulberry32((currentSeed == null ? (Date.now() % 0xffffffff) : currentSeed) >>> 0);
   let isDead = false;
   let startRoomRect = null;
   // GOD toggles
@@ -1016,6 +1018,32 @@
     else log("GOD: Cleared forced crit hit location.", "notice");
   }
 
+  // GOD: apply a deterministic RNG seed and regenerate current floor
+  function applySeed(seedUint32) {
+    const s = (Number(seedUint32) >>> 0);
+    currentSeed = s;
+    try { localStorage.setItem("SEED", String(s)); } catch (_) {}
+    rng = mulberry32(s);
+    log(`GOD: Applied seed ${s}. Regenerating floor ${floor}...`, "notice");
+    generateLevel(floor);
+    requestDraw();
+    try {
+      if (window.UI && typeof UI.updateStats === "function" && typeof UI.init === "function") {
+        // Update the GOD seed UI helper text
+        const el = document.getElementById("god-seed-help");
+        if (el) el.textContent = `Current seed: ${s}`;
+        const input = document.getElementById("god-seed-input");
+        if (input && !input.value) input.value = String(s);
+      }
+    } catch (_) {}
+  }
+
+  // GOD: reroll seed using current time
+  function rerollSeed() {
+    const s = (Date.now() % 0xffffffff) >>> 0;
+    applySeed(s);
+  }
+
   function hideGameOver() {
     if (window.UI && typeof UI.hideGameOver === "function") {
       UI.hideGameOver();
@@ -1112,6 +1140,8 @@
         onGodSpawnEnemy: () => godSpawnEnemyNearby(),
         onGodSetAlwaysCrit: (v) => setAlwaysCrit(v),
         onGodSetCritPart: (part) => setCritPart(part),
+        onGodApplySeed: (seed) => applySeed(seed),
+        onGodRerollSeed: () => rerollSeed(),
       });
     }
   }

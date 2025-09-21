@@ -54,6 +54,10 @@
       this.els.godToggleMirrorBtn = document.getElementById("god-toggle-mirror-btn");
       this.els.godToggleCritBtn = document.getElementById("god-toggle-crit-btn");
       this.els.godToggleGridBtn = document.getElementById("god-toggle-grid-btn");
+      this.els.godSeedInput = document.getElementById("god-seed-input");
+      this.els.godApplySeedBtn = document.getElementById("god-apply-seed-btn");
+      this.els.godRerollSeedBtn = document.getElementById("god-reroll-seed-btn");
+      this.els.godSeedHelp = document.getElementById("god-seed-help");
 
       // transient hand-chooser element
       this.els.handChooser = document.createElement("div");
@@ -162,6 +166,24 @@
         });
         this.updateGridButton();
       }
+      // RNG seed controls
+      if (this.els.godApplySeedBtn) {
+        this.els.godApplySeedBtn.addEventListener("click", () => {
+          const raw = (this.els.godSeedInput && this.els.godSeedInput.value) ? this.els.godSeedInput.value.trim() : "";
+          const n = Number(raw);
+          if (Number.isFinite(n) && n >= 0) {
+            if (typeof this.handlers.onGodApplySeed === "function") this.handlers.onGodApplySeed(n >>> 0);
+          } else {
+            // no-op; optionally show hint
+          }
+        });
+      }
+      if (this.els.godRerollSeedBtn) {
+        this.els.godRerollSeedBtn.addEventListener("click", () => {
+          if (typeof this.handlers.onGodRerollSeed === "function") this.handlers.onGodRerollSeed();
+        });
+      }
+      this.updateSeedUI();
 
       // Delegate equip slot clicks (unequip)
       this.els.equipSlotsEl?.addEventListener("click", (ev) => {
@@ -251,7 +273,7 @@
       return true;
     },
 
-    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSetAlwaysCrit, onGodSetCritPart } = {}) {
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
@@ -263,6 +285,8 @@
       if (typeof onGodSpawnEnemy === "function") this.handlers.onGodSpawnEnemy = onGodSpawnEnemy;
       if (typeof onGodSetAlwaysCrit === "function") this.handlers.onGodSetAlwaysCrit = onGodSetAlwaysCrit;
       if (typeof onGodSetCritPart === "function") this.handlers.onGodSetCritPart = onGodSetCritPart;
+      if (typeof onGodApplySeed === "function") this.handlers.onGodApplySeed = onGodApplySeed;
+      if (typeof onGodRerollSeed === "function") this.handlers.onGodRerollSeed = onGodRerollSeed;
     },
 
     updateStats(player, floor, getAtk, getDef) {
@@ -537,6 +561,25 @@
       const on = this.getAlwaysCritState();
       const part = this.getCritPartState();
       this.els.godToggleCritBtn.textContent = `Always Crit: ${on ? "On" : "Off"}${on && part ? ` (${part})` : ""}`;
+    },
+
+    // --- RNG UI ---
+    getSeedState() {
+      try {
+        const v = localStorage.getItem("SEED");
+        return v || "";
+      } catch (_) {}
+      return "";
+    },
+
+    updateSeedUI() {
+      const seed = this.getSeedState();
+      if (this.els.godSeedInput && !this.els.godSeedInput.value) {
+        this.els.godSeedInput.value = seed;
+      }
+      if (this.els.godSeedHelp) {
+        this.els.godSeedHelp.textContent = seed ? `Current seed: ${seed}` : "Current seed: (random)";
+      }
     },
 
     showGameOver(player, floor) {
