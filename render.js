@@ -51,6 +51,9 @@
     ctx2d.textBaseline = "middle";
 
     // tiles within viewport range
+    if (drawGrid) {
+      ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
+    }
     for (let y = startY; y <= endY; y++) {
       const rowMap = map[y];
       const rowSeen = seen[y] || [];
@@ -65,6 +68,7 @@
         if (!everSeen) {
           ctx2d.fillStyle = COLORS.wallDark;
           ctx2d.fillRect(screenX, screenY, TILE, TILE);
+          if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
           continue;
         }
 
@@ -92,7 +96,6 @@
 
         // optional subtle grid
         if (drawGrid) {
-          ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
           ctx2d.strokeRect(screenX, screenY, TILE, TILE);
         }
 

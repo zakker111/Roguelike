@@ -25,6 +25,15 @@
  * }
  */
 (function () {
+  // Reusable direction arrays to avoid per-tick allocations
+  const ALT_DIRS = Object.freeze([{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 1 }]);
+  const WANDER_DIRS = ALT_DIRS;
+
+  function occKey(x, y) {
+    // 16-bit safe packing for maps up to 65535 in each dimension
+    return ((y & 0xffff) << 16) | (x & 0xffff);
+  }
+
   function tileTransparent(ctx, x, y) {
     if (ctx.los && typeof ctx.los.tileTransparent === "function") {
       return ctx.los.tileTransparent(ctx, x, y);
@@ -62,9 +71,9 @@
 
     const senseRange = 8;
 
-    // O(1) occupancy for this turn
-    const occ = new Set(enemies.map(en => `${en.x},${en.y}`));
-    const isFree = (x, y) => ctx.isWalkable(x, y) && !occ.has(`${x},${y}`) && !(player.x === x && player.y === y);
+    // O(1) occupancy for this turn using packed integer keys (avoid string allocs)
+    const occ = new Set(enemies.map(en => occKey(en.x, en.y)));
+    const isFree = (x, y) => ctx.isWalkable(x, y) && !occ.has(occKey(x, y)) && !(player.x === x && player.y === y);
 
     for (const e of enemies) {
       const dx = player.x - e.x;
@@ -94,21 +103,20 @@
             for (const d of primaryAway) {
               const nx = e.x + d.x, ny = e.y + d.y;
               if (isFree(nx, ny)) {
-                occ.delete(`${e.x},${e.y}`);
+                occ.delete(occKey(e.x, e.y));
                 e.x = nx; e.y = ny;
-                occ.add(`${e.x},${e.y}`);
+                occ.add(occKey(e.x, e.y));
                 moved = true;
                 break;
               }
             }
             if (!moved) {
-              const alt = [{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 1 }];
-              for (const d of alt) {
+              for (const d of ALT_DIRS) {
                 const nx = e.x + d.x, ny = e.y + d.y;
                 if (isFree(nx, ny)) {
-                  occ.delete(`${e.x},${e.y}`);
+                  occ.delete(occKey(e.x, e.y));
                   e.x = nx; e.y = ny;
-                  occ.add(`${e.x},${e.y}`);
+                  occ.add(occKey(e.x, e.y));
                   moved = true;
                   break;
                 }
@@ -124,21 +132,20 @@
             for (const d of primaryAway) {
               const nx = e.x + d.x, ny = e.y + d.y;
               if (isFree(nx, ny)) {
-                occ.delete(`${e.x},${e.y}`);
+                occ.delete(occKey(e.x, e.y));
                 e.x = nx; e.y = ny;
-                occ.add(`${e.x},${e.y}`);
+                occ.add(occKey(e.x, e.y));
                 moved = true;
                 break;
               }
             }
             if (!moved) {
-              const alt = [{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 1 }];
-              for (const d of alt) {
+              for (const d of ALT_DIRS) {
                 const nx = e.x + d.x, ny = e.y + d.y;
                 if (isFree(nx, ny)) {
-                  occ.delete(`${e.x},${e.y}`);
+                  occ.delete(occKey(e.x, e.y));
                   e.x = nx; e.y = ny;
-                  occ.add(`${e.x},${e.y}`);
+                  occ.add(occKey(e.x, e.y));
                   moved = true;
                   break;
                 }
@@ -220,36 +227,34 @@
           const nx = e.x + d.x;
           const ny = e.y + d.y;
           if (isFree(nx, ny)) {
-            occ.delete(`${e.x},${e.y}`);
+            occ.delete(occKey(e.x, e.y));
             e.x = nx; e.y = ny;
-            occ.add(`${e.x},${e.y}`);
+            occ.add(occKey(e.x, e.y));
             moved = true;
             break;
           }
         }
         if (!moved) {
           // try alternate directions (simple wiggle)
-          const alt = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
-          for (const d of alt) {
+          for (const d of ALT_DIRS) {
             const nx = e.x + d.x;
             const ny = e.y + d.y;
             if (isFree(nx, ny)) {
-              occ.delete(`${e.x},${e.y}`);
+              occ.delete(occKey(e.x, e.y));
               e.x = nx; e.y = ny;
-              occ.add(`${e.x},${e.y}`);
+              occ.add(occKey(e.x, e.y));
               break;
             }
           }
         }
       } else if (chance(0.4)) {
         // random wander (moderate chance when far away)
-        const dirs = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
-        const d = dirs[randInt(0, dirs.length - 1)];
+        const d = WANDER_DIRS[randInt(0, WANDER_DIRS.length - 1)];
         const nx = e.x + d.x, ny = e.y + d.y;
         if (isFree(nx, ny)) {
-          occ.delete(`${e.x},${e.y}`);
+          occ.delete(occKey(e.x, e.y));
           e.x = nx; e.y = ny;
-          occ.add(`${e.x},${e.y}`);
+          occ.add(occKey(e.x, e.y));
         }
       }
     }
