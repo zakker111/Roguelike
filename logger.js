@@ -1,12 +1,14 @@
-/*
-Logger: simple in-DOM log with capped length and optional right-side mirror.
-
-Exports (window.Logger):
-- init(target = "#log", max = 60), log(message, type = "info")
-Types: info, crit, block, death, good, warn, flavor.
-
-If an element with id="log-right" exists and LOG_MIRROR !== false, log entries are mirrored there.
-*/
+/**
+ * Logger: in-DOM log with capped length and optional right-side mirror.
+ *
+ * Exports (window.Logger):
+ * - init(target = "#log", max = 60): boolean
+ * - log(message, type = "info")
+ * Types: info, crit, block, death, good, warn, flavor.
+ *
+ * Notes:
+ * - If an element with id="log-right" exists and LOG_MIRROR !== false, entries are mirrored there.
+ */
 (function () {
   const Logger = {
     _el: null,
@@ -51,14 +53,21 @@ If an element with id="log-right" exists and LOG_MIRROR !== false, log entries a
         el.removeChild(el.lastChild);
       }
 
-      // optional right mirror
+      // optional right mirror (skip if hidden by CSS or toggle)
       if (this._elRight) {
-        const div2 = document.createElement("div");
-        div2.className = `entry ${type}`;
-        div2.textContent = String(msg);
-        this._elRight.prepend(div2);
-        while (this._elRight.childNodes.length > this._max) {
-          this._elRight.removeChild(this._elRight.lastChild);
+        let visible = true;
+        try {
+          const cs = window.getComputedStyle(this._elRight);
+          if (cs && cs.display === "none" || cs && cs.visibility === "hidden") visible = false;
+        } catch (_) {}
+        if (visible) {
+          const div2 = document.createElement("div");
+          div2.className = `entry ${type}`;
+          div2.textContent = String(msg);
+          this._elRight.prepend(div2);
+          while (this._elRight.childNodes.length > this._max) {
+            this._elRight.removeChild(this._elRight.lastChild);
+          }
         }
       }
     }

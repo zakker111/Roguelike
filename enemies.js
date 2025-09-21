@@ -1,12 +1,16 @@
-/*
-Enemies: registry and helpers.
-
-Exports (window.Enemies):
-- TYPES, pickType(depth, rng), createEnemyAt(x, y, depth, rng)
-- colorFor(type), glyphFor(type)
-- equipTierFor(type), equipChanceFor(type), potionWeightsFor(type)
-- levelFor(type, depth, rng), damageMultiplier(level), enemyBlockChance(enemy, loc)
-*/
+/**
+ * Enemies: registry and helpers.
+ *
+ * Exports (window.Enemies):
+ * - TYPES, pickType(depth, rng), createEnemyAt(x, y, depth, rng)
+ * - colorFor(type), glyphFor(type)
+ * - equipTierFor(type), equipChanceFor(type), potionWeightsFor(type)
+ * - levelFor(type, depth, rng), damageMultiplier(level), enemyBlockChance(enemy, loc)
+ *
+ * Notes:
+ * - Weighted spawn selection with depth-dependent weights.
+ * - All randomness accepts an rng() for determinism.
+ */
 (function () {
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
@@ -25,6 +29,36 @@ Exports (window.Enemies):
       potionWeights: { lesser: 0.60, average: 0.30, strong: 0.10 },
       equipChance: 0.35,
     },
+
+    mime_ghost: {
+      key: "mime_ghost",
+      glyph: "m",
+      color: "#e6eec7",
+      tier: 1,
+      blockBase: 0.06,
+      // Make mime_ghost significantly rarer than goblins
+      weight(depth) { return depth <= 2 ? 0.15 : 0.20; },
+      hp(depth) { return 3 + Math.floor(depth / 2); },
+      atk(depth) { return 1 + Math.floor(depth / 4); },
+      xp(depth) { return 5 + Math.floor(depth / 2); },
+      potionWeights: { lesser: 0.60, average: 0.30, strong: 0.10 },
+      equipChance: 0.65,
+    },
+
+    hell_houndin: {
+      key: "hell_houndin",
+      glyph: "h",
+      color: "#d65d5d",
+      tier: 3,
+      blockBase: 0.07,
+      weight(depth) { return depth <= 2 ? 0.02 : 0.08; },
+      hp(depth) { return 5 + Math.floor(depth * 0.9); },
+      atk(depth) { return 2 + Math.floor(depth / 3); },
+      xp(depth) { return 14 + Math.floor(depth); },
+      potionWeights: { lesser: 0.45, average: 0.35, strong: 0.20 },
+      equipChance: 0.60,
+    },
+
     troll: {
       key: "troll",
       glyph: "T",

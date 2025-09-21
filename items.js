@@ -1,15 +1,16 @@
-/*
-Items: data-driven equipment registry with deterministic RNG.
-
-Exports (window.Items):
-- createEquipment(tier, rng), createEquipmentOfSlot(slot, tier, rng)
-- createByKey(key, tier, rng, overrides?), createNamed(config, rng)
-- addType(slot, def), describe(item), initialDecay(tier, rng?), MATERIALS, TYPES
-
-Notes:
-- TYPES is a flat registry keyed by item key (similar to Enemies).
-- weight can be a number or a function of tier.
-*/
+/**
+ * Items: data-driven equipment registry with deterministic RNG.
+ *
+ * Exports (window.Items):
+ * - createEquipment(tier, rng), createEquipmentOfSlot(slot, tier, rng)
+ * - createByKey(key, tier, rng, overrides?), createNamed(config, rng)
+ * - addType(slot, def), describe(item), initialDecay(tier, rng?), MATERIALS, TYPES
+ *
+ * Notes:
+ * - TYPES is a flat registry keyed by item key (similar to Enemies).
+ * - Per-type .weight can be a number or a function of tier.
+ * - All random rolls use the supplied rng() when provided for determinism.
+ */
 (function () {
   const round1 = (n) => Math.round(n * 10) / 10;
 
@@ -31,6 +32,12 @@ Notes:
       weight: 0.25,
       name: (mat) => `${mat} axe`,
       atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] },
+      atkBonus: { 1: [0.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] } },
+
+switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
+      weight: 0.12,
+      name: (mat) => `${mat} switch blade`,
+      atkRange: { 1: [0.6, 1.4], 2: [1.3, 2.6], 3: [2.0, 3.2] },
       atkBonus: { 1: [0.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] } },
 
       

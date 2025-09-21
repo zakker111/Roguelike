@@ -1,14 +1,15 @@
-/*
-PlayerEquip: equipment handling split from Player.
-
-Exports (window.PlayerEquip):
-- equipIfBetter(player, item, hooks?)
-- equipItemByIndex(player, idx, hooks?)
-- unequipSlot(player, slot, hooks?)
-Notes:
-- Hooks: { log, updateUI, renderInventory, preferredHand, describeItem }
-- This module is UI-agnostic and only uses hooks for side effects.
-*/
+/**
+ * PlayerEquip: equipment handling split from Player.
+ *
+ * Exports (window.PlayerEquip):
+ * - equipIfBetter(player, item, hooks?)
+ * - equipItemByIndex(player, idx, hooks?)
+ * - unequipSlot(player, slot, hooks?)
+ *
+ * Notes:
+ * - Hooks: { log, updateUI, renderInventory, preferredHand, describeItem }
+ * - UI-agnostic: only uses hooks for side effects.
+ */
 (function () {
   const round1 = (window.PlayerUtils && typeof PlayerUtils.round1 === "function")
     ? PlayerUtils.round1

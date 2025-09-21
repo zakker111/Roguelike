@@ -1,13 +1,19 @@
-/*
-UI: updates HUD, inventory/equipment panel, loot panel, and game over panel.
-
-Exports (window.UI):
-- init(), setHandlers({...}), updateStats(player, floor, getAtk, getDef),
-  renderInventory(player, describeItem),
-  showInventory()/hideInventory()/isInventoryOpen(),
-  showLoot(list)/hideLoot()/isLootOpen(),
-  showGameOver(player, floor)/hideGameOver()
-*/
+/**
+ * UI: HUD, inventory/equipment panel, loot panel, game over panel, and GOD panel.
+ *
+ * Exports (window.UI):
+ * - init()
+ * - setHandlers({...})
+ * - updateStats(player, floor, getAtk, getDef)
+ * - renderInventory(player, describeItem)
+ * - showInventory()/hideInventory()/isInventoryOpen()
+ * - showLoot(list)/hideLoot()/isLootOpen()
+ * - showGameOver(player, floor)/hideGameOver()
+ *
+ * Notes:
+ * - GOD panel includes: Heal, spawn items/enemy, FOV slider, side log toggle, Always Crit toggle with body-part chooser.
+ * - Persists user toggles in localStorage (LOG_MIRROR, ALWAYS_CRIT, ALWAYS_CRIT_PART).
+ */
 (function () {
   const UI = {
     els: {},
@@ -43,8 +49,16 @@ Exports (window.UI):
       this.els.godHealBtn = document.getElementById("god-heal-btn");
       this.els.godSpawnBtn = document.getElementById("god-spawn-btn");
       this.els.godSpawnEnemyBtn = document.getElementById("god-spawn-enemy-btn");
+      this.els.godSpawnStairsBtn = document.getElementById("god-spawn-stairs-btn");
       this.els.godFov = document.getElementById("god-fov");
       this.els.godFovValue = document.getElementById("god-fov-value");
+      this.els.godToggleMirrorBtn = document.getElementById("god-toggle-mirror-btn");
+      this.els.godToggleCritBtn = document.getElementById("god-toggle-crit-btn");
+      this.els.godToggleGridBtn = document.getElementById("god-toggle-grid-btn");
+      this.els.godSeedInput = document.getElementById("god-seed-input");
+      this.els.godApplySeedBtn = document.getElementById("god-apply-seed-btn");
+      this.els.godRerollSeedBtn = document.getElementById("god-reroll-seed-btn");
+      this.els.godSeedHelp = document.getElementById("god-seed-help");
 
       // transient hand-chooser element
       this.els.handChooser = document.createElement("div");
@@ -66,6 +80,28 @@ Exports (window.UI):
       `;
       document.body.appendChild(this.els.handChooser);
 
+      // transient crit-hit-part chooser
+      this.els.hitChooser = document.createElement("div");
+      this.els.hitChooser.style.position = "fixed";
+      this.els.hitChooser.style.display = "none";
+      this.els.hitChooser.style.zIndex = "50000";
+      this.els.hitChooser.style.background = "rgba(20,24,33,0.98)";
+      this.els.hitChooser.style.border = "1px solid rgba(80,90,120,0.6)";
+      this.els.hitChooser.style.borderRadius = "6px";
+      this.els.hitChooser.style.padding = "8px";
+      this.els.hitChooser.style.boxShadow = "0 8px 28px rgba(0,0,0,0.4)";
+      this.els.hitChooser.innerHTML = `
+        <div style="color:#cbd5e1; font-size:12px; margin-bottom:6px;">Force crit to:</div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; max-width:280px;">
+          <button data-part="torso" style="padding:6px 10px; background:#1f2937; color:#e5e7eb; border:1px solid #334155; border-radius:4px; cursor:pointer;">Torso</button>
+          <button data-part="head" style="padding:6px 10px; background:#1f2937; color:#e5e7eb; border:1px solid #334155; border-radius:4px; cursor:pointer;">Head</button>
+          <button data-part="hands" style="padding:6px 10px; background:#1f2937; color:#e5e7eb; border:1px solid #334155; border-radius:4px; cursor:pointer;">Hands</button>
+          <button data-part="legs" style="padding:6px 10px; background:#1f2937; color:#e5e7eb; border:1px solid #334155; border-radius:4px; cursor:pointer;">Legs</button>
+          <button data-part="cancel" style="padding:6px 10px; background:#111827; color:#9ca3af; border:1px solid #374151; border-radius:4px; cursor:pointer;">Cancel</button>
+        </div>
+      `;
+      document.body.appendChild(this.els.hitChooser);
+
       // Bind static events
       this.els.lootPanel?.addEventListener("click", () => this.hideLoot());
       this.els.restartBtn?.addEventListener("click", () => {
@@ -82,6 +118,9 @@ Exports (window.UI):
       this.els.godSpawnEnemyBtn?.addEventListener("click", () => {
         if (typeof this.handlers.onGodSpawnEnemy === "function") this.handlers.onGodSpawnEnemy();
       });
+      this.els.godSpawnStairsBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodSpawnStairs === "function") this.handlers.onGodSpawnStairs();
+      });
       if (this.els.godFov) {
         const updateFov = () => {
           const val = parseInt(this.els.godFov.value, 10);
@@ -91,6 +130,64 @@ Exports (window.UI):
         this.els.godFov.addEventListener("input", updateFov);
         this.els.godFov.addEventListener("change", updateFov);
       }
+      if (this.els.godToggleMirrorBtn) {
+        this.els.godToggleMirrorBtn.addEventListener("click", () => {
+          this.toggleSideLog();
+        });
+        // initialize label
+        this.updateSideLogButton();
+      }
+      if (this.els.godToggleCritBtn) {
+        this.els.godToggleCritBtn.addEventListener("click", (ev) => {
+          const btn = ev.currentTarget;
+          const next = !this.getAlwaysCritState();
+          this.setAlwaysCritState(next);
+          if (typeof this.handlers.onGodSetAlwaysCrit === "function") {
+            this.handlers.onGodSetAlwaysCrit(next);
+          }
+          // When enabling, ask for preferred hit location
+          if (next) {
+            // Prevent this click from triggering the global document click handler that hides choosers
+            ev.stopPropagation();
+            const rect = btn.getBoundingClientRect();
+            this.showHitChooser(rect.left, rect.bottom + 6, (part) => {
+              if (part && part !== "cancel") {
+                this.setCritPartState(part);
+                if (typeof this.handlers.onGodSetCritPart === "function") {
+                  this.handlers.onGodSetCritPart(part);
+                }
+              }
+            });
+          }
+        });
+        this.updateAlwaysCritButton();
+      }
+      if (this.els.godToggleGridBtn) {
+        this.els.godToggleGridBtn.addEventListener("click", () => {
+          const next = !this.getGridState();
+          this.setGridState(next);
+          this.updateGridButton();
+        });
+        this.updateGridButton();
+      }
+      // RNG seed controls
+      if (this.els.godApplySeedBtn) {
+        this.els.godApplySeedBtn.addEventListener("click", () => {
+          const raw = (this.els.godSeedInput && this.els.godSeedInput.value) ? this.els.godSeedInput.value.trim() : "";
+          const n = Number(raw);
+          if (Number.isFinite(n) && n >= 0) {
+            if (typeof this.handlers.onGodApplySeed === "function") this.handlers.onGodApplySeed(n >>> 0);
+          } else {
+            // no-op; optionally show hint
+          }
+        });
+      }
+      if (this.els.godRerollSeedBtn) {
+        this.els.godRerollSeedBtn.addEventListener("click", () => {
+          if (typeof this.handlers.onGodRerollSeed === "function") this.handlers.onGodRerollSeed();
+        });
+      }
+      this.updateSeedUI();
 
       // Delegate equip slot clicks (unequip)
       this.els.equipSlotsEl?.addEventListener("click", (ev) => {
@@ -156,18 +253,31 @@ Exports (window.UI):
         if (typeof cb === "function") cb(hand);
       });
 
-      // Hide chooser on any outside click (not in capture phase)
+      // Hit chooser click
+      this.els.hitChooser.addEventListener("click", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        e.stopPropagation();
+        const part = btn.dataset.part;
+        const cb = this._hitChooserCb;
+        this.hideHitChooser();
+        if (typeof cb === "function") cb(part);
+      });
+
+      // Hide choosers on any outside click (not in capture phase)
       document.addEventListener("click", (e) => {
-        if (!this.els.handChooser) return;
-        if (this.els.handChooser.style.display === "none") return;
-        if (this.els.handChooser.contains(e.target)) return;
-        this.hideHandChooser();
+        if (this.els.handChooser && this.els.handChooser.style.display !== "none" && !this.els.handChooser.contains(e.target)) {
+          this.hideHandChooser();
+        }
+        if (this.els.hitChooser && this.els.hitChooser.style.display !== "none" && !this.els.hitChooser.contains(e.target)) {
+          this.hideHitChooser();
+        }
       });
 
       return true;
     },
 
-    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy } = {}) {
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSpawnStairs, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
@@ -177,15 +287,25 @@ Exports (window.UI):
       if (typeof onGodSpawn === "function") this.handlers.onGodSpawn = onGodSpawn;
       if (typeof onGodSetFov === "function") this.handlers.onGodSetFov = onGodSetFov;
       if (typeof onGodSpawnEnemy === "function") this.handlers.onGodSpawnEnemy = onGodSpawnEnemy;
+      if (typeof onGodSpawnStairs === "function") this.handlers.onGodSpawnStairs = onGodSpawnStairs;
+      if (typeof onGodSetAlwaysCrit === "function") this.handlers.onGodSetAlwaysCrit = onGodSetAlwaysCrit;
+      if (typeof onGodSetCritPart === "function") this.handlers.onGodSetCritPart = onGodSetCritPart;
+      if (typeof onGodApplySeed === "function") this.handlers.onGodApplySeed = onGodApplySeed;
+      if (typeof onGodRerollSeed === "function") this.handlers.onGodRerollSeed = onGodRerollSeed;
     },
 
     updateStats(player, floor, getAtk, getDef) {
       if (this.els.hpEl) {
-        const gold = (player.inventory.find(i => i.kind === "gold")?.amount) || 0;
-        this.els.hpEl.textContent = `HP: ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}  Gold: ${gold}`;
+        const parts = [`HP: ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}`];
+        const statuses = [];
+        if (player.bleedTurns && player.bleedTurns > 0) statuses.push(`Bleeding (${player.bleedTurns})`);
+        if (player.dazedTurns && player.dazedTurns > 0) statuses.push(`Dazed (${player.dazedTurns})`);
+        parts.push(`  Status Effect: ${statuses.length ? statuses.join(", ") : "None"}`);
+        this.els.hpEl.textContent = parts.join("");
       }
       if (this.els.floorEl) {
-        this.els.floorEl.textContent = `Floor: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
+        // Shorter labels to fit better on small screens
+        this.els.floorEl.textContent = `F: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
       }
       if (this.els.invStatsEl && typeof getAtk === "function" && typeof getDef === "function") {
         this.els.invStatsEl.textContent = `Attack: ${getAtk().toFixed(1)}   Defense: ${getDef().toFixed(1)}`;
@@ -287,6 +407,20 @@ Exports (window.UI):
       this._handChooserCb = null;
     },
 
+    showHitChooser(x, y, cb) {
+      if (!this.els.hitChooser) return;
+      this._hitChooserCb = cb;
+      this.els.hitChooser.style.left = `${Math.round(x)}px`;
+      this.els.hitChooser.style.top = `${Math.round(y)}px`;
+      this.els.hitChooser.style.display = "block";
+    },
+
+    hideHitChooser() {
+      if (!this.els.hitChooser) return;
+      this.els.hitChooser.style.display = "none";
+      this._hitChooserCb = null;
+    },
+
     showLoot(list) {
       if (!this.els.lootPanel || !this.els.lootList) return;
       this.els.lootList.innerHTML = "";
@@ -327,6 +461,135 @@ Exports (window.UI):
       const v = Math.max(parseInt(this.els.godFov.min || "3", 10), Math.min(parseInt(this.els.godFov.max || "14", 10), parseInt(val, 10) || 0));
       this.els.godFov.value = String(v);
       if (this.els.godFovValue) this.els.godFovValue.textContent = `FOV: ${v}`;
+    },
+
+    // --- Side log mirror controls ---
+    getSideLogState() {
+      try {
+        if (typeof window.LOG_MIRROR === "boolean") return window.LOG_MIRROR;
+        const m = localStorage.getItem("LOG_MIRROR");
+        if (m === "1") return true;
+        if (m === "0") return false;
+      } catch (_) {}
+      return true; // default on
+    },
+
+    setSideLogState(enabled) {
+      try {
+        window.LOG_MIRROR = !!enabled;
+        localStorage.setItem("LOG_MIRROR", enabled ? "1" : "0");
+      } catch (_) {}
+      // Apply immediately
+      try {
+        if (window.Logger && typeof Logger.init === "function") {
+          Logger.init();
+        }
+      } catch (_) {}
+      // Ensure DOM reflects the state even without reinit
+      const el = document.getElementById("log-right");
+      if (el) {
+        el.style.display = enabled ? "" : "none";
+      }
+      this.updateSideLogButton();
+    },
+
+    toggleSideLog() {
+      const cur = this.getSideLogState();
+      this.setSideLogState(!cur);
+    },
+
+    updateSideLogButton() {
+      if (!this.els.godToggleMirrorBtn) return;
+      const on = this.getSideLogState();
+      this.els.godToggleMirrorBtn.textContent = `Side Log: ${on ? "On" : "Off"}`;
+    },
+
+    // --- Render grid controls ---
+    getGridState() {
+      try {
+        if (typeof window.DRAW_GRID === "boolean") return window.DRAW_GRID;
+        const v = localStorage.getItem("DRAW_GRID");
+        if (v === "1") return true;
+        if (v === "0") return false;
+      } catch (_) {}
+      return true; // default on
+    },
+
+    setGridState(enabled) {
+      try {
+        window.DRAW_GRID = !!enabled;
+        localStorage.setItem("DRAW_GRID", enabled ? "1" : "0");
+      } catch (_) {}
+      this.updateGridButton();
+    },
+
+    updateGridButton() {
+      if (!this.els.godToggleGridBtn) return;
+      const on = this.getGridState();
+      this.els.godToggleGridBtn.textContent = `Grid: ${on ? "On" : "Off"}`;
+    },
+
+    // --- Always Crit controls ---
+    getAlwaysCritState() {
+      try {
+        if (typeof window.ALWAYS_CRIT === "boolean") return window.ALWAYS_CRIT;
+        const v = localStorage.getItem("ALWAYS_CRIT");
+        if (v === "1") return true;
+        if (v === "0") return false;
+      } catch (_) {}
+      return false;
+    },
+
+    setAlwaysCritState(enabled) {
+      try {
+        window.ALWAYS_CRIT = !!enabled;
+        localStorage.setItem("ALWAYS_CRIT", enabled ? "1" : "0");
+      } catch (_) {}
+      this.updateAlwaysCritButton();
+    },
+
+    getCritPartState() {
+      try {
+        if (typeof window.ALWAYS_CRIT_PART === "string" && window.ALWAYS_CRIT_PART) return window.ALWAYS_CRIT_PART;
+        const v = localStorage.getItem("ALWAYS_CRIT_PART");
+        if (v) return v;
+      } catch (_) {}
+      return "";
+    },
+
+    setCritPartState(part) {
+      try {
+        window.ALWAYS_CRIT_PART = part || "";
+        if (part) localStorage.setItem("ALWAYS_CRIT_PART", part);
+        else localStorage.removeItem("ALWAYS_CRIT_PART");
+      } catch (_) {}
+      this.updateAlwaysCritButton();
+    },
+
+    updateAlwaysCritButton() {
+      if (!this.els.godToggleCritBtn) return;
+      const on = this.getAlwaysCritState();
+      const part = this.getCritPartState();
+      this.els.godToggleCritBtn.textContent = `Always Crit: ${on ? "On" : "Off"}${on && part ? ` (${part})` : ""}`;
+    },
+
+    // --- RNG UI ---
+    getSeedState() {
+      try {
+        const v = localStorage.getItem("SEED");
+        return v || "";
+      } catch (_) {}
+      return "";
+    },
+
+    updateSeedUI() {
+      const seed = this.getSeedState();
+      if (this.els.godSeedInput && !this.els.godSeedInput.value) {
+        this.els.godSeedInput.value = seed;
+      }
+      if (this.els.godSeedHelp) {
+        this.els.godSeedHelp.textContent = seed ? `Current seed: ${seed}` : "Current seed: (random)";
+      }
     },
 
     showGameOver(player, floor) {

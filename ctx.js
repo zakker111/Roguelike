@@ -1,14 +1,17 @@
-/*
-Ctx: shared context factory so modules consume a single ctx object
-instead of importing each other via window.*.
-
-Exports (window.Ctx):
-- create(base): returns a normalized ctx with consistent shape and optional module handles attached
-- attachModules(ctx): attaches discovered module handles to the ctx (Enemies, Items, Player, UI, Logger, Loot, Dungeon, DungeonItems, FOV, AI, Input, Render)
-Notes:
-- This is a thin layer. It does not mutate the provided base, it returns a new object.
-- Modules should read from ctx only; no direct window.* lookups are required if ctx is used consistently.
-*/
+/**
+ * Ctx: shared context factory so modules consume a single ctx object
+ * instead of importing each other via window.*.
+ *
+ * Exports (window.Ctx):
+ * - create(base): returns a normalized ctx with consistent shape and optional module handles attached
+ * -t):Object} create - Returns a normalized ctx with consistent shape and optional module handles.
+ * @property {function(Object):Object} attachModules - Attaches discovered module handles to the ctx (Enemies, Items, Player, UI, Logger, Loot, Dungeon, DungeonItems, FOV, AI, Input, Render, Tileset, Flavor, PlayerUtils, LOS).
+ *
+ * @remarks
+ * - Thin layer: does not mutate the provided base, returns a new object.
+ * - Modules should read from ctx only; avoid direct window.* lookups when using ctx.
+ * - Utilities on ctx.utils are deterministic when ctx.rng is provided.
+ */
 (function () {
   function shallowClone(obj) {
     const out = {};
@@ -64,6 +67,17 @@ Notes:
   }
 
   function ensureLOS(ctx) {
+    // Prefer shared LOS module if present (attached via attachModules or on window)
+    if (ctx.LOS && typeof ctx.LOS.tileTransparent === "function" && typeof ctx.LOS.hasLOS === "function") {
+      ctx.los = ctx.LOS;
+      return ctx;
+    }
+    if (typeof window !== "undefined" && window.LOS && typeof window.LOS.tileTransparent === "function" && typeof window.LOS.hasLOS === "function") {
+      ctx.los = window.LOS;
+      return ctx;
+    }
+
+    // Fallback lightweight LOS
     function tileTransparent(c, x, y) {
       if (!c.inBounds || !c.inBounds(x, y)) return false;
       return c.map[y][x] !== c.TILES.WALL;
@@ -81,7 +95,7 @@ Notes:
       }
       return true;
     }
-    ctx.los = ctx.los || { tileTransparent, hasLOS };
+    if (!ctx.los) ctx.los = { tileTransparent, hasLOS };
     return ctx;
   }
 

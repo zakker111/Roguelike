@@ -1,14 +1,16 @@
-/*
-Flavor: lightweight combat flavor messages.
-
-Exports (window.Flavor):
-- logHit(ctx, { attacker, loc, crit })
-
-Behavior:
-- Occasionally logs an extra flavor line when the player is hit by an enemy,
-  based on hit location and whether it was a critical.
-- Uses ctx.rng for determinism and ctx.log for output.
-*/
+/**
+ * Flavor: lightweight combat flavor messages.
+ *
+ * Exports (window.Flavor):
+ * - logHit(ctx, { attacker, loc, crit })
+ * - logPlayerHit(ctx, { target, loc, crit, dmg })
+ * - announceFloorEnemyCount(ctx)
+ *
+ * Behavior:
+ * - Occasionally logs an extra flavor line when the player is hit or when the player hits an enemy,
+ *   based on hit location and whether it was a critical.
+ * - Uses ctx.rng for determinism and ctx.log for output.
+ */
 (function () {
   function pick(arr, rng) {
     const r = rng || Math.random;
@@ -21,9 +23,14 @@ Behavior:
     "You take a hard hit to the head; your ears ring."
   ];
 
-  const TORSO_STING_PLAYER = [
-    "A sharp jab to your ribs knocks the wind out.",
-    "You clutch your ribs; the hit steals your breath."
+  const TORSO_STING_PLAYER = [     "A sharp jab to your ribs knocks the wind out.",    " You clutch your ribs; the hit steals your breath." . ];
+  const BLOOD_SPILL = [    "Blood spills across the floor.",
+    "Dark blood splashes on the stone.",    "A stain spreads underfoot.",
+_code  new]</;
+
+
+
+"
   ];
 
   /**
@@ -71,6 +78,14 @@ Behavior:
     const crit = !!(opts && opts.crit);
     const dmg = (opts && typeof opts.dmg === "number") ? opts.dmg : null;
 
+    // Blood spill flavor (pairs with decals). Keep brief and not on every hit.
+    if (dmg != null && dmg > 0) {
+      const p = crit ? 0.5 : 0.25; // higher chance on crits
+      if (ctx.rng() < p) {
+        ctx.log(pick(BLOOD_SPILL, ctx.rng), "flavor");
+      }
+    }
+
     // Strong crit to head -> yellow notice, include enemy and location
     if (crit && loc.part === "head") {
       if (ctx.rng() < 0.6) {
@@ -81,6 +96,8 @@ Behavior:
         ];
         ctx.log(pick(variants, ctx.rng), "notice");
       }
+      return;
+    }
       return;
     }
 

@@ -1,9 +1,12 @@
-/*
-Render: draws tiles, glyph overlays, corpses, enemies, and player with camera support.
-
-Exports (window.Render):
-- draw(ctx) where ctx contains ctx2d, TILE/ROWS/COLS/COLORS/TILES, map/seen/visible, player/enemies/corpses, camera?
-*/
+/**
+ * Render: draws tiles, corpses, enemies, and player with camera support.
+ *
+ * Exports (window.Render):
+ * - draw(ctx): where ctx contains { ctx2d, TILE, ROWS, COLS, COLORS, TILES, map, seen, visible, player, enemies, corpses, camera? }
+ *
+ * Notes:
+ * - Uses Tileset when available; falls back to colored rectangles and glyphs.
+ */
 (function () {
   function enemyColorFromModule(type, COLORS) {
     if (window.Enemies && typeof Enemies.colorFor === "function") {
@@ -22,20 +25,13 @@ Exports (window.Render):
   function draw(ctx) {
     const {
       ctx2d, TILE, ROWS, COLS, COLORS, TILES,
-      map, seen, visible, player, enemies, corpses, camera: camMaybe
+      map, seen, visible, player, enemies, corpses, decals, camera: camMaybe
     } = ctx;
-
-    if (typeof window !== "undefined" && window.DEV) {
-      try {
-        const mapRows = map.length;
-        const mapCols = map[0] ? map[0].length : 0;
-        const visEnemies = (enemies || []).filter(e => visible[e.y] && visible[e.y][e.x]).length;
-        console.debug("[DEV] draw() map:", mapCols, "x", mapRows, "player:", player.x, player.y, "enemies:", (enemies||[]).length, "visible enemies:", visEnemies);
-      } catch (_) {}
-    }
 
     const enemyColor = (t) => (ctx.enemyColor ? ctx.enemyColor(t) : enemyColorFromModule(t, COLORS));
     const TS = (ctx.Tileset || (typeof window !== "undefined" ? window.Tileset : null));
+    const tilesetReady = !!(TS && typeof TS.isReady === "function" && TS.isReady());
+    const drawGrid = (typeof window !== "undefined" && typeof window.DRAW_GRID === "boolean") ? window.DRAW_GRID : true;
 
     const cam = camMaybe || { x: 0, y: 0, width: COLS * TILE, height: ROWS * TILE };
     const tileOffsetX = cam.x % TILE;
@@ -55,6 +51,9 @@ Exports (window.Render):
     ctx2d.textBaseline = "middle";
 
     // tiles within viewport range
+    if (drawGrid) {
+      ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
+    }
     for (let y = startY; y <= endY; y++) {
       const rowMap = map[y];
       const rowSeen = seen[y] || [];
@@ -67,9 +66,9 @@ Exports (window.Render):
 
         // If tile has never been seen, render as unknown to avoid revealing layout
         if (!everSeen) {
-          // If tileset exists, we still hide unknown tiles to avoid revealing layout
           ctx2d.fillStyle = COLORS.wallDark;
           ctx2d.fillRect(screenX, screenY, TILE, TILE);
+          if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
           continue;
         }
 
@@ -82,7 +81,7 @@ Exports (window.Render):
         else key = "floor";
 
         let drawn = false;
-        if (TS && typeof TS.draw === "function") {
+        if (tilesetReady && typeof TS.draw === "function") {
           drawn = TS.draw(ctx2d, key, screenX, screenY, TILE);
         }
         if (!drawn) {
@@ -95,9 +94,10 @@ Exports (window.Render):
           ctx2d.fillRect(screenX, screenY, TILE, TILE);
         }
 
-        // subtle grid
-        ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
-        ctx2d.strokeRect(screenX, screenY, TILE, TILE);
+        // optional subtle grid
+        if (drawGrid) {
+          ctx2d.strokeRect(screenX, screenY, TILE, TILE);
+        }
 
         // FOV dim overlay for seen-but-not-visible tiles
         if (!vis && everSeen) {
@@ -106,10 +106,58 @@ Exports (window.Render):
         }
 
         // staircase glyph overlay when visible (only if we didn't render via tileset)
-        if (vis && type === TILES.STAIRS && (!TS || !TS.isReady())) {
+        if (vis && type === TILES.STAIRS && !tilesetReady) {
           drawGlyphScreen(ctx2d, screenX, screenY, ">", "#d7ba7d", TILE);
         }
       }
+    }
+
+    // decals (e.g., blood stains) - draw before corpses/enemies so they appear under them
+    if (decals && decals.length) {
+      ctx2d.save();
+      for (let i = 0; i < decals.length; i++) {
+        const d = decals[i];
+        // helper to check in-view
+        const inView = (x, y) => x >= startX && x <= endX && y >= startY && y <= endY;
+        if (!inView(d.x, d.y)) continue;
+        const sx = (d.x - startX) * TILE - tileOffsetX;
+        const sy = (d.y - startY) * TILE - tileOffsetY;
+        // Only show where the tile has been seen (avoid revealing map)
+        const everSeen = seen[d.y] && seen[d.y][d.x];
+        if (!everSeen) continue;
+        // Use alpha for fade
+        const alpha = Math.max(0, Math.min(1, d.a || 0.2));
+        if (alpha <= 0) continue;
+
+        // If tileset has a decal sprite, prefer it with alpha; otherwise draw a soft blob
+        let usedTile = false;
+        if (tilesetReady && TS) {
+          const variant = ((d.x + d.y) % 3) + 1; // 1..3
+          const key = `decal.blood${variant}`;
+          if (typeof TS.drawAlpha === "function") {
+            usedTile = TS.drawAlpha(ctx2d, key, sx, sy, TILE, alpha);
+          } else if (typeof TS.draw === "function") {
+            // fallback to manual alpha around draw()
+            const prev = ctx2d.globalAlpha;
+            ctx2d.globalAlpha = alpha;
+            usedTile = TS.draw(ctx2d, key, sx, sy, TILE);
+            ctx2d.globalAlpha = prev;
+          }
+        }
+        if (!usedTile) {
+          const prev = ctx2d.globalAlpha;
+          ctx2d.globalAlpha = alpha;
+          ctx2d.fillStyle = "#7a1717"; // deep red
+          const r = Math.max(4, Math.min(TILE - 2, d.r || Math.floor(TILE * 0.4)));
+          const cx = sx + TILE / 2;
+          const cy = sy + TILE / 2;
+          ctx2d.beginPath();
+          ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx2d.fill();
+          ctx2d.globalAlpha = prev;
+        }
+      }
+      ctx2d.restore();
     }
 
     // corpses and chests
@@ -118,7 +166,7 @@ Exports (window.Render):
       if (c.x < startX || c.x > endX || c.y < startY || c.y > endY) continue;
       const screenX = (c.x - startX) * TILE - tileOffsetX;
       const screenY = (c.y - startY) * TILE - tileOffsetY;
-      if (TS && TS.draw(ctx2d, c.kind === "chest" ? "chest" : "corpse", screenX, screenY, TILE)) {
+      if (tilesetReady && TS.draw(ctx2d, c.kind === "chest" ? "chest" : "corpse", screenX, screenY, TILE)) {
         // drawn from tileset
       } else {
         if (c.kind === "chest") {
@@ -136,7 +184,7 @@ Exports (window.Render):
       const screenX = (e.x - startX) * TILE - tileOffsetX;
       const screenY = (e.y - startY) * TILE - tileOffsetY;
       const enemyKey = e.type ? `enemy.${e.type}` : null;
-      if (enemyKey && TS && TS.draw(ctx2d, enemyKey, screenX, screenY, TILE)) {
+      if (enemyKey && tilesetReady && TS.draw(ctx2d, enemyKey, screenX, screenY, TILE)) {
         // drawn via tileset
       } else {
         drawGlyphScreen(ctx2d, screenX, screenY, e.glyph || "e", enemyColor(e.type), TILE);
@@ -147,7 +195,7 @@ Exports (window.Render):
     if (player.x >= startX && player.x <= endX && player.y >= startY && player.y <= endY) {
       const screenX = (player.x - startX) * TILE - tileOffsetX;
       const screenY = (player.y - startY) * TILE - tileOffsetY;
-      if (!(TS && TS.draw(ctx2d, "player", screenX, screenY, TILE))) {
+      if (!(tilesetReady && TS.draw(ctx2d, "player", screenX, screenY, TILE))) {
         drawGlyphScreen(ctx2d, screenX, screenY, "@", COLORS.player, TILE);
       }
     }

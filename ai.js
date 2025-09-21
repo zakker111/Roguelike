@@ -1,28 +1,39 @@
-/*
-AI: enemy perception and movement + attack routine.
-
-Exports (window.AI):
-- enemiesAct(ctx): runs one AI turn for all enemies
-
-ctx contract (minimal):
-{
-  // state
-  player, enemies, map, TILES,
-  // geometry
-  ROWS, COLS, inBounds, isWalkable,
-  // rng utils
-  rng, randInt, chance,
-  // combat helpers and effects
-  rollHitLocation(), critMultiplier(), getPlayerBlockChance(loc),
-  enemyDamageAfterDefense(raw), randFloat(min,max,dec),
-  decayBlockingHands(), decayEquipped(slot, amt),
-  // UI/log
-  log(msg, type?), updateUI(),
-  // lifecycle
-  onPlayerDied(), // called when HP <= 0
-}
-*/
+/**
+ * AI: enemy perception, movement, and attack routine.
+ *
+ * Exports (window.AI):
+ * - enemiesAct(ctx): runs one AI turn for all enemies on the map
+ *
+ * ctx (expected subset):
+ * {
+ *   // state
+ *   player, enemies, map, TILES,
+ *   // geometry
+ *   inBounds(x,y), isWalkable(x,y),
+ *   // randomness
+ *   rng(), utils?: { randInt, randFloat, chance, capitalize },
+ *   // combat helpers and effects
+ *   rollHitLocation(), critMultiplier(), getPlayerBlockChance(loc),
+ *   enemyDamageAfterDefense(raw), randFloat(min,max,dec),
+ *   decayBlockingHands(), decayEquipped(slot, amt),
+ *   // UI/log
+ *   log(msg, type?), updateUI?,
+ *   // lifecycle
+ *   onPlayerDied?(), // called when HP <= 0
+ *   // LOS
+ *   los?: { tileTransparent(ctx,x,y), hasLOS(ctx,x0,y0,x1,y1) }
+ * }
+ */
 (function () {
+  // Reusable direction arrays to avoid per-tick allocations
+  const ALT_DIRS = Object.freeze([{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 1 }]);
+  const WANDER_DIRS = ALT_DIRS;
+
+  function occKey(x, y) {
+    // 16-bit safe packing for maps up to 65535 in each dimension
+    return ((y & 0xffff) << 16) | (x & 0xffff);
+  }
+
   function tileTransparent(ctx, x, y) {
     if (ctx.los && typeof ctx.los.tileTransparent === "function") {
       return ctx.los.tileTransparent(ctx, x, y);
@@ -60,14 +71,127 @@ ctx contract (minimal):
 
     const senseRange = 8;
 
-    // O(1) occupancy for this turn
-    const occ = new Set(enemies.map(en => `${en.x},${en.y}`));
-    const isFree = (x, y) => ctx.isWalkable(x, y) && !occ.has(`${x},${y}`) && !(player.x === x && player.y === y);
+    // O(1) occupancy for this turn using packed integer keys (avoid string allocs)
+    const occ = new Set(enemies.map(en => occKey(en.x, en.y)));
+    const isFree = (x, y) => ctx.isWalkable(x, y) && !occ.has(occKey(x, y)) && !(player.x === x && player.y === y);
 
     for (const e of enemies) {
       const dx = player.x - e.x;
       const dy = player.y - e.y;
       const dist = Math.abs(dx) + Math.abs(dy);
+
+      // Low-HP panic/flee (generic for all enemies)
+      // If enemy HP is very low, small chance to enter a short panic state and try to flee,
+      // occasionally yelling they don't want to die.
+      if (typeof e.hp === "number" && e.hp <= 2) {
+        // start or refresh panic with small chance
+        if (!(e._panicTurns > 0) && chance(0.2)) {
+          e._panicTurns = 3;
+        }
+        // yell occasionally with cooldown
+        if (typeof e._panicYellCd === "number" && e._panicYellCd > 0) e._panicYellCd -= 1;
+        if ((e._panicYellCd | 0) <= 0 && (e._panicTurns | 0) > 0 && chance(0.35)) {
+          try { ctx.log("I don't want to die!", "flavor"); } catch (_) {}
+          e._panicYellCd = 6;
+        }
+      }
+
+      // Compute away-from-player preferred directions (used by panic and mime_ghost)
+      const sxAway = dx === 0 ? 0 : (dx > 0 ? -1 : 1);
+      const syAway = dy === 0 ? 0 : (dy > 0 ? -1 : 1);
+      const primaryAway = Math.abs(dx) > Math.abs(dy)
+        ? [{ x: sxAway, y: 0 }, { x: 0, y: syAway }]
+        : [{ x: 0, y: syAway }, { x: sxAway, y: 0 }];
+
+      // If panicking, prefer to flee instead of fighting when possible
+      if ((e._panicTurns | 0) > 0) {
+        let fled = false;
+        // If adjacent, strong preference to step away instead of attacking
+        const tryDirs = primaryAway.concat(ALT_DIRS);
+        for (const d of tryDirs) {
+          const nx = e.x + d.x, ny = e.y + d.y;
+          if (isFree(nx, ny)) {
+            occ.delete(occKey(e.x, e.y));
+            e.x = nx; e.y = ny;
+            occ.add(occKey(e.x, e.y));
+            fled = true;
+            break;
+          }
+        }
+        e._panicTurns -= 1;
+        if (fled) continue; // used turn to flee
+        // If couldn't flee, fall through to normal behavior (may attack if adjacent)
+      }
+
+      // Special behavior: mime_ghost tends to flee, shouts "Argh!", and only sometimes attacks
+      if (e.type === "mime_ghost") {
+        // lightweight shout cooldown to avoid spam
+        if (typeof e._arghCd === "number" && e._arghCd > 0) e._arghCd -= 1;
+        if ((e._arghCd | 0) <= 0 && chance(0.15)) {
+          try { ctx.log("Argh!", "flavor"); } catch (_) {}
+          e._arghCd = 3;
+        }
+
+        // If adjacent: 35% chance to attack; otherwise try to step away
+        if (dist === 1) {
+          if (!chance(0.35)) {
+            let moved = false;
+            for (const d of primaryAway) {
+              const nx = e.x + d.x, ny = e.y + d.y;
+              if (isFree(nx, ny)) {
+                occ.delete(occKey(e.x, e.y));
+                e.x = nx; e.y = ny;
+                occ.add(occKey(e.x, e.y));
+                moved = true;
+                break;
+              }
+            }
+            if (!moved) {
+              for (const d of ALT_DIRS) {
+                const nx = e.x + d.x, ny = e.y + d.y;
+                if (isFree(nx, ny)) {
+                  occ.delete(occKey(e.x, e.y));
+                  e.x = nx; e.y = ny;
+                  occ.add(occKey(e.x, e.y));
+                  moved = true;
+                  break;
+                }
+              }
+            }
+            if (moved) continue; // skipped attack this turn
+          }
+          // else fall through to default adjacent attack below
+        } else {
+          // Not adjacent: if senses the player with LOS, try to move away
+          if (dist <= senseRange && hasLOS(ctx, e.x, e.y, player.x, player.y)) {
+            let moved = false;
+            for (const d of primaryAway) {
+              const nx = e.x + d.x, ny = e.y + d.y;
+              if (isFree(nx, ny)) {
+                occ.delete(occKey(e.x, e.y));
+                e.x = nx; e.y = ny;
+                occ.add(occKey(e.x, e.y));
+                moved = true;
+                break;
+              }
+            }
+            if (!moved) {
+              for (const d of ALT_DIRS) {
+                const nx = e.x + d.x, ny = e.y + d.y;
+                if (isFree(nx, ny)) {
+                  occ.delete(occKey(e.x, e.y));
+                  e.x = nx; e.y = ny;
+                  occ.add(occKey(e.x, e.y));
+                  moved = true;
+                  break;
+                }
+              }
+            }
+            if (moved) continue; // handled movement; next enemy
+          }
+          // otherwise let default wander logic later handle it
+        }
+      }
 
       // attack if adjacent
       if (Math.abs(dx) + Math.abs(dy) === 1) {
@@ -96,8 +220,23 @@ ctx contract (minimal):
         }
         const dmg = ctx.enemyDamageAfterDefense(raw);
         player.hp -= dmg;
+        // Blood decal on the player's tile when damaged
+        try {
+          if (dmg > 0 && typeof ctx.addBloodDecal === "function") {
+            ctx.addBloodDecal(player.x, player.y, isCrit ? 1.4 : 1.0);
+          }
+        } catch (_) {}
         if (isCrit) ctx.log(`Critical! ${Cap(e.type)} hits your ${loc.part} for ${dmg}.`, "crit");
         else ctx.log(`${Cap(e.type)} hits your ${loc.part} for ${dmg}.`);
+        // Apply status effects
+        if (isCrit && loc.part === "head" && typeof window !== "undefined" && window.Status && typeof Status.applyDazedToPlayer === "function") {
+          const dur = (ctx.rng ? (1 + Math.floor(ctx.rng() * 2)) : 1); // 1-2 turns
+          try { Status.applyDazedToPlayer(ctx, dur); } catch (_) {}
+        }
+        // Bleed on critical hits to the player (short duration)
+        if (isCrit && typeof window !== "undefined" && window.Status && typeof Status.applyBleedToPlayer === "function") {
+          try { Status.applyBleedToPlayer(ctx, 2); } catch (_) {}
+        }
         if (ctx.Flavor && typeof ctx.Flavor.logHit === "function") {
           ctx.Flavor.logHit(ctx, { attacker: e, loc, crit: isCrit, dmg });
         }
@@ -134,36 +273,34 @@ ctx contract (minimal):
           const nx = e.x + d.x;
           const ny = e.y + d.y;
           if (isFree(nx, ny)) {
-            occ.delete(`${e.x},${e.y}`);
+            occ.delete(occKey(e.x, e.y));
             e.x = nx; e.y = ny;
-            occ.add(`${e.x},${e.y}`);
+            occ.add(occKey(e.x, e.y));
             moved = true;
             break;
           }
         }
         if (!moved) {
           // try alternate directions (simple wiggle)
-          const alt = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
-          for (const d of alt) {
+          for (const d of ALT_DIRS) {
             const nx = e.x + d.x;
             const ny = e.y + d.y;
             if (isFree(nx, ny)) {
-              occ.delete(`${e.x},${e.y}`);
+              occ.delete(occKey(e.x, e.y));
               e.x = nx; e.y = ny;
-              occ.add(`${e.x},${e.y}`);
+              occ.add(occKey(e.x, e.y));
               break;
             }
           }
         }
       } else if (chance(0.4)) {
         // random wander (moderate chance when far away)
-        const dirs = [{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}];
-        const d = dirs[randInt(0, dirs.length - 1)];
+        const d = WANDER_DIRS[randInt(0, WANDER_DIRS.length - 1)];
         const nx = e.x + d.x, ny = e.y + d.y;
         if (isFree(nx, ny)) {
-          occ.delete(`${e.x},${e.y}`);
+          occ.delete(occKey(e.x, e.y));
           e.x = nx; e.y = ny;
-          occ.add(`${e.x},${e.y}`);
+          occ.add(occKey(e.x, e.y));
         }
       }
     }
