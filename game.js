@@ -1315,7 +1315,12 @@
       } else if (typeof UI.setHandlers === "function") {
         UI.setHandlers(handlerPayload);
       }
-    };
+    }
+  }
+
+  // Hand decay helpers
+  function usingTwoHanded() {
+    const eq = player.equipment || {};
     return eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded;
   }
 
