@@ -58,7 +58,7 @@
         const w = ["sword", "axe", "bow"][ctx.randInt(0, 2)];
         const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
         let atk = randFloatLocal(ctx, ranges[0], ranges[1], 1);
-        if (w === "axe") atk = Math.min(4.0, round1Local(atk + randFloatLocal(ctx, 0.1, 0.5, 1)));
+        if (w === "axe") atk = Math.min(4.0, round1Local(ctx, atk + randFloatLocal(ctx, 0.1, 0.5, 1)));
         return { kind: "equip", slot: "hand", name: `${material} ${w}`, atk, tier, decay: ctx.initialDecay(tier) };
       } else {
         const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
@@ -103,8 +103,15 @@
     return { kind: "equip", slot: "hand", name: `${material} sword`, atk, tier, decay: ctx.initialDecay(tier) };
   }
 
-  function round1Local(n) { return Math.round(n * 10) / 10; }
+  // Use ctx.utils when available; otherwise fall back to local implementations
+  function round1Local(ctx, n) {
+    if (ctx && ctx.utils && typeof ctx.utils.round1 === "function") return ctx.utils.round1(n);
+    return Math.round(n * 10) / 10;
+  }
   function randFloatLocal(ctx, min, max, decimals = 1) {
+    if (ctx && ctx.utils && typeof ctx.utils.randFloat === "function") {
+      return ctx.utils.randFloat(min, max, decimals);
+    }
     const v = min + ctx.rng() * (max - min);
     const p = Math.pow(10, decimals);
     return Math.round(v * p) / p;
