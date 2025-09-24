@@ -11,16 +11,37 @@
  * GOD panel: P to open; Esc to close when open. FOV adjust: [-] and [+]/[=] (also Numpad +/-).
  */
 (() => {
-  const KEY_DIRS = {
+  // Load configurable bindings if present
+  const IB = (typeof window !== "undefined" ? window.InputBindings : null);
+  let KEY_DIRS = {
     // Numpad
     Numpad8: {x:0,y:-1}, Numpad2: {x:0,y:1}, Numpad4: {x:-1,y:0}, Numpad6: {x:1,y:0},
     Numpad7: {x:-1,y:-1}, Numpad9: {x:1,y:-1}, Numpad1: {x:-1,y:1}, Numpad3: {x:1,y:1},
     // Arrow keys (4-directional)
     ArrowUp: {x:0,y:-1}, ArrowDown: {x:0,y:1}, ArrowLeft: {x:-1,y:0}, ArrowRight: {x:1,y:0},
   };
+  let ACTIONS = {
+    inventory: ["i", "I"],
+    loot: ["g", "G"],
+    descend: ["n", "N", "Enter"],
+    god: ["p", "P"],
+    wait: ["Numpad5"],
+    fovDec: ["BracketLeft", "[", "Minus", "NumpadSubtract", "-"],
+    fovInc: ["BracketRight", "]", "Equal", "NumpadAdd", "="],
+  };
+  try {
+    if (IB && typeof IB.getKeyDirs === "function") KEY_DIRS = IB.getKeyDirs();
+    if (IB && typeof IB.getActions === "function") ACTIONS = IB.getActions();
+  } catch (_) {}
 
   let _handlers = null;
   let _onKey = null;
+
+  function _matchesAction(e, keys) {
+    const k = e.key;
+    const c = e.code;
+    return keys.some(s => s === k || s === c || (typeof s === "string" && s.toLowerCase && k && s.toLowerCase() === k.toLowerCase()));
+  }
 
   function init(handlers) {
     _handlers = handlers || {};
@@ -39,7 +60,7 @@
 
       
       if (_handlers.isInventoryOpen && _handlers.isInventoryOpen()) {
-        if (e.key && (e.key.toLowerCase() === "i" || e.key === "Escape")) {
+        if (_matchesAction(e, ACTIONS.inventory) || e.key === "Escape") {
           e.preventDefault();
           _handlers.onHideInventory && _handlers.onHideInventory();
         } else {
@@ -56,7 +77,7 @@
       }
 
       
-      if (e.key && e.key.toLowerCase() === "i") {
+      if (_matchesAction(e, ACTIONS.inventory)) {
         e.preventDefault();
         _handlers.onShowInventory && _handlers.onShowInventory();
         return;
@@ -74,19 +95,19 @@
       }
 
       
-      if (e.key && e.key.toLowerCase() === "p") {
+      if (_matchesAction(e, ACTIONS.god)) {
         e.preventDefault();
         _handlers.onShowGod && _handlers.onShowGod();
         return;
       }
 
       
-      if (e.code === "BracketLeft" || e.key === "[" || e.code === "Minus" || e.code === "NumpadSubtract" || e.key === "-") {
+      if (_matchesAction(e, ACTIONS.fovDec)) {
         e.preventDefault();
         _handlers.adjustFov && _handlers.adjustFov(-1);
         return;
       }
-      if (e.code === "BracketRight" || e.key === "]" || e.code === "Equal" || e.code === "NumpadAdd" || e.key === "=") {
+      if (_matchesAction(e, ACTIONS.fovInc)) {
         e.preventDefault();
         _handlers.adjustFov && _handlers.adjustFov(1);
         return;
@@ -102,14 +123,14 @@
       }
 
       
-      if (key === "Numpad5") {
+      if (_matchesAction(e, ACTIONS.wait)) {
         e.preventDefault();
         _handlers.onWait && _handlers.onWait();
         return;
       }
 
       
-      if (e.key && e.key.toLowerCase() === "g") {
+      if (_matchesAction(e, ACTIONS.loot)) {
         e.preventDefault();
         _handlers.onHideLoot && _handlers.onHideLoot();
         _handlers.onLoot && _handlers.onLoot();
@@ -117,7 +138,7 @@
       }
 
       
-      if ((e.key && e.key.toLowerCase() === "n") || e.key === "Enter") {
+      if (_matchesAction(e, ACTIONS.descend)) {
         e.preventDefault();
         _handlers.onHideLoot && _handlers.onHideLoot();
         _handlers.onDescend && _handlers.onDescend();
