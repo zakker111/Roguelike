@@ -1,0 +1,52 @@
+{
+  "root": true,
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "extends": [
+    "eslint:recommended"
+  ],
+  "parserOptions": {
+    "ecmaVersion": 2021,
+    "sourceType": "script"
+  },
+  "globals": {
+    "window": "readonly",
+    "document": "readonly",
+    "console": "readonly",
+    "localStorage": "readonly",
+    "requestAnimationFrame": "readonly",
+    // project modules on window
+    "Ctx": "readonly",
+    "LOS": "readonly",
+    "Enemies": "readonly",
+    "FOV": "readonly",
+    "Dungeon": "readonly",
+    "Logger": "readonly",
+    "UI": "readonly",
+    "Tileset": "readonly",
+    "Render": "readonly",
+    "PlayerUtils": "readonly",
+    "PlayerEquip": "readonly",
+    "Player": "readonly",
+    "Items": "readonly",
+    "DungeonItems": "readonly",
+    "Loot": "readonly",
+    "Combat": "readonly",
+    "Status": "readonly",
+    "Flavor": "readonly",
+    "AI": "readonly",
+    "Input": "readonly"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "vars": "all", "args": "none", "ignoreRestSiblings": true }],
+    "no-constant-condition": ["error", { "checkLoops": false }],
+    "no-console": "off",
+    "no-var": "off",
+    "prefer-const": "warn",
+    "eqeqeq": ["warn", "smart"],
+    "curly": ["warn", "multi-line"],
+    "no-irregular-whitespace": "error"
+  }
+}

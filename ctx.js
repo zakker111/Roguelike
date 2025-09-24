@@ -60,9 +60,21 @@
       const r = rfn || rng;
       return arr[Math.floor(r() * arr.length)];
     };
+    const pickWeighted = (entries, weightKey = "w", valueKey = "value") => {
+      if (!Array.isArray(entries) || entries.length === 0) return null;
+      const total = entries.reduce((s, e) => s + (e[weightKey] || 0), 0);
+      if (total <= 0) return entries[0][valueKey] ?? entries[0];
+      let r = rng() * total;
+      for (const e of entries) {
+        const w = e[weightKey] || 0;
+        if (r < w) return e[valueKey] ?? e;
+        r -= w;
+      }
+      return entries[0][valueKey] ?? entries[0];
+    };
     const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
-    ctx.utils = { round1, clamp, randInt, chance, randFloat, pick, capitalize };
+    ctx.utils = { round1, clamp, randInt, chance, randFloat, pick, pickWeighted, capitalize };
     return ctx;
   }
 
