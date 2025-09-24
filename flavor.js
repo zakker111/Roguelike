@@ -20,17 +20,18 @@
   // Simple flavor pools
   const HEAD_CRIT = [
     "A brutal crack to the skull; your ears ring.",
-    "You take a hard hit to the head; your ears ring."
+    "You take a hard hit to the head; your ears ring.",
   ];
 
-  const TORSO_STING_PLAYER = [     "A sharp jab to your ribs knocks the wind out.",    " You clutch your ribs; the hit steals your breath." . ];
-  const BLOOD_SPILL = [    "Blood spills across the floor.",
-    "Dark blood splashes on the stone.",    "A stain spreads underfoot.",
-_code  new]</;
+  const TORSO_STING_PLAYER = [
+    "A sharp jab to your ribs knocks the wind out.",
+    "You clutch your ribs; the hit steals your breath.",
+  ];
 
-
-
-"
+  const BLOOD_SPILL = [
+    "Blood spills across the floor.",
+    "Dark blood splashes on the stone.",
+    "A stain spreads underfoot.",
   ];
 
   /**
@@ -40,8 +41,8 @@ _code  new]</;
    */
   function logHit(ctx, opts) {
     if (!ctx || typeof ctx.log !== "function" || typeof ctx.rng !== "function") return;
-    const attacker = opts && opts.attacker || {};
-    const loc = opts && opts.loc || {};
+    const attacker = (opts && opts.attacker) || {};
+    const loc = (opts && opts.loc) || {};
     const crit = !!(opts && opts.crit);
 
     // Prioritize memorable moments
@@ -63,7 +64,7 @@ _code  new]</;
   // --- Player hitting enemies ---
   const ENEMY_TORSO_STING = [
     "You jab its ribs; it wheezes.",
-    "A punch to its ribs knocks the wind out."
+    "A punch to its ribs knocks the wind out.",
   ];
 
   /**
@@ -73,8 +74,8 @@ _code  new]</;
    */
   function logPlayerHit(ctx, opts) {
     if (!ctx || typeof ctx.log !== "function" || typeof ctx.rng !== "function") return;
-    const target = opts && opts.target || {};
-    const loc = opts && opts.loc || {};
+    const target = (opts && opts.target) || {};
+    const loc = (opts && opts.loc) || {};
     const crit = !!(opts && opts.crit);
     const dmg = (opts && typeof opts.dmg === "number") ? opts.dmg : null;
 
@@ -98,8 +99,6 @@ _code  new]</;
       }
       return;
     }
-      return;
-    }
 
     // Good damage (more frequent): absolute >= 2.0 -> green "good"
     if (!crit && dmg != null && dmg >= 2.0) {
@@ -109,11 +108,11 @@ _code  new]</;
         const variants = [
           `A heavy blow to the ${name}'s ${part}!`,
           `A solid hit to the ${name}'s ${part}!`,
-          `A telling strike to the ${name}'s ${part}!`
+          `A telling strike to the ${name}'s ${part}!`,
         ];
         ctx.log(pick(variants, ctx.rng), "good");
       }
-      // continue to allow location/type-specific line below with its own chance
+      // continue; allow location-specific line below
     }
 
     if (loc.part === "torso") {
