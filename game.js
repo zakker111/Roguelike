@@ -188,7 +188,9 @@
     const p = Math.pow(10, decimals);
     return Math.round(v * p) / p;
   };
-  const round1 = (n) => Math.round(n * 10) / 10;
+  const round1 = (window.PlayerUtils && typeof PlayerUtils.round1 === "function")
+    ? PlayerUtils.round1
+    : (n) => Math.round(n * 10) / 10;
 
   // Decay helpers
   function initialDecay(tier) {

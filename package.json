@@ -4,9 +4,11 @@
   "private": true,
   "description": "Tiny Roguelike — browser-based, modular, deterministic RNG.",
   "scripts": {
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "prepare": "husky install"
   },
   "devDependencies": {
-    "eslint": "^8.57.0"
+    "eslint": "^8.57.0",
+    "husky": "^9.0.0"
   }
 }
