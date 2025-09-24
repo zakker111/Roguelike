@@ -226,13 +226,15 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
     return Object.values(TYPES).filter(t => t.slot === slot);
   }
 
+  function weightFor(def, tier) {
+    const w = typeof def.weight === "function" ? def.weight(tier) : (def.weight || 1);
+    return Math.max(0, w);
+  }
+
   function pickType(slot, tier, rng) {
     const defs = typesBySlot(slot).filter(d => (d.minTier || 1) <= tier);
     if (defs.length === 0) return null;
-    const entries = defs.map(d => {
-      const w = typeof d.weight === "function" ? d.weight(tier) : (d.weight || 1);
-      return { value: d, w: Math.max(0, w) };
-    });
+    const entries = defs.map(d => ({ value: d, w: weightFor(d, tier) }));
     return pickWeighted(entries, rng || Math.random);
   }
 
@@ -250,10 +252,7 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
       // Fallback: pick any available type
       const any = Object.values(TYPES).filter(d => (d.minTier || 1) <= tier);
       if (any.length) {
-        const entries = any.map(d => {
-          const w = typeof d.weight === "function" ? d.weight(tier) : (d.weight || 1);
-          return { value: d, w: Math.max(0, w) };
-        });
+        const entries = any.map(d => ({ value: d, w: weightFor(d, tier) }));
         const chosen = pickWeighted(entries, r);
         if (chosen) return makeItemFromType(chosen, tier, r);
       }
