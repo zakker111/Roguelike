@@ -203,6 +203,12 @@ html, body {
   z-index: 15;
 }
 
+/* Make the GOD panel scrollable if content exceeds viewport */
+#god-panel {
+  max-height: 70vh;
+  overflow: auto;
+}
+
 .inv-title {
   color: var(--accent);
   font-weight: 600;
