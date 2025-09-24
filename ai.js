@@ -75,6 +75,9 @@
     const occ = new Set(enemies.map(en => occKey(en.x, en.y)));
     const isFree = (x, y) => ctx.isWalkable(x, y) && !occ.has(occKey(x, y)) && !(player.x === x && player.y === y);
 
+    // Per-turn cap on mime shouts to avoid spam when multiple are nearby
+    let _mimeArghLeft = 1;
+
     for (const e of enemies) {
       const dx = player.x - e.x;
       const dy = player.y - e.y;
@@ -125,11 +128,14 @@
 
       // Special behavior: mime_ghost tends to flee, shouts "Argh!", and only sometimes attacks
       if (e.type === "mime_ghost") {
-        // lightweight shout cooldown to avoid spam
+        // Shout cooldown with stricter rate limiting to avoid spam
         if (typeof e._arghCd === "number" && e._arghCd > 0) e._arghCd -= 1;
-        if ((e._arghCd | 0) <= 0 && chance(0.15)) {
+        // Lower base chance and require per-turn budget
+        if ((e._arghCd | 0) <= 0 && _mimeArghLeft > 0 && chance(0.06)) {
           try { ctx.log("Argh!", "flavor"); } catch (_) {}
-          e._arghCd = 3;
+          _mimeArghLeft -= 1;
+          // Randomize cooldown to 6–12 turns
+          e._arghCd = randInt(6, 12);
         }
 
         // If adjacent: 35% chance to attack; otherwise try to step away
