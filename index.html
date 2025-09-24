@@ -81,12 +81,27 @@
       <button id="god-toggle-crit-btn" class="btn">Always Crit: Off</button>
     </div>
     <div class="inv-subtitle">Effects</div>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+      <span class="help" style="font-size:12px;">Player duration</span>
+      <input id="god-effect-player-dur" type="number" min="1" max="10" step="1" value="2" class="btn" style="width:72px; text-align:center;">
       <button id="god-bleed-player-btn" class="btn">Apply Bleed (Player)</button>
       <button id="god-daze-player-btn" class="btn">Apply Dazed (Player)</button>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+      <span class="help" style="font-size:12px;">Enemy duration</span>
+      <input id="god-effect-enemy-dur" type="number" min="1" max="10" step="1" value="2" class="btn" style="width:72px; text-align:center;">
       <button id="god-bleed-enemy-btn" class="btn">Apply Bleed (Nearest Enemy)</button>
       <button id="god-limp-enemy-btn" class="btn">Apply Limp (Nearest Enemy)</button>
       <button id="god-clear-status-btn" class="btn">Clear All Statuses</button>
+    </div>
+    <div class="inv-subtitle">Input Settings</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+      <button id="god-enable-wasd-btn" class="btn">Enable WASD</button>
+      <span class="help" style="font-size:12px;">Inventory key</span>
+      <input id="god-remap-inventory" type="text" placeholder="Press a key" class="btn" style="width:140px; text-align:center;">
+      <span class="help" style="font-size:12px;">Loot key</span>
+      <input id="god-remap-loot" type="text" placeholder="Press a key" class="btn" style="width:140px; text-align:center;">
+      <button id="god-save-bindings-btn" class="btn">Save Bindings</button>
     </div>
     <div class="inv-subtitle">Render</div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
@@ -135,6 +150,7 @@
     }
   </script>
   <script src="ui.js"></script>
+  <script src="ui_bridge.js"></script>
   <script src="tileset.js"></script>
   <script src="render.js"></script>
   <script src="player_utils.js"></script>
@@ -144,9 +160,12 @@
   <script src="dungeon_items.js"></script>
   <script src="loot.js"></script>
   <script src="combat_utils.js"></script>
+  <script src="combat.js"></script>
   <script src="status_effects.js"></script>
   <script src="flavor.js"></script>
+  <script src="ai_behaviors.js"></script>
   <script src="ai.js"></script>
+  <script src="input_bindings.js"></script>
   <script src="input.js"></script>
   <script src="game.js"></script>
 </body>

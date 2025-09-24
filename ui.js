@@ -196,19 +196,57 @@
 
       // GOD effects bindings
       this.els.godBleedPlayerBtn?.addEventListener("click", () => {
-        if (typeof this.handlers.onGodApplyBleedPlayer === "function") this.handlers.onGodApplyBleedPlayer(2);
+        const d = parseInt((this.els.godEffectPlayerDur && this.els.godEffectPlayerDur.value) ? this.els.godEffectPlayerDur.value : "2", 10) || 2;
+        if (typeof this.handlers.onGodApplyBleedPlayer === "function") this.handlers.onGodApplyBleedPlayer(d);
       });
       this.els.godDazePlayerBtn?.addEventListener("click", () => {
-        if (typeof this.handlers.onGodApplyDazedPlayer === "function") this.handlers.onGodApplyDazedPlayer(2);
+        const d = parseInt((this.els.godEffectPlayerDur && this.els.godEffectPlayerDur.value) ? this.els.godEffectPlayerDur.value : "2", 10) || 2;
+        if (typeof this.handlers.onGodApplyDazedPlayer === "function") this.handlers.onGodApplyDazedPlayer(d);
       });
       this.els.godBleedEnemyBtn?.addEventListener("click", () => {
-        if (typeof this.handlers.onGodApplyBleedEnemy === "function") this.handlers.onGodApplyBleedEnemy(2);
+        const d = parseInt((this.els.godEffectEnemyDur && this.els.godEffectEnemyDur.value) ? this.els.godEffectEnemyDur.value : "2", 10) || 2;
+        if (typeof this.handlers.onGodApplyBleedEnemy === "function") this.handlers.onGodApplyBleedEnemy(d);
       });
       this.els.godLimpEnemyBtn?.addEventListener("click", () => {
-        if (typeof this.handlers.onGodApplyLimpEnemy === "function") this.handlers.onGodApplyLimpEnemy(2);
+        const d = parseInt((this.els.godEffectEnemyDur && this.els.godEffectEnemyDur.value) ? this.els.godEffectEnemyDur.value : "2", 10) || 2;
+        if (typeof this.handlers.onGodApplyLimpEnemy === "function") this.handlers.onGodApplyLimpEnemy(d);
       });
       this.els.godClearStatusBtn?.addEventListener("click", () => {
         if (typeof this.handlers.onGodClearStatuses === "function") this.handlers.onGodClearStatuses();
+      });
+
+      // Input remapping
+      this.els.godEnableWasdBtn = document.getElementById("god-enable-wasd-btn");
+      this.els.godEffectPlayerDur = document.getElementById("god-effect-player-dur");
+      this.els.godEffectEnemyDur = document.getElementById("god-effect-enemy-dur");
+      this.els.godRemapInventory = document.getElementById("god-remap-inventory");
+      this.els.godRemapLoot = document.getElementById("god-remap-loot");
+      this.els.godSaveBindingsBtn = document.getElementById("god-save-bindings-btn");
+
+      this.els.godEnableWasdBtn?.addEventListener("click", () => {
+        try { if (window.InputBindings && typeof InputBindings.enableWASD === "function") InputBindings.enableWASD(); } catch (_) {}
+        this.els.godEnableWasdBtn.textContent = "WASD Enabled";
+      });
+
+      // Capture single-key presses into text inputs
+      const captureKeyToInput = (inputEl, actionName) => {
+        if (!inputEl) return;
+        inputEl.addEventListener("keydown", (e) => {
+          e.preventDefault();
+          const key = e.code || e.key;
+          inputEl.value = key;
+          try {
+            if (window.InputBindings && typeof InputBindings.setAction === "function") {
+              InputBindings.setAction(actionName, [key]);
+            }
+          } catch (_) {}
+        });
+      };
+      captureKeyToInput(this.els.godRemapInventory, "inventory");
+      captureKeyToInput(this.els.godRemapLoot, "loot");
+
+      this.els.godSaveBindingsBtn?.addEventListener("click", () => {
+        try { if (window.InputBindings && typeof InputBindings.saveToStorage === "function") InputBindings.saveToStorage(); } catch (_) {}
       });
 
       this.updateSeedUI();

@@ -11,6 +11,9 @@
  * - Defaults mirror current hardcoded bindings in input.js.
  */
 (function () {
+  const STORAGE_KEY_DIRS = "INPUT_KEY_DIRS";
+  const STORAGE_ACTIONS = "INPUT_ACTIONS";
+
   const KEY_DIRS = {
     // Numpad
     Numpad8: {x:0,y:-1}, Numpad2: {x:0,y:1}, Numpad4: {x:-1,y:0}, Numpad6: {x:1,y:0},
@@ -28,6 +31,35 @@
     fovDec: ["BracketLeft", "[", "Minus", "NumpadSubtract", "-"],
     fovInc: ["BracketRight", "]", "Equal", "NumpadAdd", "="],
   };
+
+  function loadFromStorage() {
+    try {
+      const kd = localStorage.getItem(STORAGE_KEY_DIRS);
+      if (kd) {
+        const obj = JSON.parse(kd);
+        for (const code in obj) {
+          const v = obj[code];
+          if (v && typeof v.x === "number" && typeof v.y === "number") KEY_DIRS[code] = { x: v.x | 0, y: v.y | 0 };
+        }
+      }
+      const act = localStorage.getItem(STORAGE_ACTIONS);
+      if (act) {
+        const objA = JSON.parse(act);
+        for (const name in objA) {
+          const arr = objA[name];
+          if (Array.isArray(arr) && arr.length > 0 && (name in ACTIONS)) ACTIONS[name] = arr.slice();
+        }
+      }
+    } catch (_) {}
+  }
+
+  function saveToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY_DIRS, JSON.stringify(KEY_DIRS));
+      localStorage.setItem(STORAGE_ACTIONS, JSON.stringify(ACTIONS));
+      return true;
+    } catch (_) { return false; }
+  }
 
   function getKeyDirs() {
     return Object.assign({}, KEY_DIRS);
@@ -54,5 +86,17 @@
     return true;
   }
 
-  window.InputBindings = { getKeyDirs, getActions, setKeyDir, setAction };
+  // Convenience: enable WASD mappings
+  function enableWASD() {
+    KEY_DIRS.KeyW = { x:0, y:-1 };
+    KEY_DIRS.KeyA = { x:-1, y:0 };
+    KEY_DIRS.KeyS = { x:0, y:1 };
+    KEY_DIRS.KeyD = { x:1, y:0 };
+    return true;
+  }
+
+  // Initialize from storage on load
+  loadFromStorage();
+
+  window.InputBindings = { getKeyDirs, getActions, setKeyDir, setAction, saveToStorage, enableWASD };
 })();
