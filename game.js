@@ -97,7 +97,7 @@
       round1, randInt, chance, randFloat,
       enemyColor, describeItem,
       setFovRadius,
-      getPlayerAttack, getPlayerDefense, getPlayerBlockChance,
+      getPlayerAttack, getPlayerDefense, getPlayerBlockChance, getEnemyBlockChance,
       enemyThreatLabel,
       // Needed by loot and UI flows
       updateUI: () => updateUI(),
