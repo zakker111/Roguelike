@@ -1316,7 +1316,7 @@
         UI.setHandlers(handlerPayload);
       }
     }
-  }
+  
 
   // Hand decay helpers
   function usingTwoHanded() {
