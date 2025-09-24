@@ -12,7 +12,9 @@
  * - All random rolls use the supplied rng() when provided for determinism.
  */
 (function () {
-  const round1 = (n) => Math.round(n * 10) / 10;
+  const round1 = (window.PlayerUtils && typeof PlayerUtils.round1 === "function")
+    ? PlayerUtils.round1
+    : (n) => Math.round(n * 10) / 10;
 
   /* MATERIALS: map numeric tier (1..3) to material name used by item name builders */
   const MATERIALS = {
