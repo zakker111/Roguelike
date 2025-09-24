@@ -59,6 +59,12 @@
       this.els.godApplySeedBtn = document.getElementById("god-apply-seed-btn");
       this.els.godRerollSeedBtn = document.getElementById("god-reroll-seed-btn");
       this.els.godSeedHelp = document.getElementById("god-seed-help");
+      // GOD effects
+      this.els.godBleedPlayerBtn = document.getElementById("god-bleed-player-btn");
+      this.els.godDazePlayerBtn = document.getElementById("god-daze-player-btn");
+      this.els.godBleedEnemyBtn = document.getElementById("god-bleed-enemy-btn");
+      this.els.godLimpEnemyBtn = document.getElementById("god-limp-enemy-btn");
+      this.els.godClearStatusBtn = document.getElementById("god-clear-status-btn");
 
       // transient hand-chooser element
       this.els.handChooser = document.createElement("div");
@@ -187,6 +193,24 @@
           if (typeof this.handlers.onGodRerollSeed === "function") this.handlers.onGodRerollSeed();
         });
       }
+
+      // GOD effects bindings
+      this.els.godBleedPlayerBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodApplyBleedPlayer === "function") this.handlers.onGodApplyBleedPlayer(2);
+      });
+      this.els.godDazePlayerBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodApplyDazedPlayer === "function") this.handlers.onGodApplyDazedPlayer(2);
+      });
+      this.els.godBleedEnemyBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodApplyBleedEnemy === "function") this.handlers.onGodApplyBleedEnemy(2);
+      });
+      this.els.godLimpEnemyBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodApplyLimpEnemy === "function") this.handlers.onGodApplyLimpEnemy(2);
+      });
+      this.els.godClearStatusBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onGodClearStatuses === "function") this.handlers.onGodClearStatuses();
+      });
+
       this.updateSeedUI();
 
       // Delegate equip slot clicks (unequip)
@@ -277,7 +301,7 @@
       return true;
     },
 
-    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSpawnStairs, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed } = {}) {
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSpawnStairs, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed, onGodApplyBleedPlayer, onGodApplyDazedPlayer, onGodApplyBleedEnemy, onGodApplyLimpEnemy, onGodClearStatuses } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
@@ -292,6 +316,11 @@
       if (typeof onGodSetCritPart === "function") this.handlers.onGodSetCritPart = onGodSetCritPart;
       if (typeof onGodApplySeed === "function") this.handlers.onGodApplySeed = onGodApplySeed;
       if (typeof onGodRerollSeed === "function") this.handlers.onGodRerollSeed = onGodRerollSeed;
+      if (typeof onGodApplyBleedPlayer === "function") this.handlers.onGodApplyBleedPlayer = onGodApplyBleedPlayer;
+      if (typeof onGodApplyDazedPlayer === "function") this.handlers.onGodApplyDazedPlayer = onGodApplyDazedPlayer;
+      if (typeof onGodApplyBleedEnemy === "function") this.handlers.onGodApplyBleedEnemy = onGodApplyBleedEnemy;
+      if (typeof onGodApplyLimpEnemy === "function") this.handlers.onGodApplyLimpEnemy = onGodApplyLimpEnemy;
+      if (typeof onGodClearStatuses === "function") this.handlers.onGodClearStatuses = onGodClearStatuses;
     },
 
     updateStats(player, floor, getAtk, getDef) {

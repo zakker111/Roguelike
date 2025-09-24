@@ -943,6 +943,19 @@
     }
   }
 
+  // Find the nearest enemy to the player (Manhattan distance), preferring adjacent.
+  function findNearestEnemy() {
+    if (!enemies || enemies.length === 0) return null;
+    let best = null;
+    let bestDist = Infinity;
+    for (const e of enemies) {
+      const d = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+      if (d < bestDist) { bestDist = d; best = e; }
+      if (d === 1) { bestDist = d; best = e; break; }
+    }
+    return best;
+  }
+
   
   function renderInventoryPanel() {
     // Keep totals in sync
@@ -1245,9 +1258,8 @@
 
   
   if (window.UI && typeof UI.init === "function") {
-    UI.init();
-    if (window.UIBridge && typeof UIBridge.setHandlers === "function") {
-      UIBridge.setHandlers({
+      UI.init();
+      const handlerPayload = {
         onEquip: (idx) => equipItemByIndex(idx),
         onEquipHand: (idx, hand) => equipItemByIndexHand(idx, hand),
         onUnequip: (slot) => unequipSlot(slot),
@@ -1262,30 +1274,48 @@
         onGodSetCritPart: (part) => setCritPart(part),
         onGodApplySeed: (seed) => applySeed(seed),
         onGodRerollSeed: () => rerollSeed(),
-      });
-    } else if (typeof UI.setHandlers === "function") {
-      UI.setHandlers({
-        onEquip: (idx) => equipItemByIndex(idx),
-        onEquipHand: (idx, hand) => equipItemByIndexHand(idx, hand),
-        onUnequip: (slot) => unequipSlot(slot),
-        onDrink: (idx) => drinkPotionByIndex(idx),
-        onRestart: () => restartGame(),
-        onGodHeal: () => godHeal(),
-        onGodSpawn: () => godSpawnItems(),
-        onGodSetFov: (v) => setFovRadius(v),
-        onGodSpawnEnemy: () => godSpawnEnemyNearby(),
-        onGodSpawnStairs: () => godSpawnStairsHere(),
-        onGodSetAlwaysCrit: (v) => setAlwaysCrit(v),
-        onGodSetCritPart: (part) => setCritPart(part),
-        onGodApplySeed: (seed) => applySeed(seed),
-        onGodRerollSeed: () => rerollSeed(),
-      });
-    }
-  }
-
-  // Hand decay helpers
-  function usingTwoHanded() {
-    const eq = player.equipment || {};
+        onGodApplyBleedPlayer: (dur=2) => {
+          try { if (window.Status && typeof Status.applyBleedToPlayer === "function") Status.applyBleedToPlayer(getCtx(), dur); } catch (_) {}
+          requestDraw();
+        },
+        onGodApplyDazedPlayer: (dur=2) => {
+          try { if (window.Status && typeof Status.applyDazedToPlayer === "function") Status.applyDazedToPlayer(getCtx(), dur); } catch (_) {}
+          requestDraw();
+        },
+        onGodApplyBleedEnemy: (dur=2) => {
+          const e = findNearestEnemy();
+          if (e && window.Status && typeof Status.applyBleedToEnemy === "function") {
+            try { Status.applyBleedToEnemy(getCtx(), e, dur); } catch (_) {}
+          } else {
+            log("No enemy found nearby to apply Bleed.", "warn");
+          }
+          requestDraw();
+        },
+        onGodApplyLimpEnemy: (dur=2) => {
+          const e = findNearestEnemy();
+          if (e && window.Status && typeof Status.applyLimpToEnemy === "function") {
+            try { Status.applyLimpToEnemy(getCtx(), e, dur); } catch (_) {}
+          } else {
+            log("No enemy found nearby to apply Limp.", "warn");
+          }
+          requestDraw();
+        },
+        onGodClearStatuses: () => {
+          // Clear player statuses
+          player.bleedTurns = 0;
+          player.dazedTurns = 0;
+          // Clear enemies statuses
+          enemies.forEach(e => { e.bleedTurns = 0; e.immobileTurns = 0; });
+          log("GOD: Cleared all statuses on player and enemies.", "notice");
+          requestDraw();
+        },
+      };
+      if (window.UIBridge && typeof UIBridge.setHandlers === "function") {
+        UIBridge.setHandlers(handlerPayload);
+      } else if (typeof UI.setHandlers === "function") {
+        UI.setHandlers(handlerPayload);
+      }
+    };
     return eq.left && eq.right && eq.left === eq.right && eq.left.twoHanded;
   }
 
