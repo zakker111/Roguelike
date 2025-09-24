@@ -199,13 +199,8 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
   }
 
   function pickTypeForSlot(slot, tier, rng) {
-    const defs = Object.values(TYPES).filter(d => d.slot === slot && (d.minTier || 1) <= tier);
-    if (defs.length === 0) return null;
-    const entries = defs.map(d => {
-      const w = typeof d.weight === "function" ? d.weight(tier) : (d.weight || 1);
-      return { value: d, w: Math.max(0, w) };
-    });
-    return pickWeighted(entries, rng);
+    // Delegate to pickType to keep a single weighting path
+    return pickType(slot, tier, rng);
   }
 
   // Create a random equipment piece for a specific slot at the given tier.
