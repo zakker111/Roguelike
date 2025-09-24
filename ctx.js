@@ -39,6 +39,8 @@
       if (window.Flavor) ctx.Flavor = window.Flavor;
       if (window.PlayerUtils) ctx.PlayerUtils = window.PlayerUtils;
       if (window.LOS) ctx.LOS = window.LOS;
+      if (window.CombatCore) ctx.CombatCore = window.CombatCore;
+      if (window.AIBehaviors) ctx.AIBehaviors = window.AIBehaviors;
     }
     return ctx;
   }

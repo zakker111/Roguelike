@@ -75,8 +75,10 @@
     const occ = new Set(enemies.map(en => occKey(en.x, en.y)));
     const isFree = (x, y) => ctx.isWalkable(x, y) && !occ.has(occKey(x, y)) && !(player.x === x && player.y === y);
 
-    // Per-turn cap on mime shouts to avoid spam when multiple are nearby
-    let _mimeArghLeft = 1;
+    // Per-type per-turn shout budgets (to prevent spam)
+    const Beh = (ctx.AIBehaviors || (typeof window !== "undefined" ? window.AIBehaviors : null));
+    const mimeCfg = (Beh && typeof Beh.get === "function") ? Beh.get("mime_ghost") : { perTurnShoutBudget: 1, shoutChance: 0.06, shoutCooldownMin: 6, shoutCooldownMax: 12, adjacentAttackChance: 0.35 };
+    const _shoutBudget = { mime_ghost: (mimeCfg.perTurnShoutBudget | 0) };
 
     for (const e of enemies) {
       const dx = player.x - e.x;
@@ -128,19 +130,20 @@
 
       // Special behavior: mime_ghost tends to flee, shouts "Argh!", and only sometimes attacks
       if (e.type === "mime_ghost") {
-        // Shout cooldown with stricter rate limiting to avoid spam
+        // Shout cooldown and rate limiting using AIBehaviors config
         if (typeof e._arghCd === "number" && e._arghCd > 0) e._arghCd -= 1;
-        // Lower base chance and require per-turn budget
-        if ((e._arghCd | 0) <= 0 && _mimeArghLeft > 0 && chance(0.06)) {
+        if ((e._arghCd | 0) <= 0 && (_shoutBudget.mime_ghost | 0) > 0 && chance(mimeCfg.shoutChance || 0.06)) {
           try { ctx.log("Argh!", "flavor"); } catch (_) {}
-          _mimeArghLeft -= 1;
-          // Randomize cooldown to 6–12 turns
-          e._arghCd = randInt(6, 12);
+          _shoutBudget.mime_ghost = Math.max(0, (_shoutBudget.mime_ghost | 0) - 1);
+          const minCd = mimeCfg.shoutCooldownMin || 6;
+          const maxCd = mimeCfg.shoutCooldownMax || 12;
+          e._arghCd = randInt(minCd, maxCd);
         }
 
-        // If adjacent: 35% chance to attack; otherwise try to step away
+        // If adjacent: attack only with configured probability; otherwise try to step away
         if (dist === 1) {
-          if (!chance(0.35)) {
+          const pAttack = (typeof mimeCfg.adjacentAttackChance === "number") ? mimeCfg.adjacentAttackChance : 1.0;
+          if (!chance(pAttack)) {
             let moved = false;
             for (const d of primaryAway) {
               const nx = e.x + d.x, ny = e.y + d.y;
@@ -198,25 +201,32 @@
           // otherwise let default wander logic later handle it
         }
       }
+              }
+            }
+            if (moved) continue; // handled movement; next enemy
+          }
+          // otherwise let default wander logic later handle it
+        }
+      }
 
       // attack if adjacent
       if (Math.abs(dx) + Math.abs(dy) === 1) {
+        if (window.CombatCore && typeof CombatCore.enemyAttackPlayer === "function") {
+          const res = CombatCore.enemyAttackPlayer(ctx, e);
+          if (res && res.killedPlayer) return;
+          continue;
+        }
+        // Fallback to inline attack if CombatCore is unavailable
         const loc = ctx.rollHitLocation();
-
-        // Player attempts to block with hand/position
         if (ctx.rng() < ctx.getPlayerBlockChance(loc)) {
           ctx.log(`You block the ${e.type || "enemy"}'s attack to your ${loc.part}.`, "block");
-          // Optional flavor for blocks
           if (ctx.Flavor && typeof ctx.Flavor.onBlock === "function") {
             ctx.Flavor.onBlock(ctx, { side: "player", attacker: e, defender: player, loc });
           }
-          // Blocking uses gear
           ctx.decayBlockingHands();
           ctx.decayEquipped("hands", randFloat(0.3, 1.0, 1));
           continue;
         }
-
-        // Compute damage with location and crit; then reduce by defense
         let raw = e.atk * (ctx.enemyDamageMultiplier ? ctx.enemyDamageMultiplier(e.level) : (1 + 0.15 * Math.max(0, (e.level || 1) - 1))) * (loc.mult || 1);
         let isCrit = false;
         const critChance = Math.max(0, Math.min(0.5, 0.10 + (loc.critBonus || 0)));
@@ -226,7 +236,6 @@
         }
         const dmg = ctx.enemyDamageAfterDefense(raw);
         player.hp -= dmg;
-        // Blood decal on the player's tile when damaged
         try {
           if (dmg > 0 && typeof ctx.addBloodDecal === "function") {
             ctx.addBloodDecal(player.x, player.y, isCrit ? 1.4 : 1.0);
@@ -234,20 +243,16 @@
         } catch (_) {}
         if (isCrit) ctx.log(`Critical! ${Cap(e.type)} hits your ${loc.part} for ${dmg}.`, "crit");
         else ctx.log(`${Cap(e.type)} hits your ${loc.part} for ${dmg}.`);
-        // Apply status effects
         if (isCrit && loc.part === "head" && typeof window !== "undefined" && window.Status && typeof Status.applyDazedToPlayer === "function") {
-          const dur = (ctx.rng ? (1 + Math.floor(ctx.rng() * 2)) : 1); // 1-2 turns
+          const dur = (ctx.rng ? (1 + Math.floor(ctx.rng() * 2)) : 1);
           try { Status.applyDazedToPlayer(ctx, dur); } catch (_) {}
         }
-        // Bleed on critical hits to the player (short duration)
         if (isCrit && typeof window !== "undefined" && window.Status && typeof Status.applyBleedToPlayer === "function") {
           try { Status.applyBleedToPlayer(ctx, 2); } catch (_) {}
         }
         if (ctx.Flavor && typeof ctx.Flavor.logHit === "function") {
           ctx.Flavor.logHit(ctx, { attacker: e, loc, crit: isCrit, dmg });
         }
-
-        // Item decay on being hit (only struck location)
         const critWear = isCrit ? 1.6 : 1.0;
         let wear = 0.5;
         if (loc.part === "torso") wear = randFloat(0.8, 2.0, 1);

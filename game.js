@@ -698,71 +698,61 @@
     
     const enemy = enemies.find(e => e.x === nx && e.y === ny);
     if (enemy) {
-      let loc = rollHitLocation();
-      if (alwaysCrit && forcedCritPart) {
-        // Normalize to known location profile
-        const profiles = {
-          torso: { part: "torso", mult: 1.0, blockMod: 1.0, critBonus: 0.00 },
-          head:  { part: "head",  mult: 1.1, blockMod: 0.85, critBonus: 0.15 },
-          hands: { part: "hands", mult: 0.9, blockMod: 0.75, critBonus: -0.05 },
-          legs:  { part: "legs",  mult: 0.95, blockMod: 0.75, critBonus: -0.03 },
-        };
-        if (profiles[forcedCritPart]) loc = profiles[forcedCritPart];
-      }
-
-      
-      if (rng() < getEnemyBlockChance(enemy, loc)) {
-        log(`${capitalize(enemy.type || "enemy")} blocks your attack to the ${loc.part}.`, "block");
-        
-        decayAttackHands(true);
-        decayEquipped("hands", randFloat(0.2, 0.7, 1));
-        turn();
-        return;
-      }
-
-      
-      let dmg = getPlayerAttack() * loc.mult;
-      let isCrit = false;
-      const critChance = Math.max(0, Math.min(0.6, 0.12 + loc.critBonus));
-      if (alwaysCrit || rng() < critChance) {
-        isCrit = true;
-        dmg *= critMultiplier();
-      }
-      dmg = Math.max(0, round1(dmg));
-      enemy.hp -= dmg;
-
-      // Add a blood decal on the enemy tile when damage is dealt
-      if (dmg > 0) {
-        addBloodDecal(enemy.x, enemy.y, isCrit ? 1.6 : 1.0);
-      }
-
-      if (isCrit) {
-        log(`Critical! You hit the ${enemy.type || "enemy"}'s ${loc.part} for ${dmg}.`, "crit");
-      } else {
-        log(`You hit the ${enemy.type || "enemy"}'s ${loc.part} for ${dmg}.`);
-      }
-      { const ctx = getCtx(); if (ctx.Flavor && typeof ctx.Flavor.logPlayerHit === "function") ctx.Flavor.logPlayerHit(ctx, { target: enemy, loc, crit: isCrit, dmg }); }
-      // Leg crippling: apply Limp on leg crits to slow enemy movement
-      if (isCrit && loc.part === "legs" && enemy.hp > 0) {
-        if (window.Status && typeof Status.applyLimpToEnemy === "function") {
-          Status.applyLimpToEnemy(getCtx(), enemy, 2);
-        } else {
-          enemy.immobileTurns = Math.max(enemy.immobileTurns || 0, 2);
-          log(`${capitalize(enemy.type || "enemy")} staggers; its legs are crippled and it can't move for 2 turns.`, "notice");
+      const ctx = getCtx();
+      const res = (window.CombatCore && typeof CombatCore.playerAttackEnemy === "function")
+        ? CombatCore.playerAttackEnemy(ctx, enemy, { forcedCritPart: (alwaysCrit && forcedCritPart) ? forcedCritPart : "" })
+        : null;
+      // Fallback to previous inline logic if CombatCore is unavailable
+      if (!res) {
+        let loc = rollHitLocation();
+        if (alwaysCrit && forcedCritPart) {
+          const profiles = {
+            torso: { part: "torso", mult: 1.0, blockMod: 1.0, critBonus: 0.00 },
+            head:  { part: "head",  mult: 1.1, blockMod: 0.85, critBonus: 0.15 },
+            hands: { part: "hands", mult: 0.9, blockMod: 0.75, critBonus: -0.05 },
+            legs:  { part: "legs",  mult: 0.95, blockMod: 0.75, critBonus: -0.03 },
+          };
+          if (profiles[forcedCritPart]) loc = profiles[forcedCritPart];
         }
+        if (rng() < getEnemyBlockChance(enemy, loc)) {
+          log(`${capitalize(enemy.type || "enemy")} blocks your attack to the ${loc.part}.`, "block");
+          decayAttackHands(true);
+          decayEquipped("hands", randFloat(0.2, 0.7, 1));
+          turn();
+          return;
+        }
+        let dmg = getPlayerAttack() * loc.mult;
+        let isCrit = false;
+        const critChance = Math.max(0, Math.min(0.6, 0.12 + loc.critBonus));
+        if (alwaysCrit || rng() < critChance) {
+          isCrit = true;
+          dmg *= critMultiplier();
+        }
+        dmg = Math.max(0, round1(dmg));
+        enemy.hp -= dmg;
+        if (dmg > 0) {
+          addBloodDecal(enemy.x, enemy.y, isCrit ? 1.6 : 1.0);
+        }
+        if (isCrit) log(`Critical! You hit the ${enemy.type || "enemy"}'s ${loc.part} for ${dmg}.`, "crit");
+        else log(`You hit the ${enemy.type || "enemy"}'s ${loc.part} for ${dmg}.`);
+        { const ctx2 = getCtx(); if (ctx2.Flavor && typeof ctx2.Flavor.logPlayerHit === "function") ctx2.Flavor.logPlayerHit(ctx2, { target: enemy, loc, crit: isCrit, dmg }); }
+        if (isCrit && loc.part === "legs" && enemy.hp > 0) {
+          if (window.Status && typeof Status.applyLimpToEnemy === "function") {
+            Status.applyLimpToEnemy(getCtx(), enemy, 2);
+          } else {
+            enemy.immobileTurns = Math.max(enemy.immobileTurns || 0, 2);
+            log(`${capitalize(enemy.type || "enemy")} staggers; its legs are crippled and it can't move for 2 turns.`, "notice");
+          }
+        }
+        if (isCrit && enemy.hp > 0 && window.Status && typeof Status.applyBleedToEnemy === "function") {
+          Status.applyBleedToEnemy(getCtx(), enemy, 2);
+        }
+        if (enemy.hp <= 0) {
+          killEnemy(enemy);
+        }
+        decayAttackHands();
+        decayEquipped("hands", randFloat(0.3, 1.0, 1));
       }
-      // Bleed on critical hits (short duration)
-      if (isCrit && enemy.hp > 0 && window.Status && typeof Status.applyBleedToEnemy === "function") {
-        Status.applyBleedToEnemy(getCtx(), enemy, 2);
-      }
-
-      if (enemy.hp <= 0) {
-        killEnemy(enemy);
-      }
-
-      
-      decayAttackHands();
-      decayEquipped("hands", randFloat(0.3, 1.0, 1));
       turn();
       return;
     }
@@ -1239,16 +1229,18 @@
   }
 
   function decayAttackHands(light = false) {
+    const ctx = getCtx();
+    if (window.CombatCore && typeof CombatCore.decayAttackHands === "function") {
+      CombatCore.decayAttackHands(ctx, light);
+      return;
+    }
     const eq = player.equipment || {};
     const amtMain = light ? randFloat(0.6, 1.6, 1) : randFloat(1.0, 2.2, 1);
     if (usingTwoHanded()) {
-      // Two-handed: same item is referenced in both hands; applying to both intentionally doubles wear.
-      // If we ever want to apply once per swing, change to a single decayEquipped on one hand.
       if (eq.left) decayEquipped("left", amtMain);
       if (eq.right) decayEquipped("right", amtMain);
       return;
     }
-    // prefer decaying a hand with attack stat
     const leftAtk = (eq.left && typeof eq.left.atk === "number") ? eq.left.atk : 0;
     const rightAtk = (eq.right && typeof eq.right.atk === "number") ? eq.right.atk : 0;
     if (leftAtk >= rightAtk && leftAtk > 0) {
