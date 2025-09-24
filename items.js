@@ -28,31 +28,42 @@
     sword: { key: "sword", slot: "hand", twoHanded: false,
       weight: 0.35,
       name: (mat) => `${mat} sword`,
-      atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] } },
+      atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] },
+      damageType: "slash" },
 
     axe: { key: "axe", slot: "hand", twoHanded: false,
       weight: 0.25,
       name: (mat) => `${mat} axe`,
       atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] },
-      atkBonus: { 1: [0.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] } },
+      atkBonus: { 1: [0.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] },
+      damageType: "slash" },
 
 switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
       weight: 0.12,
       name: (mat) => `${mat} switch blade`,
       atkRange: { 1: [0.6, 1.4], 2: [1.3, 2.6], 3: [2.0, 3.2] },
-      atkBonus: { 1: [0.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] } },
+      atkBonus: { 1: [0.0, 0.3], 2: [0.1, 0.5], 3: [0.2, 0.6] },
+      damageType: "pierce" },
 
       
     gasoline_thrower: { key: "gasoline_thrower", slot: "hand", twoHanded: false,
       weight: 0.21,
       name: (mat) => `${mat} gasoline thrower`,
       atkRange: { 1: [0.5, 2.4], 2: [1.2, 3.4], 3: [2.2, 4.0] },
-      atkBonus: { 1: [0.1, 0.4], 2: [0.2, 0.6], 3: [0.2, 0.6] } },
+      atkBonus: { 1: [0.1, 0.4], 2: [0.2, 0.6], 3: [0.2, 0.6] },
+      damageType: "fire" },
 
     bow: { key: "bow", slot: "hand", twoHanded: false,
       weight: 0.20,
       name: (mat) => `${mat} bow`,
-      atkRange: { 1: [0.6, 2.2], 2: [1.0, 3.0], 3: [2.0, 3.6] } },
+      atkRange: { 1: [0.6, 2.2], 2: [1.0, 3.0], 3: [2.0, 3.6] },
+      damageType: "pierce" },
+
+    mace: { key: "mace", slot: "hand", twoHanded: false,
+      weight: 0.18,
+      name: (mat) => `${mat} mace`,
+      atkRange: { 1: [0.6, 2.2], 2: [1.0, 3.0], 3: [2.0, 3.6] },
+      damageType: "blunt" },
 
     shield: { key: "shield", slot: "hand", twoHanded: false,
       weight: 0.15,
@@ -63,7 +74,8 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
       weight: 0.05,
       minTier: 2,
       name: (mat) => `${mat} two-handed axe`,
-      atkRange: { 2: [2.6, 3.6], 3: [3.2, 4.0] } },
+      atkRange: { 2: [2.6, 3.6], 3: [3.2, 4.0] },
+      damageType: "slash" },
 
     helmet: { key: "helmet", slot: "head",
       weight: 1.0,
@@ -100,6 +112,7 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
         2: [1.4, 3.2],
         3: [2.2, 4.0]
       },
+      damageType: "pierce",
     },
   };
 
@@ -196,6 +209,9 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
     }
     if (def.twoHanded) {
       item.twoHanded = true;
+    }
+    if (def.damageType) {
+      item.damageType = def.damageType;
     }
     return item;
   }

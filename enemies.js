@@ -28,6 +28,7 @@
       xp(depth) { return 5 + Math.floor(depth / 2); },
       potionWeights: { lesser: 0.60, average: 0.30, strong: 0.10 },
       equipChance: 0.35,
+      resists: { blunt: 0.0, slash: 0.0, pierce: 0.0, fire: 0.0 },
     },
 
     mime_ghost: {
@@ -43,6 +44,7 @@
       xp(depth) { return 5 + Math.floor(depth / 2); },
       potionWeights: { lesser: 0.60, average: 0.30, strong: 0.10 },
       equipChance: 0.65,
+      resists: { blunt: -0.2, slash: 0.2, pierce: 0.2, fire: 0.0 },
     },
 
     hell_houndin: {
@@ -57,6 +59,7 @@
       xp(depth) { return 14 + Math.floor(depth); },
       potionWeights: { lesser: 0.45, average: 0.35, strong: 0.20 },
       equipChance: 0.60,
+      resists: { blunt: 0.0, slash: 0.0, pierce: 0.0, fire: 0.4 },
     },
 
     troll: {
@@ -71,6 +74,7 @@
       xp(depth) { return 12 + depth; },
       potionWeights: { lesser: 0.50, average: 0.35, strong: 0.15 },
       equipChance: 0.55,
+      resists: { blunt: 0.1, slash: 0.0, pierce: 0.0, fire: 0.0 },
     },
     ogre: {
       key: "ogre",
@@ -84,6 +88,7 @@
       xp(depth) { return 20 + 2 * depth; },
       potionWeights: { lesser: 0.40, average: 0.35, strong: 0.25 },
       equipChance: 0.75,
+      resists: { blunt: 0.0, slash: 0.1, pierce: -0.1, fire: 0.0 },
     },
 
     // Example enemy template (reference; weight() returns 0 so it won't spawn)
@@ -99,6 +104,7 @@
       xp(depth) { return 10 + depth; },
       potionWeights: { lesser: 0.55, average: 0.35, strong: 0.10 },
       equipChance: 0.50,
+      resists: { blunt: 0.0, slash: 0.0, pierce: 0.0, fire: 0.0 },
     },
   };
 
