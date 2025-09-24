@@ -204,7 +204,9 @@
   }
 
   function rerenderInventoryIfOpen() {
-    if (window.UI && UI.isInventoryOpen && UI.isInventoryOpen()) {
+    if (window.UIBridge && typeof UIBridge.isInventoryOpen === "function" && UIBridge.isInventoryOpen()) {
+      renderInventoryPanel();
+    } else if (window.UI && UI.isInventoryOpen && UI.isInventoryOpen()) {
       renderInventoryPanel();
     }
   }
@@ -639,20 +641,28 @@
       Input.init({
         // state queries
         isDead: () => isDead,
-        isInventoryOpen: () => !!(window.UI && UI.isInventoryOpen && UI.isInventoryOpen()),
-        isLootOpen: () => !!(window.UI && UI.isLootOpen && UI.isLootOpen()),
-        isGodOpen: () => !!(window.UI && UI.isGodOpen && UI.isGodOpen()),
+        isInventoryOpen: () => {
+          if (window.UIBridge && typeof UIBridge.isInventoryOpen === "function") return UIBridge.isInventoryOpen();
+          return !!(window.UI && UI.isInventoryOpen && UI.isInventoryOpen());
+        },
+        isLootOpen: () => {
+          if (window.UIBridge && typeof UIBridge.isLootOpen === "function") return UIBridge.isLootOpen();
+          return !!(window.UI && UI.isLootOpen && UI.isLootOpen());
+        },
+        isGodOpen: () => {
+          if (window.UIBridge && typeof UIBridge.isGodOpen === "function") return UIBridge.isGodOpen();
+          return !!(window.UI && UI.isGodOpen && UI.isGodOpen());
+        },
         // actions
         onRestart: () => restartGame(),
         onShowInventory: () => showInventoryPanel(),
         onHideInventory: () => hideInventoryPanel(),
         onHideLoot: () => hideLootPanel(),
-        onHideGod: () => { if (window.UI && UI.hideGod) UI.hideGod(); requestDraw(); },
+        onHideGod: () => { if (window.UIBridge && typeof UIBridge.hideGod === "function") UIBridge.hideGod(); else if (window.UI && UI.hideGod) UI.hideGod(); requestDraw(); },
         onShowGod: () => {
-          if (window.UI) {
-            if (typeof UI.setGodFov === "function") UI.setGodFov(fovRadius);
-            if (typeof UI.showGod === "function") UI.showGod();
-          }
+          if (window.UIBridge && typeof UIBridge.setGodFov === "function") UIBridge.setGodFov(fovRadius);
+          if (window.UIBridge && typeof UIBridge.showGod === "function") UIBridge.showGod();
+          else if (window.UI && typeof UI.showGod === "function") UI.showGod();
           requestDraw();
         },
         onMove: (dx, dy) => tryMovePlayer(dx, dy),
@@ -783,6 +793,11 @@
   }
 
   function showLootPanel(list) {
+    if (window.UIBridge && typeof UIBridge.showLoot === "function") {
+      UIBridge.showLoot(list);
+      requestDraw();
+      return;
+    }
     if (window.UI && typeof UI.showLoot === "function") {
       UI.showLoot(list);
       requestDraw();
@@ -790,6 +805,11 @@
   }
 
   function hideLootPanel() {
+    if (window.UIBridge && typeof UIBridge.hideLoot === "function") {
+      UIBridge.hideLoot();
+      requestDraw();
+      return;
+    }
     if (window.UI && typeof UI.hideLoot === "function") {
       UI.hideLoot();
       requestDraw();
@@ -925,16 +945,22 @@
 
   
   function renderInventoryPanel() {
+    // Keep totals in sync
+    updateUI();
+    if (window.UIBridge && typeof UIBridge.renderInventory === "function") {
+      UIBridge.renderInventory(player, describeItem);
+      return;
+    }
     if (window.UI && typeof UI.renderInventory === "function") {
-      // Keep totals in sync
-      updateUI();
       UI.renderInventory(player, describeItem);
     }
   }
 
   function showInventoryPanel() {
     renderInventoryPanel();
-    if (window.UI && typeof UI.showInventory === "function") {
+    if (window.UIBridge && typeof UIBridge.showInventory === "function") {
+      UIBridge.showInventory();
+    } else if (window.UI && typeof UI.showInventory === "function") {
       UI.showInventory();
     } else if (invPanel) {
       invPanel.hidden = false;
@@ -943,6 +969,11 @@
   }
 
   function hideInventoryPanel() {
+    if (window.UIBridge && typeof UIBridge.hideInventory === "function") {
+      UIBridge.hideInventory();
+      requestDraw();
+      return;
+    }
     if (window.UI && typeof UI.hideInventory === "function") {
       UI.hideInventory();
       requestDraw();
@@ -1030,6 +1061,11 @@
   
 
   function showGameOver() {
+    if (window.UIBridge && typeof UIBridge.showGameOver === "function") {
+      UIBridge.showGameOver(player, floor);
+      requestDraw();
+      return;
+    }
     if (window.UI && typeof UI.showGameOver === "function") {
       UI.showGameOver(player, floor);
       requestDraw();
@@ -1093,6 +1129,10 @@
   }
 
   function hideGameOver() {
+    if (window.UIBridge && typeof UIBridge.hideGameOver === "function") {
+      UIBridge.hideGameOver();
+      return;
+    }
     if (window.UI && typeof UI.hideGameOver === "function") {
       UI.hideGameOver();
       return;
@@ -1140,6 +1180,10 @@
 
   
   function updateUI() {
+    if (window.UIBridge && typeof UIBridge.updateStats === "function") {
+      UIBridge.updateStats(player, floor, getPlayerAttack, getPlayerDefense);
+      return;
+    }
     if (window.UI && typeof UI.updateStats === "function") {
       UI.updateStats(player, floor, getPlayerAttack, getPlayerDefense);
       return;
@@ -1202,7 +1246,24 @@
   
   if (window.UI && typeof UI.init === "function") {
     UI.init();
-    if (typeof UI.setHandlers === "function") {
+    if (window.UIBridge && typeof UIBridge.setHandlers === "function") {
+      UIBridge.setHandlers({
+        onEquip: (idx) => equipItemByIndex(idx),
+        onEquipHand: (idx, hand) => equipItemByIndexHand(idx, hand),
+        onUnequip: (slot) => unequipSlot(slot),
+        onDrink: (idx) => drinkPotionByIndex(idx),
+        onRestart: () => restartGame(),
+        onGodHeal: () => godHeal(),
+        onGodSpawn: () => godSpawnItems(),
+        onGodSetFov: (v) => setFovRadius(v),
+        onGodSpawnEnemy: () => godSpawnEnemyNearby(),
+        onGodSpawnStairs: () => godSpawnStairsHere(),
+        onGodSetAlwaysCrit: (v) => setAlwaysCrit(v),
+        onGodSetCritPart: (part) => setCritPart(part),
+        onGodApplySeed: (seed) => applySeed(seed),
+        onGodRerollSeed: () => rerollSeed(),
+      });
+    } else if (typeof UI.setHandlers === "function") {
       UI.setHandlers({
         onEquip: (idx) => equipItemByIndex(idx),
         onEquipHand: (idx, hand) => equipItemByIndexHand(idx, hand),
