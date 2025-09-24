@@ -200,15 +200,6 @@
           }
           // otherwise let default wander logic later handle it
         }
-      }
-              }
-            }
-            if (moved) continue; // handled movement; next enemy
-          }
-          // otherwise let default wander logic later handle it
-        }
-      }
-
       // attack if adjacent
       if (Math.abs(dx) + Math.abs(dy) === 1) {
         if (window.CombatCore && typeof CombatCore.enemyAttackPlayer === "function") {
