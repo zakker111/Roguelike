@@ -748,7 +748,7 @@
     updateCamera();
     recomputeFOV();
     updateUI();
-    log("You arrive in the overworld. Towns (T), Dungeons (D).", "notice");
+    log("You arrive in the overworld. Towns (T) and Dungeons (D): press Enter on T to enter a town, or on D to enter a dungeon.", "notice");
     requestDraw();
   }
 
@@ -893,7 +893,7 @@
       mode = "town";
       // Start town with the player at notional gate; we'll keep same coords but swap map
       generateTown();
-      log("You enter the town.", "notice");
+      log("You enter the town. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.", "notice");
       updateCamera();
       requestDraw();
       return true;
@@ -918,22 +918,39 @@
     return false;
   }
 
+  function leaveTownNow() {
+    mode = "world";
+    map = world.map;
+    npcs = [];
+    shops = [];
+    if (worldReturnPos) {
+      player.x = worldReturnPos.x;
+      player.y = worldReturnPos.y;
+    }
+    recomputeFOV();
+    updateCamera();
+    updateUI();
+    log("You return to the overworld.", "notice");
+    requestDraw();
+  }
+
+  function requestLeaveTown() {
+    if (window.UI && typeof UI.showConfirm === "function") {
+      // Position near center
+      const x = window.innerWidth / 2 - 140;
+      const y = window.innerHeight / 2 - 60;
+      UI.showConfirm("Leave town and return to the overworld?", { x, y }, () => leaveTownNow(), () => {});
+    } else {
+      if (window.confirm && window.confirm("Leave town and return to the overworld?")) {
+        leaveTownNow();
+      }
+    }
+  }
+
   function returnToWorldFromTown() {
     if (mode !== "town" || !world) return false;
     if (townExitAt && player.x === townExitAt.x && player.y === townExitAt.y) {
-      mode = "world";
-      map = world.map;
-      npcs = [];
-      shops = [];
-      if (worldReturnPos) {
-        player.x = worldReturnPos.x;
-        player.y = worldReturnPos.y;
-      }
-      recomputeFOV();
-      updateCamera();
-      updateUI();
-      log("You return to the overworld.", "notice");
-      requestDraw();
+      requestLeaveTown();
       return true;
     }
     log("Return to the town gate to exit to the overworld.", "info");

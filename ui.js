@@ -102,6 +102,26 @@
       `;
       document.body.appendChild(this.els.hitChooser);
 
+      // Transient confirm dialog
+      this.els.confirm = document.createElement("div");
+      this.els.confirm.style.position = "fixed";
+      this.els.confirm.style.display = "none";
+      this.els.confirm.style.zIndex = "50001";
+      this.els.confirm.style.background = "rgba(20,24,33,0.98)";
+      this.els.confirm.style.border = "1px solid rgba(80,90,120,0.6)";
+      this.els.confirm.style.borderRadius = "8px";
+      this.els.confirm.style.padding = "12px";
+      this.els.confirm.style.boxShadow = "0 10px 30px rgba(0,0,0,0.5)";
+      this.els.confirm.style.minWidth = "280px";
+      this.els.confirm.innerHTML = `
+        <div id="ui-confirm-text" style="color:#e5e7eb; font-size:14px; margin-bottom:10px;">Are you sure?</div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+          <button data-act="cancel" style="padding:6px 10px; background:#111827; color:#9ca3af; border:1px solid #374151; border-radius:4px; cursor:pointer;">Cancel</button>
+          <button data-act="ok" style="padding:6px 12px; background:#1f2937; color:#e5e7eb; border:1px solid #334155; border-radius:4px; cursor:pointer;">OK</button>
+        </div>
+      `;
+      document.body.appendChild(this.els.confirm);
+
       // Bind static events
       this.els.lootPanel?.addEventListener("click", () => this.hideLoot());
       this.els.restartBtn?.addEventListener("click", () => {
@@ -264,6 +284,19 @@
         if (typeof cb === "function") cb(part);
       });
 
+      // Confirm dialog click
+      this.els.confirm.addEventListener("click", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        const okCb = this._confirmOkCb;
+        const cancelCb = this._confirmCancelCb;
+        this.hideConfirm();
+        if (act === "ok" && typeof okCb === "function") okCb();
+        else if (act === "cancel" && typeof cancelCb === "function") cancelCb();
+      });
+
       // Hide choosers on any outside click (not in capture phase)
       document.addEventListener("click", (e) => {
         if (this.els.handChooser && this.els.handChooser.style.display !== "none" && !this.els.handChooser.contains(e.target)) {
@@ -272,9 +305,47 @@
         if (this.els.hitChooser && this.els.hitChooser.style.display !== "none" && !this.els.hitChooser.contains(e.target)) {
           this.hideHitChooser();
         }
+        if (this.els.confirm && this.els.confirm.style.display !== "none" && !this.els.confirm.contains(e.target)) {
+          // Treat outside click as cancel
+          const cancelCb = this._confirmCancelCb;
+          this.hideConfirm();
+          if (typeof cancelCb === "function") cancelCb();
+        }
       });
 
       return true;
+    },
+
+    showConfirm(text, { x, y } = {}, onOk, onCancel) {
+      if (!this.els.confirm) {
+        // fallback
+        const ans = window.confirm(text || "Are you sure?");
+        if (ans && typeof onOk === "function") onOk();
+        else if (!ans && typeof onCancel === "function") onCancel();
+        return;
+      }
+      const box = this.els.confirm;
+      const p = document.getElementById("ui-confirm-text");
+      if (p) p.textContent = text || "Are you sure?";
+      this._confirmOkCb = onOk;
+      this._confirmCancelCb = onCancel;
+      // Default position: center
+      let left = Math.round((window.innerWidth - box.offsetWidth) / 2);
+      let top = Math.round((window.innerHeight - box.offsetHeight) / 2);
+      if (typeof x === "number" && typeof y === "number") {
+        left = Math.max(10, Math.min(window.innerWidth - 300, Math.round(x)));
+        top = Math.max(10, Math.min(window.innerHeight - 120, Math.round(y)));
+      }
+      box.style.left = `${left}px`;
+      box.style.top = `${top}px`;
+      box.style.display = "block";
+    },
+
+    hideConfirm() {
+      if (!this.els.confirm) return;
+      this.els.confirm.style.display = "none";
+      this._confirmOkCb = null;
+      this._confirmCancelCb = null;
     },
 
     setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSpawnStairs, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed } = {}) {
