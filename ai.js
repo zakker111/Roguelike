@@ -35,29 +35,21 @@
   }
 
   function tileTransparent(ctx, x, y) {
+    // Delegate to shared LOS module to keep behavior consistent across the codebase.
     if (ctx.los && typeof ctx.los.tileTransparent === "function") {
       return ctx.los.tileTransparent(ctx, x, y);
     }
+    // As a safety net, use a minimal transparency check; Ctx.ensureLOS should provide ctx.los.
     if (!ctx.inBounds || !ctx.inBounds(x, y)) return false;
     return ctx.map[y][x] !== ctx.TILES.WALL;
   }
 
   function hasLOS(ctx, x0, y0, x1, y1) {
-    // Prefer shared LOS if available
+    // Always prefer the shared LOS implementation. Ctx.ensureLOS guarantees availability.
     if (ctx.los && typeof ctx.los.hasLOS === "function") {
       return ctx.los.hasLOS(ctx, x0, y0, x1, y1);
     }
-    // Fallback Bresenham
-    let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-    let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-    let err = dx + dy, e2;
-    while (!(x0 === x1 && y0 === y1)) {
-      e2 = 2 * err;
-      if (e2 >= dy) { err += dy; x0 += sx; }
-      if (e2 <= dx) { err += dx; y0 += sy; }
-      if (x0 === x1 && y0 === y1) break;
-      if (!tileTransparent(ctx, x0, y0)) return false;
-    }
+    // Safety fallback: assume LOS if we lack the module (should not happen).
     return true;
   }
 
