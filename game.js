@@ -24,6 +24,14 @@
   const FOV_DEFAULT = 8;
   let fovRadius = FOV_DEFAULT;
 
+  // Game modes: "world" (overworld) or "dungeon" (roguelike floor)
+  let mode = "world";
+  let world = null;          // { map, width, height, towns, dungeons }
+  let npcs = [];             // simple NPCs on the world map: { x, y, name, lines:[] }
+  let cameFromWorld = false; // true if current dungeon was entered from world
+  let worldReturnPos = null; // { x, y } to return to when exiting dungeon
+  let dungeonExitAt = null;  // { x, y } tile in dungeon floor 1 acting as exit back to world
+
   
   const camera = {
     x: 0,
