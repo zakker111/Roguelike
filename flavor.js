@@ -4,6 +4,7 @@
  * Exports (window.Flavor):
  * - logHit(ctx, { attacker, loc, crit })
  * - logPlayerHit(ctx, { target, loc, crit, dmg })
+ * - onBlock(ctx, { side, attacker, defender, loc })  // optional hook used by AI; safe no-op if omitted
  * - announceFloorEnemyCount(ctx)
  *
  * Behavior:
@@ -124,6 +125,35 @@
   }
 
   /**
+   * Optional hook: flavor line on blocks (player or enemy).
+   * ctx: { rng():fn, log(msg,type?):fn }
+   * opts: { side:"player"|"enemy", attacker?, defender?, loc?:{part} }
+   */
+  function onBlock(ctx, opts) {
+    if (!ctx || typeof ctx.log !== "function" || typeof ctx.rng !== "function") return;
+    const side = (opts && opts.side) || "player";
+    const loc = (opts && opts.loc) || {};
+    const part = loc.part || "attack";
+
+    // keep rare to avoid spam
+    if (ctx.rng() < 0.3) {
+      if (side === "player") {
+        const variants = [
+          `You deflect the ${part}.`,
+          `You turn aside the blow to your ${part}.`,
+        ];
+        ctx.log(pick(variants, ctx.rng), "block");
+      } else {
+        const variants = [
+          `It deflects your strike to the ${part}.`,
+          `Your blow glances off its ${part}.`,
+        ];
+        ctx.log(pick(variants, ctx.rng), "block");
+      }
+    }
+  }
+
+  /**
    * Announce total enemies present on the floor (once per floor start).
    * Always logs a concise summary using ctx.enemies.length.
    * ctx: { enemies:Array, log:fn }
@@ -140,5 +170,5 @@
     }
   }
 
-  window.Flavor = { logHit, logPlayerHit, announceFloorEnemyCount };
+  window.Flavor = { logHit, logPlayerHit, onBlock, announceFloorEnemyCount };
 })();

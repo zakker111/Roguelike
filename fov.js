@@ -34,6 +34,10 @@
       : (s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
     function isTransparent(x, y) {
+      // Prefer shared LOS transparency if available for consistency across modules
+      if (ctx.los && typeof ctx.los.tileTransparent === "function") {
+        return ctx.los.tileTransparent(ctx, x, y);
+      }
       if (!ctx.inBounds(x, y)) return false;
       return map[y][x] !== TILES.WALL;
     }
