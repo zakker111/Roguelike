@@ -98,6 +98,10 @@
       player, enemies, corpses, decals, map, seen, visible,
       floor, depth: floor,
       fovRadius,
+      // world/overworld
+      mode,
+      world,
+      npcs,
       requestDraw,
       log,
       isWalkable, inBounds,
@@ -156,7 +160,8 @@
               UI: !!ctx.UI, Logger: !!ctx.Logger, Loot: !!ctx.Loot,
               Dungeon: !!ctx.Dungeon, DungeonItems: !!ctx.DungeonItems,
               FOV: !!ctx.FOV, AI: !!ctx.AI, Input: !!ctx.Input,
-              Render: !!ctx.Render, Tileset: !!ctx.Tileset, Flavor: !!ctx.Flavor
+              Render: !!ctx.Render, Tileset: !!ctx.Tileset, Flavor: !!ctx.Flavor,
+              World: !!ctx.World
             }
           });
         } catch (_) {}
@@ -583,6 +588,23 @@
   }
 
   function recomputeFOV() {
+    if (mode === "world") {
+      // In overworld, reveal entire map (no fog-of-war)
+      const rows = map.length;
+      const cols = map[0] ? map[0].length : 0;
+      const shapeOk = Array.isArray(visible) && visible.length === rows && (rows === 0 || (visible[0] && visible[0].length === cols));
+      if (!shapeOk) {
+        visible = Array.from({ length: rows }, () => Array(cols).fill(true));
+        seen = Array.from({ length: rows }, () => Array(cols).fill(true));
+      } else {
+        for (let y = 0; y < rows; y++) {
+          visible[y].fill(true);
+          if (!seen[y]) seen[y] = Array(cols).fill(true);
+          else seen[y].fill(true);
+        }
+      }
+      return;
+    }
     ensureVisibilityShape();
     if (window.FOV && typeof FOV.recomputeFOV === "function") {
       const ctx = getCtx();
@@ -593,7 +615,6 @@
       seen = ctx.seen;
       return;
     }
-    // Fallback: reveal player tile at least
     if (inBounds(player.x, player.y)) {
       visible[player.y][player.x] = true;
       seen[player.y][player.x] = true;
@@ -703,6 +724,32 @@
 
   function tryMovePlayer(dx, dy) {
     if (isDead) return;
+
+    // WORLD MODE: move over overworld tiles, avoid walking onto NPCs
+    if (mode === "world") {
+      const nx = player.x + dx;
+      const ny = player.y + dy;
+      const wmap = world && world.map ? world.map : null;
+      if (!wmap) return;
+      const rows = wmap.length, cols = rows ? (wmap[0] ? wmap[0].length : 0) : 0;
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) return;
+
+      // Block if NPC occupies the target
+      const npcThere = npcs && npcs.some(n => n.x === nx && n.y === ny);
+      if (npcThere) {
+        log("Excuse me!", "info");
+        return;
+      }
+      // Check tile walkability via World
+      if (window.World && typeof World.isWalkable === "function" && World.isWalkable(wmap[ny][nx])) {
+        player.x = nx; player.y = ny;
+        updateCamera();
+        turn();
+      }
+      return;
+    }
+
+    // DUNGEON MODE:
     // Dazed: skip action if dazedTurns > 0
     if (player.dazedTurns && player.dazedTurns > 0) {
       player.dazedTurns -= 1;
@@ -714,12 +761,10 @@
     const ny = player.y + dy;
     if (!inBounds(nx, ny)) return;
 
-    
     const enemy = enemies.find(e => e.x === nx && e.y === ny);
     if (enemy) {
       let loc = rollHitLocation();
       if (alwaysCrit && forcedCritPart) {
-        // Normalize to known location profile
         const profiles = {
           torso: { part: "torso", mult: 1.0, blockMod: 1.0, critBonus: 0.00 },
           head:  { part: "head",  mult: 1.1, blockMod: 0.85, critBonus: 0.15 },
@@ -729,17 +774,14 @@
         if (profiles[forcedCritPart]) loc = profiles[forcedCritPart];
       }
 
-      
       if (rng() < getEnemyBlockChance(enemy, loc)) {
         log(`${capitalize(enemy.type || "enemy")} blocks your attack to the ${loc.part}.`, "block");
-        
         decayAttackHands(true);
         decayEquipped("hands", randFloat(0.2, 0.7, 1));
         turn();
         return;
       }
 
-      
       let dmg = getPlayerAttack() * loc.mult;
       let isCrit = false;
       const critChance = Math.max(0, Math.min(0.6, 0.12 + loc.critBonus));
@@ -750,7 +792,6 @@
       dmg = Math.max(0, round1(dmg));
       enemy.hp -= dmg;
 
-      // Add a blood decal on the enemy tile when damage is dealt
       if (dmg > 0) {
         addBloodDecal(enemy.x, enemy.y, isCrit ? 1.6 : 1.0);
       }
@@ -761,7 +802,6 @@
         log(`You hit the ${enemy.type || "enemy"}'s ${loc.part} for ${dmg}.`);
       }
       { const ctx = getCtx(); if (ctx.Flavor && typeof ctx.Flavor.logPlayerHit === "function") ctx.Flavor.logPlayerHit(ctx, { target: enemy, loc, crit: isCrit, dmg }); }
-      // Leg crippling: apply Limp on leg crits to slow enemy movement
       if (isCrit && loc.part === "legs" && enemy.hp > 0) {
         if (window.Status && typeof Status.applyLimpToEnemy === "function") {
           Status.applyLimpToEnemy(getCtx(), enemy, 2);
@@ -770,7 +810,6 @@
           log(`${capitalize(enemy.type || "enemy")} staggers; its legs are crippled and it can't move for 2 turns.`, "notice");
         }
       }
-      // Bleed on critical hits (short duration)
       if (isCrit && enemy.hp > 0 && window.Status && typeof Status.applyBleedToEnemy === "function") {
         Status.applyBleedToEnemy(getCtx(), enemy, 2);
       }
@@ -779,7 +818,6 @@
         killEnemy(enemy);
       }
 
-      
       decayAttackHands();
       decayEquipped("hands", randFloat(0.3, 1.0, 1));
       turn();
