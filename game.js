@@ -957,8 +957,9 @@
     renderInventoryPanel();
     if (window.UI && typeof UI.showInventory === "function") {
       UI.showInventory();
-    } else if (invPanel) {
-      invPanel.hidden = false;
+    } else {
+      const panel = document.getElementById("inv-panel");
+      if (panel) panel.hidden = false;
     }
     requestDraw();
   }
@@ -969,8 +970,9 @@
       requestDraw();
       return;
     }
-    if (!invPanel) return;
-    invPanel.hidden = true;
+    const panel = document.getElementById("inv-panel");
+    if (!panel) return;
+    panel.hidden = true;
     requestDraw();
   }
 
