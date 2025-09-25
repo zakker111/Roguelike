@@ -241,6 +241,9 @@
 
   
   function getPlayerAttack() {
+    if (window.Stats && typeof Stats.getPlayerAttack === "function") {
+      return Stats.getPlayerAttack(getCtx());
+    }
     if (window.Player && typeof Player.getAttack === "function") {
       return Player.getAttack(player);
     }
@@ -255,6 +258,9 @@
 
   
   function getPlayerDefense() {
+    if (window.Stats && typeof Stats.getPlayerDefense === "function") {
+      return Stats.getPlayerDefense(getCtx());
+    }
     if (window.Player && typeof Player.getDefense === "function") {
       return Player.getDefense(player);
     }
