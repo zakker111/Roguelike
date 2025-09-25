@@ -841,6 +841,7 @@
       const y = Math.max(1, Math.min(H - 2, plaza.y + oy));
       if (map[y][x] !== TILES.FLOOR) continue;
       if (x === player.x && y === player.y) continue;
+      if (manhattan(player.x, player.y, x, y) <= 1) continue; // don't spawn adjacent to player
       if (npcs.some(n => n.x === x && n.y === y)) continue;
       if (townProps.some(p => p.x === x && p.y === y)) continue;
       npcs.push({ x, y, name: `Villager ${placed + 1}`, lines });
@@ -892,11 +893,30 @@
 
   function isFreeTownFloor(x, y) {
     if (!inBounds(x, y)) return false;
-    if (map[y][x] !== TILES.FLOOR) return false;
+    if (map[y][x] !== TILES.FLOOR && map[y][x] !== TILES.DOOR) return false;
     if (x === player.x && y === player.y) return false;
     if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
     if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y)) return false;
     return true;
+  }
+
+  function manhattan(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
+
+  function clearAdjacentNPCsAroundPlayer() {
+    // Ensure the four cardinal neighbors around the player are not all occupied by NPCs
+    const neighbors = [
+      { x: player.x + 1, y: player.y },
+      { x: player.x - 1, y: player.y },
+      { x: player.x, y: player.y + 1 },
+      { x: player.x, y: player.y - 1 },
+    ];
+    // If any neighbor has an NPC, remove up to two to keep space
+    for (const pos of neighbors) {
+      const idx = npcs.findIndex(n => n.x === pos.x && n.y === pos.y);
+      if (idx !== -1) {
+        npcs.splice(idx, 1);
+      }
+    }
   }
 
   function spawnGateGreeters(count = 4) {
@@ -918,7 +938,7 @@
       for (const d of dirs) {
         const x = townExitAt.x + d.dx * ring;
         const y = townExitAt.y + d.dy * ring;
-        if (isFreeTownFloor(x, y)) {
+        if (isFreeTownFloor(x, y) && manhattan(player.x, player.y, x, y) > 1) {
           const name = names[randInt(0, names.length - 1)];
           npcs.push({ x, y, name, lines });
           placed++;
@@ -926,6 +946,7 @@
         }
       }
     }
+    clearAdjacentNPCsAroundPlayer();
   }
 
   function enterTownIfOnTile() {
@@ -1680,6 +1701,51 @@
     // No fallback here: AI behavior is defined in ai.js
   }
 
+  function townNPCsAct() {
+    if (mode !== "town" || !Array.isArray(npcs) || npcs.length === 0) return;
+    const dirs = [
+      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
+    ];
+    // create occupancy set including props and player
+    const occ = new Set();
+    occ.add(`${player.x},${player.y}`);
+    for (const n of npcs) occ.add(`${n.x},${n.y}`);
+    if (Array.isArray(townProps)) for (const p of townProps) occ.add(`${p.x},${p.y}`);
+
+    // shuffle order
+    const idxs = npcs.map((_, i) => i);
+    for (let i = idxs.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const tmp = idxs[i]; idxs[i] = idxs[j]; idxs[j] = tmp;
+    }
+
+    for (const i of idxs) {
+      const n = npcs[i];
+      if (rng() >= 0.5) continue; // ~50% chance to attempt movement
+      // shuffle directions
+      const order = [0,1,2,3];
+      for (let k = order.length - 1; k > 0; k--) {
+        const j = Math.floor(rng() * (k + 1));
+        const tmp = order[k]; order[k] = order[j]; order[j] = tmp;
+      }
+      for (const oi of order) {
+        const d = dirs[oi];
+        const nx = n.x + d.dx, ny = n.y + d.dy;
+        // don't crowd the player
+        if (manhattan(player.x, player.y, nx, ny) <= 1) continue;
+        if (!inBounds(nx, ny)) continue;
+        if (map[ny][nx] !== TILES.FLOOR && map[ny][nx] !== TILES.DOOR) continue;
+        const key = `${nx},${ny}`;
+        if (occ.has(key)) continue;
+        // move
+        occ.delete(`${n.x},${n.y}`);
+        n.x = nx; n.y = ny;
+        occ.add(key);
+        break;
+      }
+    }
+  }
+
   function occupied(x, y) {
     if (player.x === x && player.y === y) return true;
     return enemies.some(e => e.x === x && e.y === y);
@@ -1710,6 +1776,8 @@
       }
       // clamp corpse list length
       if (corpses.length > 50) corpses = corpses.slice(-50);
+    } else if (mode === "town") {
+      townNPCsAct();
     }
 
     recomputeFOV();
