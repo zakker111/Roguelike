@@ -310,6 +310,9 @@
   }
 
   function getPlayerBlockChance(loc) {
+    if (window.Combat && typeof Combat.getPlayerBlockChance === "function") {
+      return Combat.getPlayerBlockChance(getCtx(), loc);
+    }
     const eq = player.equipment || {};
     const leftDef = (eq.left && typeof eq.left.def === "number") ? eq.left.def : 0;
     const rightDef = (eq.right && typeof eq.right.def === "number") ? eq.right.def : 0;
@@ -320,8 +323,10 @@
 
   // Enemy damage after applying player's defense with diminishing returns and a chip-damage floor
   function enemyDamageAfterDefense(raw) {
+    if (window.Combat && typeof Combat.enemyDamageAfterDefense === "function") {
+      return Combat.enemyDamageAfterDefense(getCtx(), raw);
+    }
     const def = getPlayerDefense();
-    
     const DR = Math.max(0, Math.min(0.85, def / (def + 6)));
     const reduced = raw * (1 - DR);
     return Math.max(0.1, round1(reduced));
