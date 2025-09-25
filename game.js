@@ -24,6 +24,16 @@
   const FOV_DEFAULT = 8;
   let fovRadius = FOV_DEFAULT;
 
+  // Game modes: "world" (overworld) or "dungeon" (roguelike floor)
+  let mode = "world";
+  let world = null;          // { map, width, height, towns, dungeons }
+  let npcs = [];             // simple NPCs for town mode: { x, y, name, lines:[] }
+  let shops = [];            // shops in town mode: [{x,y,type,name}]
+  let cameFromWorld = false; // true if current dungeon was entered from world
+  let worldReturnPos = null; // { x, y } to return to when exiting dungeon or town
+  let dungeonExitAt = null;  // { x, y } tile in dungeon floor 1 acting as exit back to world
+  let townExitAt = null;     // { x, y } tile in town acting as gate back to world
+
   
   const camera = {
     x: 0,
@@ -90,6 +100,10 @@
       player, enemies, corpses, decals, map, seen, visible,
       floor, depth: floor,
       fovRadius,
+      // world/overworld
+      mode,
+      world,
+      npcs,
       requestDraw,
       log,
       isWalkable, inBounds,
@@ -148,7 +162,8 @@
               UI: !!ctx.UI, Logger: !!ctx.Logger, Loot: !!ctx.Loot,
               Dungeon: !!ctx.Dungeon, DungeonItems: !!ctx.DungeonItems,
               FOV: !!ctx.FOV, AI: !!ctx.AI, Input: !!ctx.Input,
-              Render: !!ctx.Render, Tileset: !!ctx.Tileset, Flavor: !!ctx.Flavor
+              Render: !!ctx.Render, Tileset: !!ctx.Tileset, Flavor: !!ctx.Flavor,
+              World: !!ctx.World
             }
           });
         } catch (_) {}
@@ -575,6 +590,23 @@
   }
 
   function recomputeFOV() {
+    if (mode === "world" || mode === "town") {
+      // In overworld and town, reveal entire map (no fog-of-war)
+      const rows = map.length;
+      const cols = map[0] ? map[0].length : 0;
+      const shapeOk = Array.isArray(visible) && visible.length === rows && (rows === 0 || (visible[0] && visible[0].length === cols));
+      if (!shapeOk) {
+        visible = Array.from({ length: rows }, () => Array(cols).fill(true));
+        seen = Array.from({ length: rows }, () => Array(cols).fill(true));
+      } else {
+        for (let y = 0; y < rows; y++) {
+          visible[y].fill(true);
+          if (!seen[y]) seen[y] = Array(cols).fill(true);
+          else seen[y].fill(true);
+        }
+      }
+      return;
+    }
     ensureVisibilityShape();
     if (window.FOV && typeof FOV.recomputeFOV === "function") {
       const ctx = getCtx();
@@ -585,7 +617,6 @@
       seen = ctx.seen;
       return;
     }
-    // Fallback: reveal player tile at least
     if (inBounds(player.x, player.y)) {
       visible[player.y][player.x] = true;
       seen[player.y][player.x] = true;
@@ -615,6 +646,10 @@
       map, seen, visible,
       player, enemies, corpses, decals,
       camera,
+      mode,
+      world,
+      npcs,
+      shops,
       enemyColor: (t) => enemyColor(t),
     };
   }
@@ -632,8 +667,287 @@
 
   
 
+  
+
+  function initWorld() {
+    if (!(window.World && typeof World.generate === "function")) {
+      log("World module missing; generating dungeon instead.", "warn");
+      mode = "dungeon";
+      generateLevel(floor);
+      return;
+    }
+    const ctx = getCtx();
+    world = World.generate(ctx, { width: MAP_COLS, height: MAP_ROWS });
+    const start = World.pickTownStart(world, rng);
+    player.x = start.x; player.y = start.y;
+    mode = "world";
+    enemies = [];
+    corpses = [];
+    decals = [];
+    npcs = [];   // no NPCs on overworld
+    shops = [];  // no shops on overworld
+    map = world.map;
+    // fill seen/visible fully in world
+    seen = Array.from({ length: map.length }, () => Array(map[0].length).fill(true));
+    visible = Array.from({ length: map.length }, () => Array(map[0].length).fill(true));
+    updateCamera();
+    recomputeFOV();
+    updateUI();
+    log("You arrive in the overworld. Towns (T) and Dungeons (D): press Enter on T to enter a town, or on D to enter a dungeon.", "notice");
+    if (window.UI && typeof UI.hideTownExitButton === "function") UI.hideTownExitButton();
+    requestDraw();
+  }
+
+  
+
+  function talkNearbyNPC() {
+    if (mode !== "town") return false;
+    const targets = [];
+    for (const n of npcs) {
+      const d = Math.abs(n.x - player.x) + Math.abs(n.y - player.y);
+      if (d <= 1) targets.push(n);
+    }
+    if (targets.length === 0) {
+      log("There is no one to talk to here.");
+      return false;
+    }
+    const npc = targets[randInt(0, targets.length - 1)];
+    const line = npc.lines[randInt(0, npc.lines.length - 1)];
+    log(`${npc.name}: ${line}`, "info");
+    requestDraw();
+    return true;
+  }
+
+  function generateTown() {
+    // Simple town layout: outer streets with several rectangular buildings and a gate at player's spawn
+    const W = MAP_COLS, H = MAP_ROWS;
+    map = Array.from({ length: H }, () => Array(W).fill(TILES.FLOOR));
+
+    // Carve building rectangles
+    function rect(x, y, w, h) {
+      for (let yy = y; yy < y + h; yy++) {
+        for (let xx = x; xx < x + w; xx++) {
+          if (yy <= 0 || xx <= 0 || yy >= H - 1 || xx >= W - 1) continue;
+          map[yy][xx] = TILES.WALL;
+        }
+      }
+    }
+    // Streets grid
+    for (let y = 0; y < H; y += 8) {
+      for (let x = 0; x < W; x++) map[y][x] = TILES.FLOOR;
+    }
+    for (let x = 0; x < W; x += 10) {
+      for (let y = 0; y < H; y++) map[y][x] = TILES.FLOOR;
+    }
+    // Place a few buildings
+    const buildings = [
+      { x: 6, y: 4, w: 12, h: 8 },
+      { x: 26, y: 3, w: 12, h: 9 },
+      { x: 44, y: 6, w: 12, h: 7 },
+      { x: 8, y: 18, w: 14, h: 9 },
+      { x: 30, y: 16, w: 12, h: 10 },
+      { x: 48, y: 20, w: 10, h: 8 },
+    ];
+    buildings.forEach(b => rect(b.x, b.y, b.w, b.h));
+    // Doors on buildings
+    function placeDoor(b) {
+      const side = randInt(0, 3);
+      let dx = b.x, dy = b.y;
+      if (side === 0) { dx = b.x + ((b.w / 2) | 0); dy = b.y; }
+      if (side === 1) { dx = b.x + b.w - 1; dy = b.y + ((b.h / 2) | 0); }
+      if (side === 2) { dx = b.x + ((b.w / 2) | 0); dy = b.y + b.h - 1; }
+      if (side === 3) { dx = b.x; dy = b.y + ((b.h / 2) | 0); }
+      if (dx >= 0 && dy >= 0 && dx < W && dy < H) map[dy][dx] = TILES.DOOR;
+      return { x: dx, y: dy };
+    }
+    shops = [];
+    const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn"];
+    for (let i = 0; i < Math.min(shops.length + 4, buildings.length); i++) {
+      const d = placeDoor(buildings[i]);
+      shops.push({ x: d.x, y: d.y, type: "shop", name: shopNames[i % shopNames.length] });
+    }
+
+    // Town NPCs (peaceful)
+    npcs = [];
+    const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
+    const lines = [
+      "Welcome to our town.",
+      "Shops are marked with S.",
+      "Rest your feet a while.",
+      "The dungeon is dangerous.",
+      "Buy supplies before you go.",
+    ];
+    for (let i = 0; i < 6; i++) {
+      const ox = randInt(-6, 6), oy = randInt(-4, 4);
+      const x = Math.max(1, Math.min(W - 2, plaza.x + ox));
+      const y = Math.max(1, Math.min(H - 2, plaza.y + oy));
+      if (map[y][x] !== TILES.FLOOR) continue;
+      if (x === player.x && y === player.y) continue;
+      npcs.push({ x, y, name: `Villager ${i + 1}`, lines });
+    }
+
+    // Town is fully visible
+    seen = Array.from({ length: H }, () => Array(W).fill(true));
+    visible = Array.from({ length: H }, () => Array(W).fill(true));
+    enemies = [];
+    corpses = [];
+    decals = [];
+  }
+
+  function ensureTownSpawnClear() {
+    // Make sure the player isn't inside a building (WALL).
+    // If current tile is not walkable, move to the nearest FLOOR/DOOR tile.
+    const H = map.length;
+    const W = map[0] ? map[0].length : 0;
+    const isWalk = (x, y) => x >= 0 && y >= 0 && x < W && y < H && (map[y][x] === TILES.FLOOR || map[y][x] === TILES.DOOR);
+    if (isWalk(player.x, player.y)) return;
+
+    // BFS from current position to nearest walkable
+    const q = [];
+    const seenB = new Set();
+    q.push({ x: player.x, y: player.y, d: 0 });
+    seenB.add(`${player.x},${player.y}`);
+    const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+    while (q.length) {
+      const cur = q.shift();
+      for (const d of dirs) {
+        const nx = cur.x + d.dx, ny = cur.y + d.dy;
+        const key = `${nx},${ny}`;
+        if (seenB.has(key)) continue;
+        seenB.add(key);
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        if (isWalk(nx, ny)) {
+          player.x = nx; player.y = ny;
+          return;
+        }
+        // expand through walls minimally to escape building
+        q.push({ x: nx, y: ny, d: cur.d + 1 });
+      }
+    }
+    // Fallback to center
+    player.x = (W / 2) | 0;
+    player.y = (H / 2) | 0;
+  }
+
+  function enterTownIfOnTile() {
+    if (mode !== "world" || !world) return false;
+    const WT = window.World && World.TILES;
+    const t = world.map[player.y][player.x];
+    if (WT && t === World.TILES.TOWN) {
+      worldReturnPos = { x: player.x, y: player.y };
+      mode = "town";
+      // Start town and ensure a valid spawn
+      generateTown();
+      ensureTownSpawnClear();
+      townExitAt = { x: player.x, y: player.y };
+      log("You enter the town. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.", "notice");
+      if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
+      updateCamera();
+      requestDraw();
+      return true;
+    }
+    return false;
+  }
+
+  function enterDungeonIfOnEntrance() {
+    if (mode !== "world" || !world) return false;
+    const t = world.map[player.y][player.x];
+    if (t && World.TILES && t === World.TILES.DUNGEON) {
+      cameFromWorld = true;
+      worldReturnPos = { x: player.x, y: player.y };
+      mode = "dungeon";
+      floor = 1; window.floor = floor;
+      generateLevel(floor);
+      // Mark current dungeon start as exit point back to world
+      dungeonExitAt = { x: player.x, y: player.y };
+      log("You enter the dungeon.", "notice");
+      return true;
+    }
+    return false;
+  }
+
+  function leaveTownNow() {
+    mode = "world";
+    map = world.map;
+    npcs = [];
+    shops = [];
+    if (worldReturnPos) {
+      player.x = worldReturnPos.x;
+      player.y = worldReturnPos.y;
+    }
+    recomputeFOV();
+    updateCamera();
+    updateUI();
+    log("You return to the overworld.", "notice");
+    if (window.UI && typeof UI.hideTownExitButton === "function") UI.hideTownExitButton();
+    requestDraw();
+  }
+
+  function requestLeaveTown() {
+    if (window.UI && typeof UI.showConfirm === "function") {
+      // Position near center
+      const x = window.innerWidth / 2 - 140;
+      const y = window.innerHeight / 2 - 60;
+      UI.showConfirm("Do you want to leave the town?", { x, y }, () => leaveTownNow(), () => {});
+    } else {
+      if (window.confirm && window.confirm("Do you want to leave the town?")) {
+        leaveTownNow();
+      }
+    }
+  }
+
+  function returnToWorldFromTown() {
+    if (mode !== "town" || !world) return false;
+    if (townExitAt && player.x === townExitAt.x && player.y === townExitAt.y) {
+      requestLeaveTown();
+      return true;
+    }
+    log("Return to the town gate to exit to the overworld.", "info");
+    return false;
+  }
+
+  function returnToWorldIfAtExit() {
+    if (mode !== "dungeon" || !cameFromWorld || !world) return false;
+    if (floor !== 1) return false;
+    if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y) {
+      mode = "world";
+      enemies = [];
+      corpses = [];
+      decals = [];
+      map = world.map;
+      // restore world position (either returnPos or keep)
+      if (worldReturnPos) {
+        player.x = worldReturnPos.x;
+        player.y = worldReturnPos.y;
+      }
+      recomputeFOV();
+      updateCamera();
+      updateUI();
+      log("You return to the overworld.", "notice");
+      requestDraw();
+      return true;
+    }
+    log("Return to the dungeon entrance to go back to the overworld.", "info");
+    return false;
+  }
+
   function descendIfPossible() {
     hideLootPanel();
+
+    if (mode === "world") {
+      // Try entering town first, else dungeon
+      if (!enterTownIfOnTile()) {
+        enterDungeonIfOnEntrance();
+      }
+      return;
+    }
+
+    if (mode === "town") {
+      // Exit town if at gate
+      returnToWorldFromTown();
+      return;
+    }
+
     const here = map[player.y][player.x];
     // Restrict descending to STAIRS tile only for clarity
     if (here === TILES.STAIRS) {
@@ -695,6 +1009,41 @@
 
   function tryMovePlayer(dx, dy) {
     if (isDead) return;
+
+    // WORLD MODE: move over overworld tiles (no NPCs here)
+    if (mode === "world") {
+      const nx = player.x + dx;
+      const ny = player.y + dy;
+      const wmap = world && world.map ? world.map : null;
+      if (!wmap) return;
+      const rows = wmap.length, cols = rows ? (wmap[0] ? wmap[0].length : 0) : 0;
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) return;
+      if (window.World && typeof World.isWalkable === "function" && World.isWalkable(wmap[ny][nx])) {
+        player.x = nx; player.y = ny;
+        updateCamera();
+        turn();
+      }
+      return;
+    }
+
+    // TOWN MODE: block NPC tiles, use local isWalkable
+    if (mode === "town") {
+      const nx = player.x + dx;
+      const ny = player.y + dy;
+      if (!inBounds(nx, ny)) return;
+      if (npcs.some(n => n.x === nx && n.y === ny)) {
+        log("Excuse me!", "info");
+        return;
+      }
+      if (isWalkable(nx, ny)) {
+        player.x = nx; player.y = ny;
+        updateCamera();
+        turn();
+      }
+      return;
+    }
+
+    // DUNGEON MODE:
     // Dazed: skip action if dazedTurns > 0
     if (player.dazedTurns && player.dazedTurns > 0) {
       player.dazedTurns -= 1;
@@ -706,12 +1055,10 @@
     const ny = player.y + dy;
     if (!inBounds(nx, ny)) return;
 
-    
     const enemy = enemies.find(e => e.x === nx && e.y === ny);
     if (enemy) {
       let loc = rollHitLocation();
       if (alwaysCrit && forcedCritPart) {
-        // Normalize to known location profile
         const profiles = {
           torso: { part: "torso", mult: 1.0, blockMod: 1.0, critBonus: 0.00 },
           head:  { part: "head",  mult: 1.1, blockMod: 0.85, critBonus: 0.15 },
@@ -721,17 +1068,14 @@
         if (profiles[forcedCritPart]) loc = profiles[forcedCritPart];
       }
 
-      
       if (rng() < getEnemyBlockChance(enemy, loc)) {
         log(`${capitalize(enemy.type || "enemy")} blocks your attack to the ${loc.part}.`, "block");
-        
         decayAttackHands(true);
         decayEquipped("hands", randFloat(0.2, 0.7, 1));
         turn();
         return;
       }
 
-      
       let dmg = getPlayerAttack() * loc.mult;
       let isCrit = false;
       const critChance = Math.max(0, Math.min(0.6, 0.12 + loc.critBonus));
@@ -742,7 +1086,6 @@
       dmg = Math.max(0, round1(dmg));
       enemy.hp -= dmg;
 
-      // Add a blood decal on the enemy tile when damage is dealt
       if (dmg > 0) {
         addBloodDecal(enemy.x, enemy.y, isCrit ? 1.6 : 1.0);
       }
@@ -753,7 +1096,6 @@
         log(`You hit the ${enemy.type || "enemy"}'s ${loc.part} for ${dmg}.`);
       }
       { const ctx = getCtx(); if (ctx.Flavor && typeof ctx.Flavor.logPlayerHit === "function") ctx.Flavor.logPlayerHit(ctx, { target: enemy, loc, crit: isCrit, dmg }); }
-      // Leg crippling: apply Limp on leg crits to slow enemy movement
       if (isCrit && loc.part === "legs" && enemy.hp > 0) {
         if (window.Status && typeof Status.applyLimpToEnemy === "function") {
           Status.applyLimpToEnemy(getCtx(), enemy, 2);
@@ -762,7 +1104,6 @@
           log(`${capitalize(enemy.type || "enemy")} staggers; its legs are crippled and it can't move for 2 turns.`, "notice");
         }
       }
-      // Bleed on critical hits (short duration)
       if (isCrit && enemy.hp > 0 && window.Status && typeof Status.applyBleedToEnemy === "function") {
         Status.applyBleedToEnemy(getCtx(), enemy, 2);
       }
@@ -771,7 +1112,6 @@
         killEnemy(enemy);
       }
 
-      
       decayAttackHands();
       decayEquipped("hands", randFloat(0.3, 1.0, 1));
       turn();
@@ -797,6 +1137,15 @@
   
   function lootCorpse() {
     if (isDead) return;
+    if (mode === "town") {
+      // Talk in town mode
+      talkNearbyNPC();
+      return;
+    }
+    if (mode === "world") {
+      log("Nothing to loot here.");
+      return;
+    }
     if (window.Loot && typeof Loot.lootHere === "function") {
       Loot.lootHere(getCtx());
       return;
@@ -957,8 +1306,9 @@
     renderInventoryPanel();
     if (window.UI && typeof UI.showInventory === "function") {
       UI.showInventory();
-    } else if (invPanel) {
-      invPanel.hidden = false;
+    } else {
+      const panel = document.getElementById("inv-panel");
+      if (panel) panel.hidden = false;
     }
     requestDraw();
   }
@@ -969,8 +1319,9 @@
       requestDraw();
       return;
     }
-    if (!invPanel) return;
-    invPanel.hidden = true;
+    const panel = document.getElementById("inv-panel");
+    if (!panel) return;
+    panel.hidden = true;
     requestDraw();
   }
 
@@ -1087,14 +1438,19 @@
     else log("GOD: Cleared forced crit hit location.", "notice");
   }
 
-  // GOD: apply a deterministic RNG seed and regenerate current floor
+  // GOD: apply a deterministic RNG seed and regenerate current map
   function applySeed(seedUint32) {
     const s = (Number(seedUint32) >>> 0);
     currentSeed = s;
     try { localStorage.setItem("SEED", String(s)); } catch (_) {}
     rng = mulberry32(s);
-    log(`GOD: Applied seed ${s}. Regenerating floor ${floor}...`, "notice");
-    generateLevel(floor);
+    if (mode === "world") {
+      log(`GOD: Applied seed ${s}. Regenerating overworld...`, "notice");
+      initWorld();
+    } else {
+      log(`GOD: Applied seed ${s}. Regenerating floor ${floor}...`, "notice");
+      generateLevel(floor);
+    }
     requestDraw();
     try {
       if (window.UI && typeof UI.updateStats === "function" && typeof UI.init === "function") {
@@ -1127,7 +1483,8 @@
     floor = 1;
     window.floor = floor;
     isDead = false;
-    generateLevel(floor);
+    mode = "world";
+    initWorld();
   }
 
   
@@ -1193,25 +1550,29 @@
     if (typeof decayEquippedOverTime === "function") {
       try { decayEquippedOverTime(); } catch (_) {}
     }
-    enemiesAct();
-    // Status effects tick (bleed, dazed, etc.)
-    try {
-      if (window.Status && typeof Status.tick === "function") {
-        Status.tick(getCtx());
+
+    if (mode === "dungeon") {
+      enemiesAct();
+      // Status effects tick (bleed, dazed, etc.)
+      try {
+        if (window.Status && typeof Status.tick === "function") {
+          Status.tick(getCtx());
+        }
+      } catch (_) {}
+      // Visual: decals fade each turn (keep deterministic, no randomness here)
+      if (decals && decals.length) {
+        for (let i = 0; i < decals.length; i++) {
+          decals[i].a *= 0.92; // exponential fade
+        }
+        decals = decals.filter(d => d.a > 0.04);
       }
-    } catch (_) {}
-    // Visual: decals fade each turn (keep deterministic, no randomness here)
-    if (decals && decals.length) {
-      for (let i = 0; i < decals.length; i++) {
-        decals[i].a *= 0.92; // exponential fade
-      }
-      decals = decals.filter(d => d.a > 0.04);
+      // clamp corpse list length
+      if (corpses.length > 50) corpses = corpses.slice(-50);
     }
+
     recomputeFOV();
     updateUI();
     requestDraw();
-    // decay corpse flags
-    if (corpses.length > 50) corpses = corpses.slice(-50);
   }
 
   // Main animation loop
@@ -1239,6 +1600,7 @@
         onGodSetCritPart: (part) => setCritPart(part),
         onGodApplySeed: (seed) => applySeed(seed),
         onGodRerollSeed: () => rerollSeed(),
+        onTownExit: () => requestLeaveTown(),
       });
     }
   }
@@ -1292,7 +1654,7 @@
   }
 
   
-  generateLevel(floor);
+  initWorld();
   setupInput();
   loop();
 })();

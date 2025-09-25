@@ -25,7 +25,7 @@
   function draw(ctx) {
     const {
       ctx2d, TILE, ROWS, COLS, COLORS, TILES,
-      map, seen, visible, player, enemies, corpses, decals, camera: camMaybe
+      map, seen, visible, player, enemies, corpses, decals, camera: camMaybe, mode, world, npcs, shops
     } = ctx;
 
     const enemyColor = (t) => (ctx.enemyColor ? ctx.enemyColor(t) : enemyColorFromModule(t, COLORS));
@@ -50,6 +50,120 @@
     ctx2d.textAlign = "center";
     ctx2d.textBaseline = "middle";
 
+    // WORLD MODE RENDER
+    if (mode === "world") {
+      // lightweight palette for overworld
+      const WCOL = {
+        water: "#0a1b2a",
+        grass: "#10331a",
+        forest: "#0d2615",
+        mountain: "#2f2f34",
+        town: "#3a2f1b",
+        dungeon: "#2a1b2a",
+      };
+
+      if (drawGrid) {
+        ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
+      }
+
+      for (let y = startY; y <= endY; y++) {
+        const row = map[y];
+        for (let x = startX; x <= endX; x++) {
+          const screenX = (x - startX) * TILE - tileOffsetX;
+          const screenY = (y - startY) * TILE - tileOffsetY;
+          const t = row[x];
+          let fill = WCOL.grass;
+          const WT = (typeof window !== "undefined" && window.World && World.TILES) ? World.TILES : null;
+          if (WT) {
+            if (t === WT.WATER) fill = WCOL.water;
+            else if (t === WT.GRASS) fill = WCOL.grass;
+            else if (t === WT.FOREST) fill = WCOL.forest;
+            else if (t === WT.MOUNTAIN) fill = WCOL.mountain;
+            else if (t === WT.TOWN) fill = WCOL.town;
+            else if (t === WT.DUNGEON) fill = WCOL.dungeon;
+          }
+          ctx2d.fillStyle = fill;
+          ctx2d.fillRect(screenX, screenY, TILE, TILE);
+          if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
+
+          // Overlay glyphs for special overworld tiles
+          if (WT && t === WT.TOWN) {
+            drawGlyphScreen(ctx2d, screenX, screenY, "T", "#d7ba7d", TILE);
+          } else if (WT && t === WT.DUNGEON) {
+            drawGlyphScreen(ctx2d, screenX, screenY, "D", "#c586c0", TILE);
+          }
+        }
+      }
+
+      // NPCs
+      if (Array.isArray(npcs)) {
+        for (const n of npcs) {
+          if (n.x < startX || n.x > endX || n.y < startY || n.y > endY) continue;
+          const screenX = (n.x - startX) * TILE - tileOffsetX;
+          const screenY = (n.y - startY) * TILE - tileOffsetY;
+          drawGlyphScreen(ctx2d, screenX, screenY, "n", "#b4f9f8", TILE);
+        }
+      }
+
+      // player
+      if (player.x >= startX && player.x <= endX && player.y >= startY && player.y <= endY) {
+        const screenX = (player.x - startX) * TILE - tileOffsetX;
+        const screenY = (player.y - startY) * TILE - tileOffsetY;
+        drawGlyphScreen(ctx2d, screenX, screenY, "@", COLORS.player, TILE);
+      }
+      return;
+    }
+
+    // TOWN MODE RENDER
+    if (mode === "town") {
+      const TCOL = {
+        wall: "#2f2b26",       // building
+        floor: "#0f1620",      // street/plaza
+        door: "#6f5b3e",
+        shop: "#d7ba7d",
+      };
+      if (drawGrid) ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
+
+      for (let y = startY; y <= endY; y++) {
+        const rowMap = map[y];
+        for (let x = startX; x <= endX; x++) {
+          const screenX = (x - startX) * TILE - tileOffsetX;
+          const screenY = (y - startY) * TILE - tileOffsetY;
+          const type = rowMap[x];
+          let fill = TCOL.floor;
+          if (type === TILES.WALL) fill = TCOL.wall;
+          else if (type === TILES.DOOR) fill = TCOL.door;
+          ctx2d.fillStyle = fill;
+          ctx2d.fillRect(screenX, screenY, TILE, TILE);
+          if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
+
+          // shop glyph overlay if provided
+          if (Array.isArray(shops) && shops.some(s => s.x === x && s.y === y)) {
+            drawGlyphScreen(ctx2d, screenX, screenY, "S", TCOL.shop, TILE);
+          }
+        }
+      }
+
+      // draw NPCs
+      if (Array.isArray(npcs)) {
+        for (const n of npcs) {
+          if (n.x < startX || n.x > endX || n.y < startY || n.y > endY) continue;
+          const screenX = (n.x - startX) * TILE - tileOffsetX;
+          const screenY = (n.y - startY) * TILE - tileOffsetY;
+          drawGlyphScreen(ctx2d, screenX, screenY, "n", "#b4f9f8", TILE);
+        }
+      }
+
+      // player
+      if (player.x >= startX && player.x <= endX && player.y >= startY && player.y <= endY) {
+        const screenX = (player.x - startX) * TILE - tileOffsetX;
+        const screenY = (player.y - startY) * TILE - tileOffsetY;
+        drawGlyphScreen(ctx2d, screenX, screenY, "@", COLORS.player, TILE);
+      }
+      return;
+    }
+
+    // DUNGEON RENDER (default)
     // tiles within viewport range
     if (drawGrid) {
       ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
@@ -94,18 +208,15 @@
           ctx2d.fillRect(screenX, screenY, TILE, TILE);
         }
 
-        // optional subtle grid
         if (drawGrid) {
           ctx2d.strokeRect(screenX, screenY, TILE, TILE);
         }
 
-        // FOV dim overlay for seen-but-not-visible tiles
         if (!vis && everSeen) {
           ctx2d.fillStyle = COLORS.dim;
           ctx2d.fillRect(screenX, screenY, TILE, TILE);
         }
 
-        // staircase glyph overlay when visible (only if we didn't render via tileset)
         if (vis && type === TILES.STAIRS && !tilesetReady) {
           drawGlyphScreen(ctx2d, screenX, screenY, ">", "#d7ba7d", TILE);
         }
@@ -117,27 +228,22 @@
       ctx2d.save();
       for (let i = 0; i < decals.length; i++) {
         const d = decals[i];
-        // helper to check in-view
         const inView = (x, y) => x >= startX && x <= endX && y >= startY && y <= endY;
         if (!inView(d.x, d.y)) continue;
         const sx = (d.x - startX) * TILE - tileOffsetX;
         const sy = (d.y - startY) * TILE - tileOffsetY;
-        // Only show where the tile has been seen (avoid revealing map)
         const everSeen = seen[d.y] && seen[d.y][d.x];
         if (!everSeen) continue;
-        // Use alpha for fade
         const alpha = Math.max(0, Math.min(1, d.a || 0.2));
         if (alpha <= 0) continue;
 
-        // If tileset has a decal sprite, prefer it with alpha; otherwise draw a soft blob
         let usedTile = false;
         if (tilesetReady && TS) {
-          const variant = ((d.x + d.y) % 3) + 1; // 1..3
+          const variant = ((d.x + d.y) % 3) + 1;
           const key = `decal.blood${variant}`;
           if (typeof TS.drawAlpha === "function") {
             usedTile = TS.drawAlpha(ctx2d, key, sx, sy, TILE, alpha);
           } else if (typeof TS.draw === "function") {
-            // fallback to manual alpha around draw()
             const prev = ctx2d.globalAlpha;
             ctx2d.globalAlpha = alpha;
             usedTile = TS.draw(ctx2d, key, sx, sy, TILE);
@@ -147,7 +253,7 @@
         if (!usedTile) {
           const prev = ctx2d.globalAlpha;
           ctx2d.globalAlpha = alpha;
-          ctx2d.fillStyle = "#7a1717"; // deep red
+          ctx2d.fillStyle = "#7a1717";
           const r = Math.max(4, Math.min(TILE - 2, d.r || Math.floor(TILE * 0.4)));
           const cx = sx + TILE / 2;
           const cy = sy + TILE / 2;
