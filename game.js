@@ -939,9 +939,9 @@
       // Position near center
       const x = window.innerWidth / 2 - 140;
       const y = window.innerHeight / 2 - 60;
-      UI.showConfirm("Leave town and return to the overworld?", { x, y }, () => leaveTownNow(), () => {});
+      UI.showConfirm("Do you want to leave the town?", { x, y }, () => leaveTownNow(), () => {});
     } else {
-      if (window.confirm && window.confirm("Leave town and return to the overworld?")) {
+      if (window.confirm && window.confirm("Do you want to leave the town?")) {
         leaveTownNow();
       }
     }
