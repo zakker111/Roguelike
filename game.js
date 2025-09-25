@@ -667,62 +667,7 @@
 
   
 
-  // WORLD helpers
-  function populateNPCs() {
-    npcs = [];
-    if (!world || !world.towns || !world.map) return;
-    const m = world.map;
-    const rows = m.length, cols = rows ? (m[0] ? m[0].length : 0) : 0;
-
-    // Forbid placing NPCs on player's tile and immediate 4-neighborhood
-    const forbidden = new Set();
-    const forbid = (x, y) => { if (x >= 0 && y >= 0 && x < cols && y < rows) forbidden.add(`${x},${y}`); };
-    forbid(player.x, player.y);
-    forbid(player.x + 1, player.y);
-    forbid(player.x - 1, player.y);
-    forbid(player.x, player.y + 1);
-    forbid(player.x, player.y - 1);
-
-    const occupied = (x, y) => npcs.some(n => n.x === x && n.y === y);
-
-    const tryPlaceNear = (x, y) => {
-      // Prefer tiles at distance 2 first to reduce crowding around town center
-      const rings = [
-        [{dx:2,dy:0},{dx:-2,dy:0},{dx:0,dy:2},{dx:0,dy:-2},{dx:2,dy:1},{dx:2,dy:-1},{dx:-2,dy:1},{dx:-2,dy:-1},{dx:1,dy:2},{dx:-1,dy:2},{dx:1,dy:-2},{dx:-1,dy:-2}],
-        [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1},{dx:1,dy:1},{dx:1,dy:-1},{dx:-1,dy:1},{dx:-1,dy:-1}],
-      ];
-      for (const ring of rings) {
-        for (const d of ring) {
-          const sx = x + d.dx, sy = y + d.dy;
-          if (sx < 0 || sy < 0 || sx >= cols || sy >= rows) continue;
-          if (forbidden.has(`${sx},${sy}`)) continue;
-          if (!World.isWalkable(m[sy][sx])) continue;
-          if (occupied(sx, sy)) continue;
-          return { x: sx, y: sy };
-        }
-      }
-      return null;
-    };
-
-    for (const town of world.towns) {
-      const count = randInt(2, 4);
-      for (let i = 0; i < count; i++) {
-        const spot = tryPlaceNear(town.x, town.y);
-        if (!spot) continue;
-        const names = ["Ava", "Borin", "Cora", "Darin", "Eda", "Finn", "Goro", "Hana"];
-        const name = names[randInt(0, names.length - 1)];
-        const lines = [
-          "Welcome to our town.",
-          "Beware the dungeons; they change with each descent.",
-          "If you're hurt, potions help.",
-          "I heard treasure lies below.",
-          "The stairs are marked with '>' underground.",
-          "Stay a while and listen.",
-        ];
-        npcs.push({ x: spot.x, y: spot.y, name, lines });
-      }
-    }
-  }
+  
 
   function initWorld() {
     if (!(window.World && typeof World.generate === "function")) {
@@ -753,40 +698,7 @@
     requestDraw();
   }
 
-  function ensureWorldStartClear() {
-    if (!world || !world.map) return;
-    // Ensure at least one cardinal direction is free and walkable
-    const dirs = [
-      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
-    ];
-    const walkable = (x, y) => (x >= 0 && y >= 0 && y < world.map.length && x < world.map[0].length) && World.isWalkable(world.map[y][x]);
-    // Remove NPCs from any non-walkable or crowded immediate tiles around player
-    for (const d of dirs) {
-      const nx = player.x + d.dx, ny = player.y + d.dy;
-      if (!walkable(nx, ny)) continue;
-      // If an NPC occupies this tile, remove just one to free a path
-      const idx = npcs.findIndex(n => n.x === nx && n.y === ny);
-      if (idx !== -1) {
-        npcs.splice(idx, 1);
-        // Freeing one is enough; keep checking others to ensure multiple exits when possible
-      }
-    }
-    // If still all four sides blocked (by terrain), try nudging player to a free adjacent tile
-    let exits = 0;
-    for (const d of dirs) {
-      const nx = player.x + d.dx, ny = player.y + d.dy;
-      if (walkable(nx, ny) && !npcs.some(n => n.x === nx && n.y === ny)) exits++;
-    }
-    if (exits === 0) {
-      for (const d of dirs) {
-        const nx = player.x + d.dx, ny = player.y + d.dy;
-        if (walkable(nx, ny)) {
-          player.x = nx; player.y = ny;
-          break;
-        }
-      }
-    }
-  }
+  
 
   function talkNearbyNPC() {
     if (mode !== "town") return false;
