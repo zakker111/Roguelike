@@ -1,11 +1,12 @@
 /**
- * World: simple overworld with towns and dungeon entrances.
+ * World: expanded overworld with multiple biomes, rivers, towns, and dungeon entrances.
  *
  * Exports (window.World):
- * - TILES: { WATER, GRASS, FOREST, MOUNTAIN, TOWN, DUNGEON, SWAMP, RIVER }
+ * - TILES: { WATER, GRASS, FOREST, MOUNTAIN, TOWN, DUNGEON, SWAMP, RIVER, BEACH, DESERT, SNOW }
  * - generate(ctx, opts?): returns { map, width, height, towns:[{x,y}], dungeons:[{x,y}] }
  * - isWalkable(tile): returns boolean
  * - pickTownStart(world, rng): returns a {x,y} start at/near a town
+ * - biomeName(tile): returns a human-readable biome string
  */
 (function () {
   const TILES = {
@@ -17,25 +18,43 @@
     DUNGEON: 5,
     SWAMP: 6,
     RIVER: 7,
+    BEACH: 8,
+    DESERT: 9,
+    SNOW: 10,
   };
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
   function isWalkable(tile) {
-    // Non-walkable: deep water, steep mountains
-    if (tile === TILES.WATER || tile === TILES.MOUNTAIN) return false;
-    // Swamp and river are walkable for now (could be slowed later)
-    return true;
+    // Non-walkable: deep water, rivers, steep mountains
+    return tile !== TILES.WATER && tile !== TILES.RIVER && tile !== TILES.MOUNTAIN;
   }
 
   function inBounds(x, y, w, h) {
     return x >= 0 && y >= 0 && x < w && y < h;
   }
 
+  function biomeName(tile) {
+    switch (tile) {
+      case TILES.WATER: return "Ocean/Lake";
+      case TILES.RIVER: return "River";
+      case TILES.BEACH: return "Beach";
+      case TILES.SWAMP: return "Swamp";
+      case TILES.FOREST: return "Forest";
+      case TILES.MOUNTAIN: return "Mountain";
+      case TILES.DESERT: return "Desert";
+      case TILES.SNOW: return "Snow";
+      case TILES.GRASS: return "Plains";
+      case TILES.TOWN: return "Town";
+      case TILES.DUNGEON: return "Dungeon";
+      default: return "Unknown";
+    }
+  }
+
   function generate(ctx, opts = {}) {
     const rng = (ctx && typeof ctx.rng === "function") ? ctx.rng : Math.random;
-    const width = clamp((opts.width | 0) || 96, 32, 512);
-    const height = clamp((opts.height | 0) || 96, 32, 512);
+    const width = clamp((opts.width | 0) || 120, 48, 512);
+    const height = clamp((opts.height | 0) || 80, 48, 512);
     const map = Array.from({ length: height }, () => Array(width).fill(TILES.GRASS));
 
     // Scatter noise: lakes, forests, mountains
@@ -59,6 +78,24 @@
     scatter(TILES.WATER, Math.max(3, blobs | 0), 6);
     scatter(TILES.FOREST, Math.max(4, (blobs * 2) | 0), 5);
     scatter(TILES.MOUNTAIN, Math.max(3, blobs | 0), 4);
+
+    // Mountain ridges (simple random walks)
+    const ridges = 2 + ((rng() * 3) | 0);
+    for (let i = 0; i < ridges; i++) {
+      let x = (rng() * width) | 0;
+      let y = (rng() * height) | 0;
+      let dx = rng() < 0.5 ? 1 : -1;
+      let dy = rng() < 0.5 ? 1 : -1;
+      let steps = 120 + ((rng() * 180) | 0);
+      while (steps-- > 0 && inBounds(x, y, width, height)) {
+        map[y][x] = TILES.MOUNTAIN;
+        if (rng() < 0.4 && inBounds(x + 1, y, width, height)) map[y][x + 1] = TILES.MOUNTAIN;
+        if (rng() < 0.4 && inBounds(x, y + 1, width, height)) map[y + 1][x] = TILES.MOUNTAIN;
+        if (rng() < 0.08) dx = -dx;
+        if (rng() < 0.08) dy = -dy;
+        x += dx; y += dy;
+      }
+    }
 
     // Extra small forest patches for individual trees feel
     scatter(TILES.FOREST, Math.max(6, (blobs * 2) | 0), 2);
@@ -108,34 +145,64 @@
       }
     }
 
-    // Swamps: grass tiles adjacent to water/river become swamp with some chance
+    // Swamps and beaches near water/river
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        if (map[y][x] !== TILES.GRASS) continue;
-        let nearWet = false;
-        for (let dy = -1; dy <= 1 && !nearWet; dy++) {
-          for (let dx = -1; dx <= 1 && !nearWet; dx++) {
+        const t = map[y][x];
+        let nearWater = false;
+        for (let dy = -1; dy <= 1 && !nearWater; dy++) {
+          for (let dx = -1; dx <= 1 && !nearWater; dx++) {
             if (!dx && !dy) continue;
             const nx = x + dx, ny = y + dy;
             if (!inBounds(nx, ny, width, height)) continue;
-            const t = map[ny][nx];
-            if (t === TILES.WATER || t === TILES.RIVER) nearWet = true;
+            const n = map[ny][nx];
+            if (n === TILES.WATER || n === TILES.RIVER) nearWater = true;
           }
         }
-        if (nearWet && rng() < 0.35) {
-          map[y][x] = TILES.SWAMP;
+        if (t === TILES.GRASS && nearWater) {
+          // Mix of swamp and beach along shores
+          if (rng() < 0.35) map[y][x] = TILES.SWAMP;
+          else if (rng() < 0.55) map[y][x] = TILES.BEACH;
+        }
+        if (t === TILES.FOREST && nearWater && rng() < 0.15) {
+          map[y][x] = TILES.GRASS; // thin forests right at the shore
         }
       }
     }
 
-    // Carve a few towns on grass near edges or center-ish
+    // Climate-based conversion to DESERT and SNOW on plains
+    for (let y = 0; y < height; y++) {
+      const temp = 1 - (y / (height - 1)); // top cold (1->0 reversed later)
+      const temperature = 1 - temp; // top cold ~0, bottom hot ~1
+      for (let x = 0; x < width; x++) {
+        if (map[y][x] !== TILES.GRASS) continue;
+        // moisture proxy: any water within radius 4
+        let moist = 0;
+        for (let ry = -4; ry <= 4; ry++) {
+          for (let rx = -4; rx <= 4; rx++) {
+            const nx = x + rx, ny = y + ry;
+            if (!inBounds(nx, ny, width, height)) continue;
+            const nt = map[ny][nx];
+            if (nt === TILES.WATER || nt === TILES.RIVER || nt === TILES.SWAMP) { moist++; }
+          }
+        }
+        const moisture = Math.min(1, moist / 40);
+        if (temperature > 0.65 && moisture < 0.15 && rng() < 0.9) {
+          map[y][x] = TILES.DESERT;
+        } else if (temperature < 0.25 && moisture < 0.6 && rng() < 0.9) {
+          map[y][x] = TILES.SNOW;
+        }
+      }
+    }
+
+    // Carve a few towns (prefer near water/river or beach)
     const towns = [];
     const dungeons = [];
-    const wantTowns = 6 + ((rng() * 4) | 0);
-    const wantDungeons = 8 + ((rng() * 4) | 0);
+    const wantTowns = 8 + ((rng() * 4) | 0);
+    const wantDungeons = 10 + ((rng() * 6) | 0);
 
     function placeWithPredicate(n, predicate, write) {
-      let placed = 0, attempts = 0, maxAttempts = n * 300;
+      let placed = 0, attempts = 0, maxAttempts = n * 400;
       while (placed < n && attempts++ < maxAttempts) {
         const x = (rng() * width) | 0;
         const y = (rng() * height) | 0;
@@ -146,13 +213,35 @@
       }
     }
 
-    placeWithPredicate(wantTowns,
-      (x, y) => map[y][x] === TILES.GRASS,
+    placeWithPredicate(
+      wantTowns,
+      (x, y) => {
+        const t = map[y][x];
+        if (t !== TILES.GRASS && t !== TILES.BEACH) return false;
+        // prefer near water or river
+        for (let dy = -5; dy <= 5; dy++) {
+          for (let dx = -5; dx <= 5; dx++) {
+            const nx = x + dx, ny = y + dy;
+            if (!inBounds(nx, ny, width, height)) continue;
+            const n = map[ny][nx];
+            if (n === TILES.WATER || n === TILES.RIVER || n === TILES.BEACH) {
+              return true;
+            }
+          }
+        }
+        return rng() < 0.08; // small chance elsewhere
+      },
       (x, y) => { map[y][x] = TILES.TOWN; towns.push({ x, y }); }
     );
 
-    placeWithPredicate(wantDungeons,
-      (x, y) => map[y][x] === TILES.FOREST || map[y][x] === TILES.GRASS,
+    placeWithPredicate(
+      wantDungeons,
+      (x, y) => {
+        const t = map[y][x];
+        if (t === TILES.FOREST || t === TILES.MOUNTAIN) return true;
+        if (t === TILES.GRASS) return rng() < 0.05;
+        return false;
+      },
       (x, y) => { map[y][x] = TILES.DUNGEON; dungeons.push({ x, y }); }
     );
 
@@ -173,5 +262,5 @@
     return { x: 1, y: 1 };
   }
 
-  window.World = { TILES, generate, isWalkable, pickTownStart };
+  window.World = { TILES, generate, isWalkable, pickTownStart, biomeName };
 })();

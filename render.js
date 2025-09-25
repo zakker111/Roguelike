@@ -59,6 +59,9 @@
         grass: "#10331a",
         forest: "#0d2615",
         swamp: "#1b2a1e",
+        beach: "#b59b6a",
+        desert: "#c2a36b",
+        snow: "#b9c7d3",
         mountain: "#2f2f34",
         town: "#3a2f1b",
         dungeon: "#2a1b2a",
@@ -68,6 +71,8 @@
         ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
       }
 
+      const WT = (typeof window !== "undefined" && window.World && World.TILES) ? World.TILES : null;
+
       for (let y = startY; y <= endY; y++) {
         const row = map[y];
         for (let x = startX; x <= endX; x++) {
@@ -75,11 +80,13 @@
           const screenY = (y - startY) * TILE - tileOffsetY;
           const t = row[x];
           let fill = WCOL.grass;
-          const WT = (typeof window !== "undefined" && window.World && World.TILES) ? World.TILES : null;
           if (WT) {
             if (t === WT.WATER) fill = WCOL.water;
             else if (t === WT.RIVER) fill = WCOL.river;
             else if (t === WT.SWAMP) fill = WCOL.swamp;
+            else if (t === WT.BEACH) fill = WCOL.beach;
+            else if (t === WT.DESERT) fill = WCOL.desert;
+            else if (t === WT.SNOW) fill = WCOL.snow;
             else if (t === WT.GRASS) fill = WCOL.grass;
             else if (t === WT.FOREST) fill = WCOL.forest;
             else if (t === WT.MOUNTAIN) fill = WCOL.mountain;
@@ -98,6 +105,79 @@
           }
         }
       }
+
+      // Biome label
+      try {
+        if (WT && typeof World.biomeName === "function") {
+          const tile = map[player.y] && map[player.y][player.x];
+          const name = World.biomeName(tile);
+          ctx2d.fillStyle = "rgba(13,16,24,0.8)";
+          ctx2d.fillRect(8, 8, 260, 26);
+          ctx2d.fillStyle = "#e5e7eb";
+          ctx2d.textAlign = "left";
+          ctx2d.fillText(`Biome: ${name}`, 18, 8 + 13);
+          ctx2d.textAlign = "center";
+        }
+      } catch (_) {}
+
+      // Minimap (top-right)
+      try {
+        const mw = world && world.width ? world.width : (map[0] ? map[0].length : 0);
+        const mh = world && world.height ? world.height : map.length;
+        if (mw && mh) {
+          const maxW = 200, maxH = 150;
+          const scale = Math.max(1, Math.floor(Math.min(maxW / mw, maxH / mh)));
+          const wpx = mw * scale, hpx = mh * scale;
+          const pad = 8;
+          const bx = cam.width - wpx - pad;
+          const by = pad;
+
+          // background
+          ctx2d.fillStyle = "rgba(13,16,24,0.6)";
+          ctx2d.fillRect(bx - 6, by - 6, wpx + 12, hpx + 12);
+
+          // draw tiles
+          for (let yy = 0; yy < mh; yy++) {
+            const rowM = map[yy];
+            for (let xx = 0; xx < mw; xx++) {
+              const t = rowM[xx];
+              let c = WCOL.grass;
+              if (WT) {
+                if (t === WT.WATER) c = WCOL.water;
+                else if (t === WT.RIVER) c = WCOL.river;
+                else if (t === WT.SWAMP) c = WCOL.swamp;
+                else if (t === WT.BEACH) c = WCOL.beach;
+                else if (t === WT.DESERT) c = WCOL.desert;
+                else if (t === WT.SNOW) c = WCOL.snow;
+                else if (t === WT.FOREST) c = WCOL.forest;
+                else if (t === WT.MOUNTAIN) c = WCOL.mountain;
+                else if (t === WT.DUNGEON) c = WCOL.dungeon;
+                else if (t === WT.TOWN) c = WCOL.town;
+              }
+              ctx2d.fillStyle = c;
+              ctx2d.fillRect(bx + xx * scale, by + yy * scale, scale, scale);
+            }
+          }
+
+          // overlay towns and dungeons if available
+          if (world && Array.isArray(world.towns)) {
+            ctx2d.fillStyle = "#ffcc66";
+            for (const t of world.towns) {
+              ctx2d.fillRect(bx + t.x * scale, by + t.y * scale, Math.max(1, scale), Math.max(1, scale));
+            }
+          }
+          if (world && Array.isArray(world.dungeons)) {
+            ctx2d.fillStyle = "#c586c0";
+            for (const d of world.dungeons) {
+              ctx2d.fillRect(bx + d.x * scale, by + d.y * scale, Math.max(1, scale), Math.max(1, scale));
+            }
+          }
+
+          // player marker
+          ctx2d.fillStyle = "#ffffff";
+          ctx2d.fillRect(bx + player.x * scale, by + player.y * scale, Math.max(1, scale), Math.max(1, scale));
+        }
+      } catch (_) {}
 
       // NPCs
       if (Array.isArray(npcs)) {
