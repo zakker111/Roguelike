@@ -879,7 +879,9 @@
     updateCamera();
     updateUI();
     log("You return to the overworld.", "notice");
-    if (window.UI && typeof UI.hideTown }
+    if (window.UI && typeof UI.hideTownExitButton === "function") UI.hideTownExitButton();
+    requestDraw();
+  }
 
   function requestLeaveTown() {
     if (window.UI && typeof UI.showConfirm === "function") {
