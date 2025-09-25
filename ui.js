@@ -27,6 +27,7 @@
       onGodSpawn: null,
       onGodSetFov: null,
       onGodSpawnEnemy: null,
+      onTownExit: null,
     },
 
     init() {
@@ -121,6 +122,25 @@
         </div>
       `;
       document.body.appendChild(this.els.confirm);
+
+      // Floating Town Exit button (hidden by default, shown in town)
+      this.els.townExitBtn = document.createElement("button");
+      const b = this.els.townExitBtn;
+      b.textContent = "Exit Town";
+      b.style.position = "fixed";
+      b.style.right = "16px";
+      b.style.bottom = "16px";
+      b.style.padding = "8px 12px";
+      b.style.fontSize = "14px";
+      b.style.background = "#1f2937";
+      b.style.color = "#e5e7eb";
+      b.style.border = "1px solid #334155";
+      b.style.borderRadius = "6px";
+      b.style.boxShadow = "0 8px 24px rgba(0,0,0,0.35)";
+      b.style.cursor = "pointer";
+      b.style.display = "none";
+      b.title = "Leave the town";
+      document.body.appendChild(b);
 
       // Bind static events
       this.els.lootPanel?.addEventListener("click", () => this.hideLoot());
@@ -297,6 +317,14 @@
         else if (act === "cancel" && typeof cancelCb === "function") cancelCb();
       });
 
+      // Town exit button click
+      this.els.townExitBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (typeof this.handlers.onTownExit === "function") {
+          this.handlers.onTownExit();
+        }
+      });
+
       // Hide choosers on any outside click (not in capture phase)
       document.addEventListener("click", (e) => {
         if (this.els.handChooser && this.els.handChooser.style.display !== "none" && !this.els.handChooser.contains(e.target)) {
@@ -348,7 +376,15 @@
       this._confirmCancelCb = null;
     },
 
-    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSpawnStairs, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed } = {}) {
+    showTownExitButton() {
+      if (this.els.townExitBtn) this.els.townExitBtn.style.display = "block";
+    },
+
+    hideTownExitButton() {
+      if (this.els.townExitBtn) this.els.townExitBtn.style.display = "none";
+    },
+
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSpawnStairs, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed, onTownExit } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
@@ -363,6 +399,7 @@
       if (typeof onGodSetCritPart === "function") this.handlers.onGodSetCritPart = onGodSetCritPart;
       if (typeof onGodApplySeed === "function") this.handlers.onGodApplySeed = onGodApplySeed;
       if (typeof onGodRerollSeed === "function") this.handlers.onGodRerollSeed = onGodRerollSeed;
+      if (typeof onTownExit === "function") this.handlers.onTownExit = onTownExit;
     },
 
     updateStats(player, floor, getAtk, getDef) {

@@ -749,6 +749,7 @@
     recomputeFOV();
     updateUI();
     log("You arrive in the overworld. Towns (T) and Dungeons (D): press Enter on T to enter a town, or on D to enter a dungeon.", "notice");
+    if (window.UI && typeof UI.hideTownExitButton === "function") UI.hideTownExitButton();
     requestDraw();
   }
 
@@ -928,6 +929,7 @@
       ensureTownSpawnClear();
       townExitAt = { x: player.x, y: player.y };
       log("You enter the town. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.", "notice");
+      if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
       requestDraw();
       return true;
@@ -965,8 +967,7 @@
     updateCamera();
     updateUI();
     log("You return to the overworld.", "notice");
-    requestDraw();
-  }
+    if (window.UI && typeof UI.hideTown }
 
   function requestLeaveTown() {
     if (window.UI && typeof UI.showConfirm === "function") {
@@ -1685,6 +1686,7 @@
         onGodSetCritPart: (part) => setCritPart(part),
         onGodApplySeed: (seed) => applySeed(seed),
         onGodRerollSeed: () => rerollSeed(),
+        onTownExit: () => requestLeaveTown(),
       });
     }
   }
