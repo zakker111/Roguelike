@@ -18,8 +18,8 @@
   const COLS = 30;
   const ROWS = 20;
   
-  const MAP_COLS = 60;
-  const MAP_ROWS = 40;
+  const MAP_COLS = 120;
+  const MAP_ROWS = 80;
 
   const FOV_DEFAULT = 8;
   let fovRadius = FOV_DEFAULT;

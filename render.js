@@ -55,8 +55,10 @@
       // lightweight palette for overworld
       const WCOL = {
         water: "#0a1b2a",
+        river: "#0e2f4a",
         grass: "#10331a",
         forest: "#0d2615",
+        swamp: "#1b2a1e",
         mountain: "#2f2f34",
         town: "#3a2f1b",
         dungeon: "#2a1b2a",
@@ -76,6 +78,8 @@
           const WT = (typeof window !== "undefined" && window.World && World.TILES) ? World.TILES : null;
           if (WT) {
             if (t === WT.WATER) fill = WCOL.water;
+            else if (t === WT.RIVER) fill = WCOL.river;
+            else if (t === WT.SWAMP) fill = WCOL.swamp;
             else if (t === WT.GRASS) fill = WCOL.grass;
             else if (t === WT.FOREST) fill = WCOL.forest;
             else if (t === WT.MOUNTAIN) fill = WCOL.mountain;
