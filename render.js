@@ -228,6 +228,23 @@
         }
       }
 
+      // draw props (wells, benches, lamps, stalls, fountain)
+      if (Array.isArray(ctx.townProps)) {
+        for (const p of ctx.townProps) {
+          if (p.x < startX || p.x > endX || p.y < startY || p.y > endY) continue;
+          const screenX = (p.x - startX) * TILE - tileOffsetX;
+          const screenY = (p.y - startY) * TILE - tileOffsetY;
+          let glyph = "?";
+          let color = "#e5e7eb";
+          if (p.type === "well") { glyph = "O"; color = "#7aa2f7"; }
+          else if (p.type === "fountain") { glyph = "◌"; color = "#89ddff"; }
+          else if (p.type === "bench") { glyph = "≡"; color = "#d7ba7d"; }
+          else if (p.type === "lamp") { glyph = "†"; color = "#ffd166"; }
+          else if (p.type === "stall") { glyph = "s"; color = "#b4f9f8"; }
+          drawGlyphScreen(ctx2d, screenX, screenY, glyph, color, TILE);
+        }
+      }
+
       // draw NPCs
       if (Array.isArray(npcs)) {
         for (const n of npcs) {

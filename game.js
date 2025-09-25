@@ -29,6 +29,7 @@
   let world = null;          // { map, width, height, towns, dungeons }
   let npcs = [];             // simple NPCs for town mode: { x, y, name, lines:[] }
   let shops = [];            // shops in town mode: [{x,y,type,name}]
+  let townProps = [];        // interactive town props: [{x,y,type,name}]
   let cameFromWorld = false; // true if current dungeon was entered from world
   let worldReturnPos = null; // { x, y } to return to when exiting dungeon or town
   let dungeonExitAt = null;  // { x, y } tile in dungeon floor 1 acting as exit back to world
@@ -650,6 +651,7 @@
       world,
       npcs,
       shops,
+      townProps,
       townExitAt,
       enemyColor: (t) => enemyColor(t),
     };
@@ -720,7 +722,7 @@
   }
 
   function generateTown() {
-    // Town layout with street grid, hollow buildings (wall perimeter, floor interior), doors and shops
+    // Town layout with street grid, hollow buildings (wall perimeter, floor interior), doors and shops, central plaza and props
     const W = MAP_COLS, H = MAP_ROWS;
     map = Array.from({ length: H }, () => Array(W).fill(TILES.FLOOR));
 
@@ -734,6 +736,7 @@
         }
       }
     }
+
     // Streets grid
     for (let y = 0; y < H; y += 8) {
       for (let x = 0; x < W; x++) map[y][x] = TILES.FLOOR;
@@ -741,14 +744,18 @@
     for (let x = 0; x < W; x += 10) {
       for (let y = 0; y < H; y++) map[y][x] = TILES.FLOOR;
     }
-    // Place a few buildings
+
+    // Buildings (more to reduce empty space)
     const buildings = [
       { x: 6, y: 4, w: 12, h: 8 },
-      { x: 26, y: 3, w: 12, h: 9 },
-      { x: 44, y: 6, w: 12, h: 7 },
+      { x: 24, y: 3, w: 12, h: 9 },
+      { x: 42, y: 6, w: 12, h: 7 },
       { x: 8, y: 18, w: 14, h: 9 },
-      { x: 30, y: 16, w: 12, h: 10 },
-      { x: 48, y: 20, w: 10, h: 8 },
+      { x: 28, y: 16, w: 12, h: 10 },
+      { x: 46, y: 20, w: 10, h: 8 },
+      { x: 12, y: 30, w: 12, h: 8 },
+      { x: 30, y: 30, w: 12, h: 8 },
+      { x: 48, y: 30, w: 12, h: 8 },
     ];
     buildings.forEach(b => rectHollow(b.x, b.y, b.w, b.h));
 
@@ -764,33 +771,78 @@
       return { x: dx, y: dy };
     }
 
-    // Shops
+    // Shops at some doors
     shops = [];
-    const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn", "Fletcher", "Herbalist"];
-    const shopCount = Math.min(5, buildings.length);
+    const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn", "Fletcher", "Herbalist", "Fishmonger"];
+    const shopCount = Math.min(6, buildings.length);
     for (let i = 0; i < shopCount; i++) {
       const d = placeDoor(buildings[i]);
       shops.push({ x: d.x, y: d.y, type: "shop", name: shopNames[i % shopNames.length] });
     }
 
-    // Town NPCs (peaceful) around central plaza
-    npcs = [];
+    // Central plaza
     const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
+    const plazaW = 12, plazaH = 10;
+    for (let yy = plaza.y - (plazaH / 2) | 0; yy <= plaza.y + (plazaH / 2) | 0; yy++) {
+      for (let xx = plaza.x - (plazaW / 2) | 0; xx <= plaza.x + (plazaW / 2) | 0; xx++) {
+        if (yy <= 0 || xx <= 0 || yy >= H - 1 || xx >= W - 1) continue;
+        map[yy][xx] = TILES.FLOOR;
+      }
+    }
+
+    // Props: wells, lamps, benches, stalls
+    townProps = [];
+    const addProp = (x, y, type, name) => {
+      if (x <= 0 || y <= 0 || x >= W - 1 || y >= H - 1) return;
+      if (map[y][x] !== TILES.FLOOR) return;
+      if (townProps.some(p => p.x === x && p.y === y)) return;
+      townProps.push({ x, y, type, name });
+    };
+
+    // Well at center
+    addProp(plaza.x, plaza.y, "well", "Town Well");
+
+    // Lamps at corners of plaza
+    addProp(plaza.x - 6, plaza.y - 4, "lamp", "Lamp Post");
+    addProp(plaza.x + 6, plaza.y - 4, "lamp", "Lamp Post");
+    addProp(plaza.x - 6, plaza.y + 4, "lamp", "Lamp Post");
+    addProp(plaza.x + 6, plaza.y + 4, "lamp", "Lamp Post");
+
+    // Benches along plaza edges
+    for (let dx = -4; dx <= 4; dx += 4) {
+      addProp(plaza.x + dx, plaza.y - 3, "bench", "Bench");
+      addProp(plaza.x + dx, plaza.y + 3, "bench", "Bench");
+    }
+
+    // Market stalls near plaza
+    for (let i = -4; i <= 4; i += 4) {
+      addProp(plaza.x - 8, plaza.y + i, "stall", "Market Stall");
+      addProp(plaza.x + 8, plaza.y + i, "stall", "Market Stall");
+    }
+
+    // Decorative fountain variant near well sometimes
+    if (rng() < 0.35) addProp(plaza.x + 1, plaza.y, "fountain", "Fountain");
+
+    // Town NPCs (peaceful) around central plaza with retries
+    npcs = [];
     const lines = [
       "Welcome to our town.",
       "Shops are marked with S.",
       "Rest your feet a while.",
       "The dungeon is dangerous.",
       "Buy supplies before you go.",
+      "Lovely day on the plaza.",
+      "Care for a drink at the well?",
     ];
     let placed = 0, tries = 0;
-    while (placed < 8 && tries++ < 200) {
-      const ox = randInt(-8, 8), oy = randInt(-6, 6);
+    while (placed < 10 && tries++ < 400) {
+      const ox = randInt(-10, 10), oy = randInt(-8, 8);
       const x = Math.max(1, Math.min(W - 2, plaza.x + ox));
       const y = Math.max(1, Math.min(H - 2, plaza.y + oy));
       if (map[y][x] !== TILES.FLOOR) continue;
       if (x === player.x && y === player.y) continue;
       if (npcs.some(n => n.x === x && n.y === y)) continue;
+      if (townProps.some(p => p.x === x && p.y === y)) continue;
       npcs.push({ x, y, name: `Villager ${placed + 1}`, lines });
       placed++;
     }
@@ -1144,11 +1196,52 @@
   }
 
   
+  function interactTownProps() {
+    if (mode !== "town") return false;
+    const candidates = [];
+    const coords = [
+      { x: player.x, y: player.y },
+      { x: player.x + 1, y: player.y },
+      { x: player.x - 1, y: player.y },
+      { x: player.x, y: player.y + 1 },
+      { x: player.x, y: player.y - 1 },
+    ];
+    for (const c of coords) {
+      const p = townProps.find(p => p.x === c.x && p.y === c.y);
+      if (p) candidates.push(p);
+    }
+    if (!candidates.length) return false;
+    const p = candidates[0];
+    switch (p.type) {
+      case "well":
+        log("You draw some cool water from the well. Refreshing.", "good");
+        break;
+      case "fountain":
+        log("You watch the fountain for a moment. You feel calmer.", "info");
+        break;
+      case "bench":
+        log("You sit on the bench and rest a moment.", "info");
+        break;
+      case "lamp":
+        log("The lamp flickers warmly.", "info");
+        break;
+      case "stall":
+        log("A vendor waves: 'Fresh wares soon!'", "notice");
+        break;
+      default:
+        log("There's nothing special here.");
+    }
+    requestDraw();
+    return true;
+  }
+
   function lootCorpse() {
     if (isDead) return;
     if (mode === "town") {
-      // Talk in town mode
-      talkNearbyNPC();
+      // Interact with props first, then attempt to talk to an NPC
+      if (interactTownProps()) return;
+      if (talkNearbyNPC()) return;
+      log("Nothing to do here.");
       return;
     }
     if (mode === "world") {
