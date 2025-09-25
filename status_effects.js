@@ -14,14 +14,19 @@
  * - Bleed applies 1 damage per turn and can kill; leaves a blood decal if available (ctx.addBloodDecal).
  */
 (function () {
-  function capName(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+  function Cap(ctx, s) {
+    const cap = (ctx && ctx.utils && typeof ctx.utils.capitalize === "function")
+      ? ctx.utils.capitalize
+      : (t) => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+    return cap(s);
+  }
 
   function applyLimpToEnemy(ctx, enemy, duration) {
     if (!enemy) return;
     const d = Math.max(1, duration | 0);
     enemy.immobileTurns = Math.max(enemy.immobileTurns || 0, d);
     try {
-      ctx.log(`${capName(enemy.type || "enemy")} staggers; its legs are crippled and it can't move for ${d} turn${d > 1 ? "s" : ""}.`, "notice");
+      ctx.log(`${Cap(ctx, enemy.type || "enemy")} staggers; its legs are crippled and it can't move for ${d} turn${d > 1 ? "s" : ""}.`, "notice");
     } catch (_) {}
   }
 
@@ -39,7 +44,7 @@
     const d = Math.max(1, duration | 0);
     enemy.bleedTurns = Math.max(enemy.bleedTurns || 0, d);
     try {
-      ctx.log(`${capName(enemy.type || "enemy")} starts bleeding (${enemy.bleedTurns}).`, "flavor");
+      ctx.log(`${Cap(ctx, enemy.type || "enemy")} starts bleeding (${enemy.bleedTurns}).`, "flavor");
     } catch (_) {}
   }
 
@@ -91,7 +96,7 @@
           if (e.hp <= 0) {
             died.push(e);
           } else {
-            try { ctx.log(`${capName(e.type || "enemy")} bleeds (1).`, "flavor"); } catch (_) {}
+            try { ctx.log(`${Cap(ctx, e.type || "enemy")} bleeds (1).`, "flavor"); } catch (_) {}
           }
         }
       }

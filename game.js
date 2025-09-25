@@ -176,7 +176,9 @@
   }
   const randInt = (min, max) => Math.floor(rng() * (max - min + 1)) + min;
   const chance = (p) => rng() < p;
-  const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  const capitalize = (window.PlayerUtils && typeof PlayerUtils.capitalize === "function")
+    ? PlayerUtils.capitalize
+    : (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   const enemyColor = (type) => {
     if (window.Enemies && typeof Enemies.colorFor === "function") {
       return Enemies.colorFor(type);
