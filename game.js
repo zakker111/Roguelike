@@ -27,10 +27,12 @@
   // Game modes: "world" (overworld) or "dungeon" (roguelike floor)
   let mode = "world";
   let world = null;          // { map, width, height, towns, dungeons }
-  let npcs = [];             // simple NPCs on the world map: { x, y, name, lines:[] }
+  let npcs = [];             // simple NPCs for town mode: { x, y, name, lines:[] }
+  let shops = [];            // shops in town mode: [{x,y,type,name}]
   let cameFromWorld = false; // true if current dungeon was entered from world
-  let worldReturnPos = null; // { x, y } to return to when exiting dungeon
+  let worldReturnPos = null; // { x, y } to return to when exiting dungeon or town
   let dungeonExitAt = null;  // { x, y } tile in dungeon floor 1 acting as exit back to world
+  let townExitAt = null;     // { x, y } tile in town acting as gate back to world
 
   
   const camera = {
@@ -588,8 +590,8 @@
   }
 
   function recomputeFOV() {
-    if (mode === "world") {
-      // In overworld, reveal entire map (no fog-of-war)
+    if (mode === "world" || mode === "town") {
+      // In overworld and town, reveal entire map (no fog-of-war)
       const rows = map.length;
       const cols = map[0] ? map[0].length : 0;
       const shapeOk = Array.isArray(visible) && visible.length === rows && (rows === 0 || (visible[0] && visible[0].length === cols));
@@ -647,6 +649,7 @@
       mode,
       world,
       npcs,
+      shops,
       enemyColor: (t) => enemyColor(t),
     };
   }
@@ -736,16 +739,16 @@
     enemies = [];
     corpses = [];
     decals = [];
+    npcs = [];   // no NPCs on overworld
+    shops = [];  // no shops on overworld
     map = world.map;
     // fill seen/visible fully in world
-    seen = Array.from({ length: map.length }, (_, y) => Array(map[0].length).fill(true));
-    visible = Array.from({ length: map.length }, (_, y) => Array(map[0].length).fill(true));
-    populateNPCs();
-    ensureWorldStartClear();
+    seen = Array.from({ length: map.length }, () => Array(map[0].length).fill(true));
+    visible = Array.from({ length: map.length }, () => Array(map[0].length).fill(true));
     updateCamera();
     recomputeFOV();
     updateUI();
-    log("You arrive in the overworld. Towne");
+    log("You arrive in the overworld. Towns (T), Dungeons (D).", "notice");
     requestDraw();
   }
 
@@ -785,7 +788,7 @@
   }
 
   function talkNearbyNPC() {
-    if (mode !== "world") return false;
+    if (mode !== "town") return false;
     const targets = [];
     for (const n of npcs) {
       const d = Math.abs(n.x - player.x) + Math.abs(n.y - player.y);
@@ -802,6 +805,102 @@
     return true;
   }
 
+  function generateTown() {
+    // Simple town layout: outer streets with several rectangular buildings and a gate at player's spawn
+    const W = MAP_COLS, H = MAP_ROWS;
+    map = Array.from({ length: H }, () => Array(W).fill(TILES.FLOOR));
+
+    // Carve building rectangles
+    function rect(x, y, w, h) {
+      for (let yy = y; yy < y + h; yy++) {
+        for (let xx = x; xx < x + w; xx++) {
+          if (yy <= 0 || xx <= 0 || yy >= H - 1 || xx >= W - 1) continue;
+          map[yy][xx] = TILES.WALL;
+        }
+      }
+    }
+    // Streets grid
+    for (let y = 0; y < H; y += 8) {
+      for (let x = 0; x < W; x++) map[y][x] = TILES.FLOOR;
+    }
+    for (let x = 0; x < W; x += 10) {
+      for (let y = 0; y < H; y++) map[y][x] = TILES.FLOOR;
+    }
+    // Place a few buildings
+    const buildings = [
+      { x: 6, y: 4, w: 12, h: 8 },
+      { x: 26, y: 3, w: 12, h: 9 },
+      { x: 44, y: 6, w: 12, h: 7 },
+      { x: 8, y: 18, w: 14, h: 9 },
+      { x: 30, y: 16, w: 12, h: 10 },
+      { x: 48, y: 20, w: 10, h: 8 },
+    ];
+    buildings.forEach(b => rect(b.x, b.y, b.w, b.h));
+    // Doors on buildings
+    function placeDoor(b) {
+      const side = randInt(0, 3);
+      let dx = b.x, dy = b.y;
+      if (side === 0) { dx = b.x + ((b.w / 2) | 0); dy = b.y; }
+      if (side === 1) { dx = b.x + b.w - 1; dy = b.y + ((b.h / 2) | 0); }
+      if (side === 2) { dx = b.x + ((b.w / 2) | 0); dy = b.y + b.h - 1; }
+      if (side === 3) { dx = b.x; dy = b.y + ((b.h / 2) | 0); }
+      if (dx >= 0 && dy >= 0 && dx < W && dy < H) map[dy][dx] = TILES.DOOR;
+      return { x: dx, y: dy };
+    }
+    shops = [];
+    const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn"];
+    for (let i = 0; i < Math.min(shops.length + 4, buildings.length); i++) {
+      const d = placeDoor(buildings[i]);
+      shops.push({ x: d.x, y: d.y, type: "shop", name: shopNames[i % shopNames.length] });
+    }
+
+    // Town NPCs (peaceful)
+    npcs = [];
+    const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
+    const lines = [
+      "Welcome to our town.",
+      "Shops are marked with S.",
+      "Rest your feet a while.",
+      "The dungeon is dangerous.",
+      "Buy supplies before you go.",
+    ];
+    for (let i = 0; i < 6; i++) {
+      const ox = randInt(-6, 6), oy = randInt(-4, 4);
+      const x = Math.max(1, Math.min(W - 2, plaza.x + ox));
+      const y = Math.max(1, Math.min(H - 2, plaza.y + oy));
+      if (map[y][x] !== TILES.FLOOR) continue;
+      if (x === player.x && y === player.y) continue;
+      npcs.push({ x, y, name: `Villager ${i + 1}`, lines });
+    }
+
+    // Gate/exit at player's spawn position
+    townExitAt = { x: player.x, y: player.y };
+
+    // Town is fully visible
+    seen = Array.from({ length: H }, () => Array(W).fill(true));
+    visible = Array.from({ length: H }, () => Array(W).fill(true));
+    enemies = [];
+    corpses = [];
+    decals = [];
+  }
+
+  function enterTownIfOnTile() {
+    if (mode !== "world" || !world) return false;
+    const WT = window.World && World.TILES;
+    const t = world.map[player.y][player.x];
+    if (WT && t === World.TILES.TOWN) {
+      worldReturnPos = { x: player.x, y: player.y };
+      mode = "town";
+      // Start town with the player at notional gate; we'll keep same coords but swap map
+      generateTown();
+      log("You enter the town.", "notice");
+      updateCamera();
+      requestDraw();
+      return true;
+    }
+    return false;
+  }
+
   function enterDungeonIfOnEntrance() {
     if (mode !== "world" || !world) return false;
     const t = world.map[player.y][player.x];
@@ -816,7 +915,28 @@
       log("You enter the dungeon.", "notice");
       return true;
     }
-    log("Stand on a dungeon (D) tile to enter.");
+    return false;
+  }
+
+  function returnToWorldFromTown() {
+    if (mode !== "town" || !world) return false;
+    if (townExitAt && player.x === townExitAt.x && player.y === townExitAt.y) {
+      mode = "world";
+      map = world.map;
+      npcs = [];
+      shops = [];
+      if (worldReturnPos) {
+        player.x = worldReturnPos.x;
+        player.y = worldReturnPos.y;
+      }
+      recomputeFOV();
+      updateCamera();
+      updateUI();
+      log("You return to the overworld.", "notice");
+      requestDraw();
+      return true;
+    }
+    log("Return to the town gate to exit to the overworld.", "info");
     return false;
   }
 
@@ -848,9 +968,17 @@
   function descendIfPossible() {
     hideLootPanel();
 
-    // World: try to enter a dungeon from an entrance tile
     if (mode === "world") {
-      enterDungeonIfOnEntrance();
+      // Try entering town first, else dungeon
+      if (!enterTownIfOnTile()) {
+        enterDungeonIfOnEntrance();
+      }
+      return;
+    }
+
+    if (mode === "town") {
+      // Exit town if at gate
+      returnToWorldFromTown();
       return;
     }
 
@@ -916,7 +1044,7 @@
   function tryMovePlayer(dx, dy) {
     if (isDead) return;
 
-    // WORLD MODE: move over overworld tiles, avoid walking onto NPCs
+    // WORLD MODE: move over overworld tiles (no NPCs here)
     if (mode === "world") {
       const nx = player.x + dx;
       const ny = player.y + dy;
@@ -924,15 +1052,24 @@
       if (!wmap) return;
       const rows = wmap.length, cols = rows ? (wmap[0] ? wmap[0].length : 0) : 0;
       if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) return;
+      if (window.World && typeof World.isWalkable === "function" && World.isWalkable(wmap[ny][nx])) {
+        player.x = nx; player.y = ny;
+        updateCamera();
+        turn();
+      }
+      return;
+    }
 
-      // Block if NPC occupies the target
-      const npcThere = npcs && npcs.some(n => n.x === nx && n.y === ny);
-      if (npcThere) {
+    // TOWN MODE: block NPC tiles, use local isWalkable
+    if (mode === "town") {
+      const nx = player.x + dx;
+      const ny = player.y + dy;
+      if (!inBounds(nx, ny)) return;
+      if (npcs.some(n => n.x === nx && n.y === ny)) {
         log("Excuse me!", "info");
         return;
       }
-      // Check tile walkability via World
-      if (window.World && typeof World.isWalkable === "function" && World.isWalkable(wmap[ny][nx])) {
+      if (isWalkable(nx, ny)) {
         player.x = nx; player.y = ny;
         updateCamera();
         turn();
@@ -1034,11 +1171,13 @@
   
   function lootCorpse() {
     if (isDead) return;
+    if (mode === "town") {
+      // Talk in town mode
+      talkNearbyNPC();
+      return;
+    }
     if (mode === "world") {
-      // Interact in world: talk to nearby NPCs, or try return to world if oddly called in dungeon
-      if (!talkNearbyNPC()) {
-        // no-op if no NPC nearby
-      }
+      log("Nothing to loot here.");
       return;
     }
     if (window.Loot && typeof Loot.lootHere === "function") {
@@ -1378,7 +1517,8 @@
     floor = 1;
     window.floor = floor;
     isDead = false;
-    moderateLevel(floor);
+    mode = "world";
+    initWorld();
   }
 
   

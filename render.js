@@ -25,7 +25,7 @@
   function draw(ctx) {
     const {
       ctx2d, TILE, ROWS, COLS, COLORS, TILES,
-      map, seen, visible, player, enemies, corpses, decals, camera: camMaybe, mode, world, npcs
+      map, seen, visible, player, enemies, corpses, decals, camera: camMaybe, mode, world, npcs, shops
     } = ctx;
 
     const enemyColor = (t) => (ctx.enemyColor ? ctx.enemyColor(t) : enemyColorFromModule(t, COLORS));
@@ -96,6 +96,55 @@
       }
 
       // NPCs
+      if (Array.isArray(npcs)) {
+        for (const n of npcs) {
+          if (n.x < startX || n.x > endX || n.y < startY || n.y > endY) continue;
+          const screenX = (n.x - startX) * TILE - tileOffsetX;
+          const screenY = (n.y - startY) * TILE - tileOffsetY;
+          drawGlyphScreen(ctx2d, screenX, screenY, "n", "#b4f9f8", TILE);
+        }
+      }
+
+      // player
+      if (player.x >= startX && player.x <= endX && player.y >= startY && player.y <= endY) {
+        const screenX = (player.x - startX) * TILE - tileOffsetX;
+        const screenY = (player.y - startY) * TILE - tileOffsetY;
+        drawGlyphScreen(ctx2d, screenX, screenY, "@", COLORS.player, TILE);
+      }
+      return;
+    }
+
+    // TOWN MODE RENDER
+    if (mode === "town") {
+      const TCOL = {
+        wall: "#2f2b26",       // building
+        floor: "#0f1620",      // street/plaza
+        door: "#6f5b3e",
+        shop: "#d7ba7d",
+      };
+      if (drawGrid) ctx2d.strokeStyle = "rgba(122,162,247,0.05)";
+
+      for (let y = startY; y <= endY; y++) {
+        const rowMap = map[y];
+        for (let x = startX; x <= endX; x++) {
+          const screenX = (x - startX) * TILE - tileOffsetX;
+          const screenY = (y - startY) * TILE - tileOffsetY;
+          const type = rowMap[x];
+          let fill = TCOL.floor;
+          if (type === TILES.WALL) fill = TCOL.wall;
+          else if (type === TILES.DOOR) fill = TCOL.door;
+          ctx2d.fillStyle = fill;
+          ctx2d.fillRect(screenX, screenY, TILE, TILE);
+          if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
+
+          // shop glyph overlay if provided
+          if (Array.isArray(shops) && shops.some(s => s.x === x && s.y === y)) {
+            drawGlyphScreen(ctx2d, screenX, screenY, "S", TCOL.shop, TILE);
+          }
+        }
+      }
+
+      // draw NPCs
       if (Array.isArray(npcs)) {
         for (const n of npcs) {
           if (n.x < startX || n.x > endX || n.y < startY || n.y > endY) continue;
