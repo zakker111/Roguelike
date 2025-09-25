@@ -890,6 +890,44 @@
     player.y = (H / 2) | 0;
   }
 
+  function isFreeTownFloor(x, y) {
+    if (!inBounds(x, y)) return false;
+    if (map[y][x] !== TILES.FLOOR) return false;
+    if (x === player.x && y === player.y) return false;
+    if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
+    if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y)) return false;
+    return true;
+  }
+
+  function spawnGateGreeters(count = 4) {
+    if (!townExitAt) return;
+    const dirs = [
+      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+      { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 }
+    ];
+    const names = ["Ava", "Borin", "Cora", "Darin", "Eda", "Finn", "Goro", "Hana"];
+    const lines = [
+      "Welcome to our town.",
+      "Shops are marked with S.",
+      "Stay as long as you like.",
+      "The plaza is at the center.",
+    ];
+    let placed = 0;
+    // two rings around the gate
+    for (let ring = 1; ring <= 2 && placed < count; ring++) {
+      for (const d of dirs) {
+        const x = townExitAt.x + d.dx * ring;
+        const y = townExitAt.y + d.dy * ring;
+        if (isFreeTownFloor(x, y)) {
+          const name = names[randInt(0, names.length - 1)];
+          npcs.push({ x, y, name, lines });
+          placed++;
+          if (placed >= count) break;
+        }
+      }
+    }
+  }
+
   function enterTownIfOnTile() {
     if (mode !== "world" || !world) return false;
     const WT = window.World && World.TILES;
@@ -901,6 +939,8 @@
       generateTown();
       ensureTownSpawnClear();
       townExitAt = { x: player.x, y: player.y };
+      // Place a few greeters near the gate so the entrance isn't empty
+      spawnGateGreeters(4);
       log("You enter the town. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.", "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
