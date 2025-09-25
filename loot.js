@@ -12,7 +12,7 @@
  *
  * ctx (expected subset):
  * {
- *   player, corpses, rng, randInt, chance,
+ *   player, corpses, rng, randInt, chance, utils:{randFloat, round1},
  *   describeItem(), equipIfBetter(), addPotionToInventory(), initialDecay(),
  *   log(), updateUI(), renderInventory(), showLoot(list), hideLoot(), turn(),
  *   Items?, Enemies?
@@ -45,7 +45,7 @@
 
   /**
    * Create an equipment item when Items.createEquipment is unavailable.
-   * Uses ctx.rng to pick a slot and generate tier-appropriate stats and names.
+   * Uses ctx.utils.randFloat and ctx.rng to pick a slot and generate tier-appropriate stats and names.
    * This ensures the game remains playable without the Items module.
    */
   function fallbackEquipment(ctx, tier) {
@@ -57,57 +57,50 @@
       if (ctx.rng() < 0.65) {
         const w = ["sword", "axe", "bow"][ctx.randInt(0, 2)];
         const ranges = tier === 1 ? [0.5, 2.4] : tier === 2 ? [1.2, 3.4] : [2.2, 4.0];
-        let atk = randFloatLocal(ctx, ranges[0], ranges[1], 1);
-        if (w === "axe") atk = Math.min(4.0, round1Local(atk + randFloatLocal(ctx, 0.1, 0.5, 1)));
+        let atk = ctx.utils.randFloat(ranges[0], ranges[1], 1);
+        if (w === "axe") atk = Math.min(4.0, ctx.utils.round1(atk + ctx.utils.randFloat(0.1, 0.5, 1)));
         return { kind: "equip", slot: "hand", name: `${material} ${w}`, atk, tier, decay: ctx.initialDecay(tier) };
       } else {
         const ranges = tier === 1 ? [0.4, 2.0] : tier === 2 ? [1.2, 3.2] : [2.0, 4.0];
-        const def = randFloatLocal(ctx, ranges[0], ranges[1], 1);
+        const def = ctx.utils.randFloat(ranges[0], ranges[1], 1);
         return { kind: "equip", slot: "hand", name: `${material} shield`, def, tier, decay: ctx.initialDecay(tier) };
       }
     }
 
     if (cat === "head") {
       const ranges = tier === 1 ? [0.2, 1.6] : tier === 2 ? [0.8, 2.8] : [1.6, 3.6];
-      const def = randFloatLocal(ctx, ranges[0], ranges[1], 1);
+      const def = ctx.utils.randFloat(ranges[0], ranges[1], 1);
       const name = tier >= 3 ? `${material} great helm` : `${material} helmet`;
       return { kind: "equip", slot: "head", name, def, tier, decay: ctx.initialDecay(tier) };
     }
 
     if (cat === "torso") {
       const ranges = tier === 1 ? [0.6, 2.6] : tier === 2 ? [1.6, 3.6] : [2.4, 4.0];
-      const def = randFloatLocal(ctx, ranges[0], ranges[1], 1);
+      const def = ctx.utils.randFloat(ranges[0], ranges[1], 1);
       const name = tier >= 3 ? `${material} plate armor` : (tier === 2 ? `${material} chainmail` : `${material} leather armor`);
       return { kind: "equip", slot: "torso", name, def, tier, decay: ctx.initialDecay(tier) };
     }
 
     if (cat === "legs") {
       const ranges = tier === 1 ? [0.3, 1.8] : tier === 2 ? [1.0, 3.0] : [1.8, 3.8];
-      const def = randFloatLocal(ctx, ranges[0], ranges[1], 1);
+      const def = ctx.utils.randFloat(ranges[0], ranges[1], 1);
       return { kind: "equip", slot: "legs", name: `${material} leg armor`, def, tier, decay: ctx.initialDecay(tier) };
     }
 
     if (cat === "hands") {
       const ranges = tier === 1 ? [0.2, 1.2] : tier === 2 ? [0.8, 2.4] : [1.2, 3.0];
-      const def = randFloatLocal(ctx, ranges[0], ranges[1], 1);
+      const def = ctx.utils.randFloat(ranges[0], ranges[1], 1);
       const name = tier >= 2 ? `${material} gauntlets` : `${material} gloves`;
       const drop = { kind: "equip", slot: "hands", name, def, tier, decay: ctx.initialDecay(tier) };
       if (tier >= 2 && ctx.chance(0.5)) {
-        const atk = tier === 2 ? randFloatLocal(ctx, 0.1, 0.6, 1) : randFloatLocal(ctx, 0.2, 1.0, 1);
+        const atk = tier === 2 ? ctx.utils.randFloat(0.1, 0.6, 1) : ctx.utils.randFloat(0.2, 1.0, 1);
         drop.atk = atk;
       }
       return drop;
     }
 
-    const atk = randFloatLocal(ctx, 0.8 + 0.4 * (tier - 1), 2.4 + 0.8 * (tier - 1), 1);
+    const atk = ctx.utils.randFloat(0.8 + 0.4 * (tier - 1), 2.4 + 0.8 * (tier - 1), 1);
     return { kind: "equip", slot: "hand", name: `${material} sword`, atk, tier, decay: ctx.initialDecay(tier) };
-  }
-
-  function round1Local(n) { return Math.round(n * 10) / 10; }
-  function randFloatLocal(ctx, min, max, decimals = 1) {
-    const v = min + ctx.rng() * (max - min);
-    const p = Math.pow(10, decimals);
-    return Math.round(v * p) / p;
   }
 
   /**
