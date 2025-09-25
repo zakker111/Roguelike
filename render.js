@@ -25,7 +25,7 @@
   function draw(ctx) {
     const {
       ctx2d, TILE, ROWS, COLS, COLORS, TILES,
-      map, seen, visible, player, enemies, corpses, decals, camera: camMaybe
+      map, seen, visible, player, enemies, corpses, decals, camera: camMaybe, mode, world
     } = ctx;
 
     const enemyColor = (t) => (ctx.enemyColor ? ctx.enemyColor(t) : enemyColorFromModule(t, COLORS));
