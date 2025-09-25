@@ -246,6 +246,7 @@
         drawGlyphScreen(ctx2d, screenX, screenY, e.glyph || "e", enemyColor(e.type), TILE);
       }
     }
+    }
 
     // player
     if (player.x >= startX && player.x <= endX && player.y >= startY && player.y <= endY) {
