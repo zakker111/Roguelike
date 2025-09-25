@@ -73,22 +73,23 @@
           const screenY = (y - startY) * TILE - tileOffsetY;
           const t = row[x];
           let fill = WCOL.grass;
-          switch (t) {
-            case (window.World && World.TILES ? World.TILES.WATER : -1): fill = WCOL.water; break;
-            case (window.World && World.TILES ? World.TILES.GRASS : -1): fill = WCOL.grass; break;
-            case (window.World && World.TILES ? World.TILES.FOREST : -1): fill = WCOL.forest; break;
-            case (window.World && World.TILES ? World.TILES.MOUNTAIN : -1): fill = WCOL.mountain; break;
-            case (window.World && World.TILES ? World.TILES.TOWN : -1): fill = WCOL.town; break;
-            case (window.World && World.TILES ? World.TILES.DUNGEON : -1): fill = WCOL.dungeon; break;
+          const WT = (typeof window !== "undefined" && window.World && World.TILES) ? World.TILES : null;
+          if (WT) {
+            if (t === WT.WATER) fill = WCOL.water;
+            else if (t === WT.GRASS) fill = WCOL.grass;
+            else if (t === WT.FOREST) fill = WCOL.forest;
+            else if (t === WT.MOUNTAIN) fill = WCOL.mountain;
+            else if (t === WT.TOWN) fill = WCOL.town;
+            else if (t === WT.DUNGEON) fill = WCOL.dungeon;
           }
           ctx2d.fillStyle = fill;
           ctx2d.fillRect(screenX, screenY, TILE, TILE);
           if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
 
           // Overlay glyphs for special overworld tiles
-          if (window.World && t === World.TILES.TOWN) {
+          if (WT && t === WT.TOWN) {
             drawGlyphScreen(ctx2d, screenX, screenY, "T", "#d7ba7d", TILE);
-          } else if (window.World && t === World.TILES.DUNGEON) {
+          } else if (WT && t === WT.DUNGEON) {
             drawGlyphScreen(ctx2d, screenX, screenY, "D", "#c586c0", TILE);
           }
         }

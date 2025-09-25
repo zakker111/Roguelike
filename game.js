@@ -644,6 +644,9 @@
       map, seen, visible,
       player, enemies, corpses, decals,
       camera,
+      mode,
+      world,
+      npcs,
       enemyColor: (t) => enemyColor(t),
     };
   }
@@ -661,8 +664,143 @@
 
   
 
+  // WORLD helpers
+  function populateNPCs() {
+    npcs = [];
+    if (!world || !world.towns || !world.map) return;
+    const m = world.map;
+    const rows = m.length, cols = rows ? (m[0] ? m[0].length : 0) : 0;
+    const tryPlaceNear = (x, y) => {
+      const spots = [
+        { x: x + 1, y }, { x: x - 1, y }, { x, y: y + 1 }, { x, y: y - 1 },
+        { x: x + 1, y: y + 1 }, { x: x + 1, y: y - 1 }, { x: x - 1, y: y + 1 }, { x: x - 1, y: y - 1 },
+      ];
+      for (const s of spots) {
+        if (s.x < 0 || s.y < 0 || s.x >= cols || s.y >= rows) continue;
+        if (!World.isWalkable(m[s.y][s.x])) continue;
+        if (npcs.some(n => n.x === s.x && n.y === s.y)) continue;
+        if (s.x === player.x && s.y === player.y) continue;
+        return s;
+      }
+      return null;
+    };
+    for (const town of world.towns) {
+      const count = randInt(2, 4);
+      for (let i = 0; i < count; i++) {
+        const spot = tryPlaceNear(town.x, town.y);
+        if (!spot) continue;
+        const names = ["Ava", "Borin", "Cora", "Darin", "Eda", "Finn", "Goro", "Hana"];
+        const name = names[randInt(0, names.length - 1)];
+        const lines = [
+          "Welcome to our town.",
+          "Beware the dungeons; they change with each descent.",
+          "If you're hurt, potions help.",
+          "I heard treasure lies below.",
+          "The stairs are marked with '>' underground.",
+          "Stay a while and listen.",
+        ];
+        npcs.push({ x: spot.x, y: spot.y, name, lines });
+      }
+    }
+  }
+
+  function initWorld() {
+    if (!(window.World && typeof World.generate === "function")) {
+      log("World module missing; generating dungeon instead.", "warn");
+      mode = "dungeon";
+      generateLevel(floor);
+      return;
+    }
+    const ctx = getCtx();
+    world = World.generate(ctx, { width: MAP_COLS, height: MAP_ROWS });
+    const start = World.pickTownStart(world, rng);
+    player.x = start.x; player.y = start.y;
+    mode = "world";
+    enemies = [];
+    corpses = [];
+    decals = [];
+    map = world.map;
+    // fill seen/visible fully in world
+    seen = Array.from({ length: map.length }, (_, y) => Array(map[0].length).fill(true));
+    visible = Array.from({ length: map.length }, (_, y) => Array(map[0].length).fill(true));
+    populateNPCs();
+    updateCamera();
+    recomputeFOV();
+    updateUI();
+    log("You arrive in the overworld. Towns (T), Dungeons (D).", "notice");
+    requestDraw();
+  }
+
+  function talkNearbyNPC() {
+    if (mode !== "world") return false;
+    const targets = [];
+    for (const n of npcs) {
+      const d = Math.abs(n.x - player.x) + Math.abs(n.y - player.y);
+      if (d <= 1) targets.push(n);
+    }
+    if (targets.length === 0) {
+      log("There is no one to talk to here.");
+      return false;
+    }
+    const npc = targets[randInt(0, targets.length - 1)];
+    const line = npc.lines[randInt(0, npc.lines.length - 1)];
+    log(`${npc.name}: ${line}`, "info");
+    requestDraw();
+    return true;
+  }
+
+  function enterDungeonIfOnEntrance() {
+    if (mode !== "world" || !world) return false;
+    const t = world.map[player.y][player.x];
+    if (t && World.TILES && t === World.TILES.DUNGEON) {
+      cameFromWorld = true;
+      worldReturnPos = { x: player.x, y: player.y };
+      mode = "dungeon";
+      floor = 1; window.floor = floor;
+      generateLevel(floor);
+      // Mark current dungeon start as exit point back to world
+      dungeonExitAt = { x: player.x, y: player.y };
+      log("You enter the dungeon.", "notice");
+      return true;
+    }
+    log("Stand on a dungeon (D) tile to enter.");
+    return false;
+  }
+
+  function returnToWorldIfAtExit() {
+    if (mode !== "dungeon" || !cameFromWorld || !world) return false;
+    if (floor !== 1) return false;
+    if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y) {
+      mode = "world";
+      enemies = [];
+      corpses = [];
+      decals = [];
+      map = world.map;
+      // restore world position (either returnPos or keep)
+      if (worldReturnPos) {
+        player.x = worldReturnPos.x;
+        player.y = worldReturnPos.y;
+      }
+      recomputeFOV();
+      updateCamera();
+      updateUI();
+      log("You return to the overworld.", "notice");
+      requestDraw();
+      return true;
+    }
+    log("Return to the dungeon entrance to go back to the overworld.", "info");
+    return false;
+  }
+
   function descendIfPossible() {
     hideLootPanel();
+
+    // World: try to enter a dungeon from an entrance tile
+    if (mode === "world") {
+      enterDungeonIfOnEntrance();
+      return;
+    }
+
     const here = map[player.y][player.x];
     // Restrict descending to STAIRS tile only for clarity
     if (here === TILES.STAIRS) {
@@ -843,6 +981,13 @@
   
   function lootCorpse() {
     if (isDead) return;
+    if (mode === "world") {
+      // Interact in world: talk to nearby NPCs, or try return to world if oddly called in dungeon
+      if (!talkNearbyNPC()) {
+        // no-op if no NPC nearby
+      }
+      return;
+    }
     if (window.Loot && typeof Loot.lootHere === "function") {
       Loot.lootHere(getCtx());
       return;
@@ -1135,14 +1280,19 @@
     else log("GOD: Cleared forced crit hit location.", "notice");
   }
 
-  // GOD: apply a deterministic RNG seed and regenerate current floor
+  // GOD: apply a deterministic RNG seed and regenerate current map
   function applySeed(seedUint32) {
     const s = (Number(seedUint32) >>> 0);
     currentSeed = s;
     try { localStorage.setItem("SEED", String(s)); } catch (_) {}
     rng = mulberry32(s);
-    log(`GOD: Applied seed ${s}. Regenerating floor ${floor}...`, "notice");
-    generateLevel(floor);
+    if (mode === "world") {
+      log(`GOD: Applied seed ${s}. Regenerating overworld...`, "notice");
+      initWorld();
+    } else {
+      log(`GOD: Applied seed ${s}. Regenerating floor ${floor}...`, "notice");
+      generateLevel(floor);
+    }
     requestDraw();
     try {
       if (window.UI && typeof UI.updateStats === "function" && typeof UI.init === "function") {
@@ -1175,7 +1325,7 @@
     floor = 1;
     window.floor = floor;
     isDead = false;
-    generateLevel(floor);
+    moderateLevel(floor);
   }
 
   
@@ -1241,25 +1391,29 @@
     if (typeof decayEquippedOverTime === "function") {
       try { decayEquippedOverTime(); } catch (_) {}
     }
-    enemiesAct();
-    // Status effects tick (bleed, dazed, etc.)
-    try {
-      if (window.Status && typeof Status.tick === "function") {
-        Status.tick(getCtx());
+
+    if (mode === "dungeon") {
+      enemiesAct();
+      // Status effects tick (bleed, dazed, etc.)
+      try {
+        if (window.Status && typeof Status.tick === "function") {
+          Status.tick(getCtx());
+        }
+      } catch (_) {}
+      // Visual: decals fade each turn (keep deterministic, no randomness here)
+      if (decals && decals.length) {
+        for (let i = 0; i < decals.length; i++) {
+          decals[i].a *= 0.92; // exponential fade
+        }
+        decals = decals.filter(d => d.a > 0.04);
       }
-    } catch (_) {}
-    // Visual: decals fade each turn (keep deterministic, no randomness here)
-    if (decals && decals.length) {
-      for (let i = 0; i < decals.length; i++) {
-        decals[i].a *= 0.92; // exponential fade
-      }
-      decals = decals.filter(d => d.a > 0.04);
+      // clamp corpse list length
+      if (corpses.length > 50) corpses = corpses.slice(-50);
     }
+
     recomputeFOV();
     updateUI();
     requestDraw();
-    // decay corpse flags
-    if (corpses.length > 50) corpses = corpses.slice(-50);
   }
 
   // Main animation loop
@@ -1340,7 +1494,7 @@
   }
 
   
-  generateLevel(floor);
+  initWorld();
   setupInput();
   loop();
 })();
