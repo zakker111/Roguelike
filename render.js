@@ -238,6 +238,16 @@
         }
       }
 
+      // draw gate 'G' at townExitAt
+      if (ctx.townExitAt) {
+        const gx = ctx.townExitAt.x, gy = ctx.townExitAt.y;
+        if (gx >= startX && gx <= endX && gy >= startY && gy <= endY) {
+          const screenX = (gx - startX) * TILE - tileOffsetX;
+          const screenY = (gy - startY) * TILE - tileOffsetY;
+          drawGlyphScreen(ctx2d, screenX, screenY, "G", "#9ece6a", TILE);
+        }
+      }
+
       // player
       if (player.x >= startX && player.x <= endX && player.y >= startY && player.y <= endY) {
         const screenX = (player.x - startX) * TILE - tileOffsetX;

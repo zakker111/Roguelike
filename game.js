@@ -650,6 +650,7 @@
       world,
       npcs,
       shops,
+      townExitAt,
       enemyColor: (t) => enemyColor(t),
     };
   }
@@ -719,16 +720,17 @@
   }
 
   function generateTown() {
-    // Simple town layout: outer streets with several rectangular buildings and a gate at player's spawn
+    // Town layout with street grid, hollow buildings (wall perimeter, floor interior), doors and shops
     const W = MAP_COLS, H = MAP_ROWS;
     map = Array.from({ length: H }, () => Array(W).fill(TILES.FLOOR));
 
-    // Carve building rectangles
-    function rect(x, y, w, h) {
+    // Helper: draw hollow rectangle building (walls on border, floor inside)
+    function rectHollow(x, y, w, h) {
       for (let yy = y; yy < y + h; yy++) {
         for (let xx = x; xx < x + w; xx++) {
           if (yy <= 0 || xx <= 0 || yy >= H - 1 || xx >= W - 1) continue;
-          map[yy][xx] = TILES.WALL;
+          const isBorder = (yy === y || yy === y + h - 1 || xx === x || xx === x + w - 1);
+          map[yy][xx] = isBorder ? TILES.WALL : TILES.FLOOR;
         }
       }
     }
@@ -748,7 +750,8 @@
       { x: 30, y: 16, w: 12, h: 10 },
       { x: 48, y: 20, w: 10, h: 8 },
     ];
-    buildings.forEach(b => rect(b.x, b.y, b.w, b.h));
+    buildings.forEach(b => rectHollow(b.x, b.y, b.w, b.h));
+
     // Doors on buildings
     function placeDoor(b) {
       const side = randInt(0, 3);
@@ -760,14 +763,17 @@
       if (dx >= 0 && dy >= 0 && dx < W && dy < H) map[dy][dx] = TILES.DOOR;
       return { x: dx, y: dy };
     }
+
+    // Shops
     shops = [];
-    const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn"];
-    for (let i = 0; i < Math.min(shops.length + 4, buildings.length); i++) {
+    const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn", "Fletcher", "Herbalist"];
+    const shopCount = Math.min(5, buildings.length);
+    for (let i = 0; i < shopCount; i++) {
       const d = placeDoor(buildings[i]);
       shops.push({ x: d.x, y: d.y, type: "shop", name: shopNames[i % shopNames.length] });
     }
 
-    // Town NPCs (peaceful)
+    // Town NPCs (peaceful) around central plaza
     npcs = [];
     const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
     const lines = [
@@ -777,13 +783,16 @@
       "The dungeon is dangerous.",
       "Buy supplies before you go.",
     ];
-    for (let i = 0; i < 6; i++) {
-      const ox = randInt(-6, 6), oy = randInt(-4, 4);
+    let placed = 0, tries = 0;
+    while (placed < 8 && tries++ < 200) {
+      const ox = randInt(-8, 8), oy = randInt(-6, 6);
       const x = Math.max(1, Math.min(W - 2, plaza.x + ox));
       const y = Math.max(1, Math.min(H - 2, plaza.y + oy));
       if (map[y][x] !== TILES.FLOOR) continue;
       if (x === player.x && y === player.y) continue;
-      npcs.push({ x, y, name: `Villager ${i + 1}`, lines });
+      if (npcs.some(n => n.x === x && n.y === y)) continue;
+      npcs.push({ x, y, name: `Villager ${placed + 1}`, lines });
+      placed++;
     }
 
     // Town is fully visible
