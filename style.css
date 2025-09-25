@@ -260,3 +260,9 @@ html, body {
 .inv-list li:hover {
   color: var(--accent);
 }
+
+/* Make GOD panel scrollable on constrained viewports */
+#god-panel {
+  max-height: 80vh;
+  overflow: auto;
+}
