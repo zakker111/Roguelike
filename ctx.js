@@ -4,7 +4,6 @@
  *
  * Exports (window.Ctx):
  * - create(base): returns a normalized ctx with consistent shape and optional module handles attached
- * -t):Object} create - Returns a normalized ctx with consistent shape and optional module handles.
  * @property {function(Object):Object} attachModules - Attaches discovered module handles to the ctx (Enemies, Items, Player, UI, Logger, Loot, Dungeon, DungeonItems, FOV, AI, Input, Render, Tileset, Flavor, PlayerUtils, LOS).
  *
  * @remarks
