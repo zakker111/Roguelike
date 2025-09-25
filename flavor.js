@@ -12,8 +12,12 @@
  * - Uses ctx.rng for determinism and ctx.log for output.
  */
 (function () {
-  function pick(arr, rng) {
-    const r = rng || Math.random;
+  // Pick helper: prefer ctx.utils.pick for consistency; fallback to ctx.rng
+  function pickFrom(arr, ctx) {
+    if (ctx && ctx.utils && typeof ctx.utils.pick === "function") {
+      return ctx.utils.pick(arr, ctx.rng);
+    }
+    const r = (ctx && typeof ctx.rng === "function") ? ctx.rng : Math.random;
     return arr[Math.floor(r() * arr.length)];
   }
 
@@ -36,7 +40,7 @@
 
   /**
    * Log an optional flavor line for an enemy hit against the player.
-   * ctx: { rng():fn, log(msg, type?):fn }
+   * ctx: { rng():fn, log(msg, type?):fn, utils?:{pick} }
    * opts: { attacker:{type?}, loc:{part}, crit:boolean }
    */
   function logHit(ctx, opts) {
@@ -48,14 +52,14 @@
     // Prioritize memorable moments
     if (crit && loc.part === "head") {
       if (ctx.rng() < 0.6) {
-        ctx.log(pick(HEAD_CRIT, ctx.rng), "flavor");
+        ctx.log(pickFrom(HEAD_CRIT, ctx), "flavor");
       }
       return;
     }
 
     if (loc.part === "torso") {
       if (ctx.rng() < 0.5) {
-        ctx.log(pick(TORSO_STING_PLAYER, ctx.rng), "info");
+        ctx.log(pickFrom(TORSO_STING_PLAYER, ctx), "info");
       }
       return;
     }
@@ -69,7 +73,7 @@
 
   /**
    * Log an optional flavor line for when the player hits an enemy.
-   * ctx: { rng():fn, log(msg, type?):fn }
+   * ctx: { rng():fn, log(msg, type?):fn, utils?:{pick} }
    * opts: { target:{type?}, loc:{part}, crit:boolean, dmg:number }
    */
   function logPlayerHit(ctx, opts) {
@@ -83,7 +87,7 @@
     if (dmg != null && dmg > 0) {
       const p = crit ? 0.5 : 0.25; // higher chance on crits
       if (ctx.rng() < p) {
-        ctx.log(pick(BLOOD_SPILL, ctx.rng), "flavor");
+        ctx.log(pickFrom(BLOOD_SPILL, ctx), "flavor");
       }
     }
 
@@ -95,7 +99,7 @@
           `A clean crack to the ${name}'s head; it reels.`,
           `Your strike slams the ${name}'s head; it staggers.`,
         ];
-        ctx.log(pick(variants, ctx.rng), "notice");
+        ctx.log(pickFrom(variants, ctx), "notice");
       }
       return;
     }
@@ -110,14 +114,14 @@
           `A solid hit to the ${name}'s ${part}!`,
           `A telling strike to the ${name}'s ${part}!`,
         ];
-        ctx.log(pick(variants, ctx.rng), "good");
+        ctx.log(pickFrom(variants, ctx), "good");
       }
       // continue; allow location-specific line below
     }
 
     if (loc.part === "torso") {
       if (ctx.rng() < 0.5) {
-        ctx.log(pick(ENEMY_TORSO_STING, ctx.rng), "info");
+        ctx.log(pickFrom(ENEMY_TORSO_STING, ctx), "info");
       }
       return;
     }

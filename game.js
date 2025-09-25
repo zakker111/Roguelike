@@ -66,7 +66,7 @@
   let visible = [];
   let player = (window.Player && typeof Player.createInitial === "function")
     ? Player.createInitial()
-    : { x: 0, y: 0, hp: 40, maxHp: 40, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null } };
+    : { x: 0, y: 0, hp: 20, maxHp: 40, inventory: [], atk: 1, xp: 0, level: 1, xpNext: 20, equipment: { left: null, right: null, head: null, torso: null, legs: null, hands: null } };
   let enemies = [];
   let corpses = [];
   // Visual decals like blood stains on the floor; array of { x, y, a (alpha 0..1), r (radius px) }
@@ -176,7 +176,9 @@
   }
   const randInt = (min, max) => Math.floor(rng() * (max - min + 1)) + min;
   const chance = (p) => rng() < p;
-  const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  const capitalize = (window.PlayerUtils && typeof PlayerUtils.capitalize === "function")
+    ? PlayerUtils.capitalize
+    : (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   const enemyColor = (type) => {
     if (window.Enemies && typeof Enemies.colorFor === "function") {
       return Enemies.colorFor(type);
@@ -239,6 +241,9 @@
 
   
   function getPlayerAttack() {
+    if (window.Stats && typeof Stats.getPlayerAttack === "function") {
+      return Stats.getPlayerAttack(getCtx());
+    }
     if (window.Player && typeof Player.getAttack === "function") {
       return Player.getAttack(player);
     }
@@ -253,6 +258,9 @@
 
   
   function getPlayerDefense() {
+    if (window.Stats && typeof Stats.getPlayerDefense === "function") {
+      return Stats.getPlayerDefense(getCtx());
+    }
     if (window.Player && typeof Player.getDefense === "function") {
       return Player.getDefense(player);
     }
@@ -308,6 +316,9 @@
   }
 
   function getPlayerBlockChance(loc) {
+    if (window.Combat && typeof Combat.getPlayerBlockChance === "function") {
+      return Combat.getPlayerBlockChance(getCtx(), loc);
+    }
     const eq = player.equipment || {};
     const leftDef = (eq.left && typeof eq.left.def === "number") ? eq.left.def : 0;
     const rightDef = (eq.right && typeof eq.right.def === "number") ? eq.right.def : 0;
@@ -318,8 +329,10 @@
 
   // Enemy damage after applying player's defense with diminishing returns and a chip-damage floor
   function enemyDamageAfterDefense(raw) {
+    if (window.Combat && typeof Combat.enemyDamageAfterDefense === "function") {
+      return Combat.enemyDamageAfterDefense(getCtx(), raw);
+    }
     const def = getPlayerDefense();
-    
     const DR = Math.max(0, Math.min(0.85, def / (def + 6)));
     const reduced = raw * (1 - DR);
     return Math.max(0.1, round1(reduced));

@@ -14,6 +14,30 @@
 (function () {
   const round1 = (n) => Math.round(n * 10) / 10;
 
+  // Minimal mulberry32 PRNG for deterministic fallback when rng isn't provided.
+  function mulberry32(a) {
+    return function() {
+      let t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function getRng(rng) {
+    if (typeof rng === "function") return rng;
+    // Prefer saved SEED for deterministic behavior if available
+    try {
+      const sRaw = (typeof localStorage !== "undefined") ? localStorage.getItem("SEED") : null;
+      if (sRaw != null) {
+        const s = (Number(sRaw) >>> 0);
+        return mulberry32(s);
+      }
+    } catch (_) {}
+    // Fallback: time-based seed
+    const s = ((Date.now() % 0xffffffff) >>> 0);
+    return mulberry32(s);
+  }
+
   /* MATERIALS: map numeric tier (1..3) to material name used by item name builders */
   const MATERIALS = {
     1: "rusty",
@@ -140,10 +164,11 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
 
   // initialDecay: starting wear in percent for generated items.
   // Lower tiers begin more worn; higher tiers start closer to pristine.
-  function initialDecay(tier, rng = Math.random) {
-    if (tier <= 1) return randFloat(rng, 10, 35, 0);
-    if (tier === 2) return randFloat(rng, 5, 20, 0);
-    return randFloat(rng, 0, 10, 0);
+  function initialDecay(tier, rng) {
+    const r = getRng(rng);
+    if (tier <= 1) return randFloat(r, 10, 35, 0);
+    if (tier === 2) return randFloat(r, 5, 20, 0);
+    return randFloat(r, 0, 10, 0);
   }
 
   function pickSlot(rng) {
@@ -163,6 +188,7 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
   // - Applies optional small hand attack bonus for "hands" slot (gloves)
   // - Carries 'twoHanded' flag through for hand items that occupy both hands
   function makeItemFromType(def, tier, rng) {
+    const r = getRng(rng);
     const material = MATERIALS[tier] || "iron";
     const name = typeof def.name === "function" ? def.name(material, tier) : (def.name || (material + " item"));
     const item = {
@@ -170,25 +196,25 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
       slot: def.slot,
       name,
       tier,
-      decay: initialDecay(tier, rng),
+      decay: initialDecay(tier, r),
     };
 
     if (def.atkRange) {
-      let atk = rollStatFromRange(rng, def.atkRange, tier, 1);
+      let atk = rollStatFromRange(r, def.atkRange, tier, 1);
       if (def.atkBonus && def.atkBonus[tier]) {
-        atk = Math.min(4.0, round1(atk + randFloat(rng, def.atkBonus[tier][0], def.atkBonus[tier][1], 1)));
+        atk = Math.min(4.0, round1(atk + randFloat(r, def.atkBonus[tier][0], def.atkBonus[tier][1], 1)));
       }
       if (atk > 0) item.atk = atk;
     }
     if (def.defRange) {
-      const defVal = rollStatFromRange(rng, def.defRange, tier, 1);
+      const defVal = rollStatFromRange(r, def.defRange, tier, 1);
       if (defVal > 0) item.def = defVal;
     }
     if (def.slot === "hands" && def.handAtkBonus && def.handAtkBonus[tier]) {
       const chance = typeof def.handAtkChance === "number" ? def.handAtkChance : 0.5;
-      if (rng() < chance) {
+      if (r() < chance) {
         const [minB, maxB] = def.handAtkBonus[tier];
-        item.atk = (item.atk || 0) + randFloat(rng, minB, maxB, 1);
+        item.atk = (item.atk || 0) + randFloat(r, minB, maxB, 1);
         item.atk = round1(Math.min(4.0, item.atk));
       }
     }
@@ -205,13 +231,13 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
       const w = typeof d.weight === "function" ? d.weight(tier) : (d.weight || 1);
       return { value: d, w: Math.max(0, w) };
     });
-    return pickWeighted(entries, rng);
+    return pickWeighted(entries, getRng(rng));
   }
 
   // Create a random equipment piece for a specific slot at the given tier.
   // Respects per-type weights within that slot and minTier constraints.
   function createEquipmentOfSlot(slot, tier, rng) {
-    const r = rng || Math.random;
+    const r = getRng(rng);
     const def = pickTypeForSlot(slot, tier, r);
     if (!def) return null;
     return makeItemFromType(def, tier, r);
@@ -238,7 +264,7 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
       const w = typeof d.weight === "function" ? d.weight(tier) : (d.weight || 1);
       return { value: d, w: Math.max(0, w) };
     });
-    return pickWeighted(entries, rng || Math.random);
+    return pickWeighted(entries, getRng(rng));
   }
 
   // Create a random equipment piece at the given tier.
@@ -248,7 +274,7 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
   // 3) Roll stats and return the item
   // Includes robust fallbacks if the slot has no valid types at this tier.
   function createEquipment(tier, rng) {
-    const r = rng || Math.random;
+    const r = getRng(rng);
     const slot = pickSlot(r);
     const def = pickTypeForSlot(slot, tier, r);
     if (!def) {
@@ -302,7 +328,7 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
 
   function createByKey(key, tier, rng, overrides) {
     const def = findTypeByKey(key);
-    const r = rng || Math.random;
+    const r = getRng(rng);
     if (!def) return null;
     const item = makeItemFromType(def, tier, r);
     if (overrides && typeof overrides === "object") {
@@ -328,7 +354,7 @@ switch_blade: { key: "switch_blade", slot: "hand", twoHanded: false,
     const VALID_SLOTS = new Set(["hand","head","torso","legs","hands"]);
     if (!slot || !VALID_SLOTS.has(slot)) return null;
     const t = Math.max(1, Math.min(3, tier || 1));
-    const r = rng || Math.random;
+    const r = getRng(rng);
     const item = {
       kind: "equip",
       slot,
