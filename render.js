@@ -241,6 +241,7 @@
           else if (p.type === "bench") { glyph = "≡"; color = "#d7ba7d"; }
           else if (p.type === "lamp") { glyph = "†"; color = "#ffd166"; }
           else if (p.type === "stall") { glyph = "s"; color = "#b4f9f8"; }
+          else if (p.type === "tree") { glyph = "♣"; color = "#84cc16"; }
           drawGlyphScreen(ctx2d, screenX, screenY, glyph, color, TILE);
         }
       }

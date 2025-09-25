@@ -722,75 +722,123 @@
   }
 
   function generateTown() {
-    // Town layout with street grid, hollow buildings (wall perimeter, floor interior), doors and shops, central plaza and props
+    // Structured town: walls with a gate, main road to a central plaza, secondary roads, buildings aligned to blocks, shops near plaza
     const W = MAP_COLS, H = MAP_ROWS;
     map = Array.from({ length: H }, () => Array(W).fill(TILES.FLOOR));
 
-    // Helper: draw hollow rectangle building (walls on border, floor inside)
-    function rectHollow(x, y, w, h) {
-      for (let yy = y; yy < y + h; yy++) {
-        for (let xx = x; xx < x + w; xx++) {
-          if (yy <= 0 || xx <= 0 || yy >= H - 1 || xx >= W - 1) continue;
-          const isBorder = (yy === y || yy === y + h - 1 || xx === x || xx === x + w - 1);
-          map[yy][xx] = isBorder ? TILES.WALL : TILES.FLOOR;
-        }
-      }
-    }
+    const clampXY = (x, y) => ({ x: Math.max(1, Math.min(W - 2, x)), y: Math.max(1, Math.min(H - 2, y)) });
 
-    // Streets grid
-    for (let y = 0; y < H; y += 8) {
-      for (let x = 0; x < W; x++) map[y][x] = TILES.FLOOR;
-    }
-    for (let x = 0; x < W; x += 10) {
-      for (let y = 0; y < H; y++) map[y][x] = TILES.FLOOR;
-    }
+    // Town walls (outer perimeter)
+    for (let x = 0; x < W; x++) { map[0][x] = TILES.WALL; map[H - 1][x] = TILES.WALL; }
+    for (let y = 0; y < H; y++) { map[y][0] = TILES.WALL; map[y][W - 1] = TILES.WALL; }
 
-    // Buildings (more to reduce empty space)
-    const buildings = [
-      { x: 6, y: 4, w: 12, h: 8 },
-      { x: 24, y: 3, w: 12, h: 9 },
-      { x: 42, y: 6, w: 12, h: 7 },
-      { x: 8, y: 18, w: 14, h: 9 },
-      { x: 28, y: 16, w: 12, h: 10 },
-      { x: 46, y: 20, w: 10, h: 8 },
-      { x: 12, y: 30, w: 12, h: 8 },
-      { x: 30, y: 30, w: 12, h: 8 },
-      { x: 48, y: 30, w: 12, h: 8 },
-    ];
-    buildings.forEach(b => rectHollow(b.x, b.y, b.w, b.h));
+    // Choose gate closest to player's current world-projected position
+    const targets = [
+      { x: 1, y: player.y },                // west
+      { x: W - 2, y: player.y },            // east
+      { x: player.x, y: 1 },                // north
+      { x: player.x, y: H - 2 },            // south
+    ].map(p => clampXY(p.x, p.y));
 
-    // Doors on buildings
-    function placeDoor(b) {
-      const side = randInt(0, 3);
-      let dx = b.x, dy = b.y;
-      if (side === 0) { dx = b.x + ((b.w / 2) | 0); dy = b.y; }
-      if (side === 1) { dx = b.x + b.w - 1; dy = b.y + ((b.h / 2) | 0); }
-      if (side === 2) { dx = b.x + ((b.w / 2) | 0); dy = b.y + b.h - 1; }
-      if (side === 3) { dx = b.x; dy = b.y + ((b.h / 2) | 0); }
-      if (dx >= 0 && dy >= 0 && dx < W && dy < H) map[dy][dx] = TILES.DOOR;
-      return { x: dx, y: dy };
+    let best = targets[0], bd = Infinity;
+    for (const t of targets) {
+      const d = Math.abs(t.x - player.x) + Math.abs(t.y - player.y);
+      if (d < bd) { bd = d; best = t; }
     }
+    const gate = best;
+    // Carve gate opening in wall
+    if (gate.x === 1) map[gate.y][0] = TILES.DOOR;
+    else if (gate.x === W - 2) map[gate.y][W - 1] = TILES.DOOR;
+    else if (gate.y === 1) map[0][gate.x] = TILES.DOOR;
+    else if (gate.y === H - 2) map[H - 1][gate.x] = TILES.DOOR;
 
-    // Shops at some doors
-    shops = [];
-    const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn", "Fletcher", "Herbalist", "Fishmonger"];
-    const shopCount = Math.min(6, buildings.length);
-    for (let i = 0; i < shopCount; i++) {
-      const d = placeDoor(buildings[i]);
-      shops.push({ x: d.x, y: d.y, type: "shop", name: shopNames[i % shopNames.length] });
-    }
+    // Ensure gate tile inside wall is floor
+    map[gate.y][gate.x] = TILES.FLOOR;
+    player.x = gate.x; player.y = gate.y;
+    townExitAt = { x: gate.x, y: gate.y };
 
-    // Central plaza
+    // Central plaza (rectangle)
     const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
-    const plazaW = 12, plazaH = 10;
-    for (let yy = plaza.y - (plazaH / 2) | 0; yy <= plaza.y + (plazaH / 2) | 0; yy++) {
-      for (let xx = plaza.x - (plazaW / 2) | 0; xx <= plaza.x + (plazaW / 2) | 0; xx++) {
+    const plazaW = 14, plazaH = 12;
+    for (let yy = (plaza.y - (plazaH / 2)) | 0; yy <= (plaza.y + (plazaH / 2)) | 0; yy++) {
+      for (let xx = (plaza.x - (plazaW / 2)) | 0; xx <= (plaza.x + (plazaW / 2)) | 0; xx++) {
         if (yy <= 0 || xx <= 0 || yy >= H - 1 || xx >= W - 1) continue;
         map[yy][xx] = TILES.FLOOR;
       }
     }
 
-    // Props: wells, lamps, benches, stalls
+    // Main road from gate to plaza (L-shape)
+    const carveRoad = (x1, y1, x2, y2) => {
+      let x = x1, y = y1;
+      while (x !== x2) { map[y][x] = TILES.FLOOR; x += Math.sign(x2 - x); }
+      while (y !== y2) { map[y][x] = TILES.FLOOR; y += Math.sign(y2 - y); }
+      map[y][x] = TILES.FLOOR;
+    };
+    carveRoad(gate.x, gate.y, plaza.x, gate.y);
+    carveRoad(plaza.x, gate.y, plaza.x, plaza.y);
+
+    // Secondary roads (grid) aligned around plaza
+    for (let y = 6; y < H - 6; y += 8) for (let x = 1; x < W - 1; x++) map[y][x] = TILES.FLOOR;
+    for (let x = 6; x < W - 6; x += 10) for (let y = 1; y < H - 1; y++) map[y][x] = TILES.FLOOR;
+
+    // Blocks: place buildings aligned with blocks, leaving 1-tile sidewalk
+    const buildings = [];
+    const placeBuilding = (bx, by, bw, bh) => {
+      // hollow rectangle
+      for (let yy = by; yy < by + bh; yy++) {
+        for (let xx = bx; xx < bx + bw; xx++) {
+          if (yy <= 0 || xx <= 0 || yy >= H - 1 || xx >= W - 1) continue;
+          const isBorder = (yy === by || yy === by + bh - 1 || xx === bx || xx === bx + bw - 1);
+          map[yy][xx] = isBorder ? TILES.WALL : TILES.FLOOR;
+        }
+      }
+      buildings.push({ x: bx, y: by, w: bw, h: bh });
+    };
+
+    // Iterate grid and try to place buildings in areas not roads
+    for (let by = 2; by < H - 10; by += 8) {
+      for (let bx = 2; bx < W - 12; bx += 10) {
+        // skip if near plaza
+        if (Math.abs((bx + 5) - plaza.x) < 9 && Math.abs((by + 4) - plaza.y) < 7) continue;
+        // ensure area is floor and not road lines
+        let clear = true;
+        for (let yy = by; yy < by + 7 && clear; yy++) {
+          for (let xx = bx; xx < bx + 8; xx++) {
+            if (map[yy][xx] !== TILES.FLOOR) { clear = false; break; }
+          }
+        }
+        if (clear) {
+          const w = 8, h = 6;
+          placeBuilding(bx + 1, by + 1, w, h);
+        }
+      }
+    }
+
+    // Doors and shops near plaza/main road
+    function placeDoor(b) {
+      const options = [
+        { x: b.x + ((b.w / 2) | 0), y: b.y },                 // top
+        { x: b.x + b.w - 1, y: b.y + ((b.h / 2) | 0) },      // right
+        { x: b.x + ((b.w / 2) | 0), y: b.y + b.h - 1 },      // bottom
+        { x: b.x, y: b.y + ((b.h / 2) | 0) }                 // left
+      ];
+      const d = options[randInt(0, options.length - 1)];
+      if (d.x >= 0 && d.y >= 0 && d.x < W && d.y < H) map[d.y][d.x] = TILES.DOOR;
+      return d;
+    }
+
+    shops = [];
+    const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn", "Fletcher", "Herbalist", "Fishmonger"];
+    // Pick buildings closest to plaza for shops
+    const scored = buildings.map(b => ({ b, d: Math.abs((b.x + (b.w / 2)) - plaza.x) + Math.abs((b.y + (b.h / 2)) - plaza.y) }));
+    scored.sort((a, b) => a.d - b.d);
+    const shopCount = Math.min(8, scored.length);
+    for (let i = 0; i < shopCount; i++) {
+      const door = placeDoor(scored[i].b);
+      shops.push({ x: door.x, y: door.y, type: "shop", name: shopNames[i % shopNames.length] });
+    }
+
+    // Props in plaza and parks
     townProps = [];
     const addProp = (x, y, type, name) => {
       if (x <= 0 || y <= 0 || x >= W - 1 || y >= H - 1) return;
@@ -798,32 +846,29 @@
       if (townProps.some(p => p.x === x && p.y === y)) return;
       townProps.push({ x, y, type, name });
     };
-
-    // Well at center
+    // Plaza fixtures
     addProp(plaza.x, plaza.y, "well", "Town Well");
-
-    // Lamps at corners of plaza
     addProp(plaza.x - 6, plaza.y - 4, "lamp", "Lamp Post");
     addProp(plaza.x + 6, plaza.y - 4, "lamp", "Lamp Post");
     addProp(plaza.x - 6, plaza.y + 4, "lamp", "Lamp Post");
     addProp(plaza.x + 6, plaza.y + 4, "lamp", "Lamp Post");
-
-    // Benches along plaza edges
     for (let dx = -4; dx <= 4; dx += 4) {
       addProp(plaza.x + dx, plaza.y - 3, "bench", "Bench");
       addProp(plaza.x + dx, plaza.y + 3, "bench", "Bench");
     }
-
-    // Market stalls near plaza
     for (let i = -4; i <= 4; i += 4) {
       addProp(plaza.x - 8, plaza.y + i, "stall", "Market Stall");
       addProp(plaza.x + 8, plaza.y + i, "stall", "Market Stall");
     }
-
-    // Decorative fountain variant near well sometimes
     if (rng() < 0.35) addProp(plaza.x + 1, plaza.y, "fountain", "Fountain");
+    // Small park corners with trees
+    for (let t = 0; t < 16; t++) {
+      const tx = plaza.x + randInt(-10, 10);
+      const ty = plaza.y + randInt(-8, 8);
+      addProp(tx, ty, "tree", "Tree");
+    }
 
-    // Town NPCs (peaceful) around central plaza with retries
+    // Town NPCs around plaza and along main road, avoid player adjacency
     npcs = [];
     const lines = [
       "Welcome to our town.",
@@ -835,22 +880,34 @@
       "Care for a drink at the well?",
     ];
     let placed = 0, tries = 0;
-    while (placed < 10 && tries++ < 400) {
-      const ox = randInt(-10, 10), oy = randInt(-8, 8);
-      const x = Math.max(1, Math.min(W - 2, plaza.x + ox));
-      const y = Math.max(1, Math.min(H - 2, plaza.y + oy));
-      if (map[y][x] !== TILES.FLOOR) continue;
+    while (placed < 12 && tries++ < 500) {
+      const onRoad = rng() < 0.4;
+      let x, y;
+      if (onRoad) {
+        // sample near main road y = gate.y or x = plaza.x
+        if (rng() < 0.5) { y = gate.y; x = randInt(2, W - 3); }
+        else { x = plaza.x; y = randInt(2, H - 3); }
+      } else {
+        const ox = randInt(-10, 10), oy = randInt(-8, 8);
+        x = Math.max(1, Math.min(W - 2, plaza.x + ox));
+        y = Math.max(1, Math.min(H - 2, plaza.y + oy));
+      }
+      if (map[y][x] !== TILES.FLOOR && map[y][x] !== TILES.DOOR) continue;
       if (x === player.x && y === player.y) continue;
-      if (manhattan(player.x, player.y, x, y) <= 1) continue; // don't spawn adjacent to player
+      if (manhattan(player.x, player.y, x, y) <= 1) continue;
       if (npcs.some(n => n.x === x && n.y === y)) continue;
       if (townProps.some(p => p.x === x && p.y === y)) continue;
       npcs.push({ x, y, name: `Villager ${placed + 1}`, lines });
       placed++;
     }
 
-    // Town is fully visible
+    // Visibility
     seen = Array.from({ length: H }, () => Array(W).fill(true));
     visible = Array.from({ length: H }, () => Array(W).fill(true));
+    enemies = [];
+    corpses = [];
+    decals = [];
+  }, () => Array(W).fill(true));
     enemies = [];
     corpses = [];
     decals = [];
@@ -1288,6 +1345,9 @@
         break;
       case "stall":
         log("A vendor waves: 'Fresh wares soon!'", "notice");
+        break;
+      case "tree":
+        log("A leafy tree offers a bit of shade.", "info");
         break;
       default:
         log("There's nothing special here.");
