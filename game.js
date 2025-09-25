@@ -873,15 +873,47 @@
       npcs.push({ x, y, name: `Villager ${i + 1}`, lines });
     }
 
-    // Gate/exit at player's spawn position
-    townExitAt = { x: player.x, y: player.y };
-
     // Town is fully visible
     seen = Array.from({ length: H }, () => Array(W).fill(true));
     visible = Array.from({ length: H }, () => Array(W).fill(true));
     enemies = [];
     corpses = [];
     decals = [];
+  }
+
+  function ensureTownSpawnClear() {
+    // Make sure the player isn't inside a building (WALL).
+    // If current tile is not walkable, move to the nearest FLOOR/DOOR tile.
+    const H = map.length;
+    const W = map[0] ? map[0].length : 0;
+    const isWalk = (x, y) => x >= 0 && y >= 0 && x < W && y < H && (map[y][x] === TILES.FLOOR || map[y][x] === TILES.DOOR);
+    if (isWalk(player.x, player.y)) return;
+
+    // BFS from current position to nearest walkable
+    const q = [];
+    const seenB = new Set();
+    q.push({ x: player.x, y: player.y, d: 0 });
+    seenB.add(`${player.x},${player.y}`);
+    const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+    while (q.length) {
+      const cur = q.shift();
+      for (const d of dirs) {
+        const nx = cur.x + d.dx, ny = cur.y + d.dy;
+        const key = `${nx},${ny}`;
+        if (seenB.has(key)) continue;
+        seenB.add(key);
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        if (isWalk(nx, ny)) {
+          player.x = nx; player.y = ny;
+          return;
+        }
+        // expand through walls minimally to escape building
+        q.push({ x: nx, y: ny, d: cur.d + 1 });
+      }
+    }
+    // Fallback to center
+    player.x = (W / 2) | 0;
+    player.y = (H / 2) | 0;
   }
 
   function enterTownIfOnTile() {
@@ -891,8 +923,10 @@
     if (WT && t === World.TILES.TOWN) {
       worldReturnPos = { x: player.x, y: player.y };
       mode = "town";
-      // Start town with the player at notional gate; we'll keep same coords but swap map
+      // Start town and ensure a valid spawn
       generateTown();
+      ensureTownSpawnClear();
+      townExitAt = { x: player.x, y: player.y };
       log("You enter the town. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.", "notice");
       updateCamera();
       requestDraw();
