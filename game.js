@@ -815,7 +815,7 @@
       } catch (_) {}
       // Advance one turn (NPCs act, time advances)
       turn();
-    }, 700);
+    }, 500);
   }
   function stopTownAutoTick() {
     if (townAutoTimer) {
@@ -1549,9 +1549,14 @@
       ensureTownSpawnClear();
       townExitAt = { x: player.x, y: player.y };
       // Spawn a few greeters near the gate so the player sees immediate activity
-      spawnGateGreeters(4);
+      spawnGateGreeters(6);
       log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice");
-      try { if (window.DEV) log(`[DEV] Town population: ${Array.isArray(npcs) ? npcs.length : 0} NPCs, shops: ${Array.isArray(shops) ? shops.length : 0}.`, "notice"); } catch (_) {}
+      try {
+        if (window.DEV) {
+          log(`[DEV] Town population: ${Array.isArray(npcs) ? npcs.length : 0} NPCs, shops: ${Array.isArray(shops) ? shops.length : 0}.`, "notice");
+          log(`[DEV] Town auto-advance: ${townAutoEnabled ? "ON" : "OFF"} (paused while panels are open).`, "notice");
+        }
+      } catch (_) {}
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
       recomputeFOV();
