@@ -9,6 +9,9 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v0.8.1 — Improve Player Visibility on Overworld
+- UI: Added a subtle white backdrop and outline under the player glyph '@' in overworld mode so the player stands out on all biomes.
+
 v0.8 — Town Buildings: Guaranteed Doors and Varied Sizes
 - Added: Every town building now has at least one door carved into its perimeter.
 - Changed: Building sizes are now varied per block (randomized within block bounds) for a more organic layout.
