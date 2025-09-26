@@ -14,6 +14,9 @@
     _el: null,
     _elRight: null,
     _max: 60,
+    _lastText: "",
+    _lastType: "",
+    _lastCount: 0,
 
     init(target, max) {
       if (typeof max === "number" && max > 0) {
@@ -39,37 +42,62 @@
       return this._el != null;
     },
 
+    _prepend(el, type, text) {
+      const div = document.createElement("div");
+      div.className = `entry ${type}`;
+      div.textContent = String(text);
+      el.prepend(div);
+      while (el.childNodes.length > this._max) {
+        el.removeChild(el.lastChild);
+      }
+    },
+
+    _mirror(type, text) {
+      if (!this._elRight) return;
+      let visible = true;
+      try {
+        const cs = window.getComputedStyle(this._elRight);
+        if (cs && (cs.display === "none" || cs.visibility === "hidden")) visible = false;
+      } catch (_) {}
+      if (!visible) return;
+      this._prepend(this._elRight, type, text);
+    },
+
     log(msg, type = "info") {
       if (!this._el) this.init();
       const el = this._el;
       if (!el) return;
 
-      // main log
-      const div = document.createElement("div");
-      div.className = `entry ${type}`;
-      div.textContent = String(msg);
-      el.prepend(div);
-      while (el.childNodes.length > this._max) {
-        el.removeChild(el.lastChild);
-      }
+      const text = String(msg);
 
-      // optional right mirror (skip if hidden by CSS or toggle)
-      if (this._elRight) {
-        let visible = true;
-        try {
-          const cs = window.getComputedStyle(this._elRight);
-          if (cs && cs.display === "none" || cs && cs.visibility === "hidden") visible = false;
-        } catch (_) {}
-        if (visible) {
-          const div2 = document.createElement("div");
-          div2.className = `entry ${type}`;
-          div2.textContent = String(msg);
-          this._elRight.prepend(div2);
-          while (this._elRight.childNodes.length > this._max) {
-            this._elRight.removeChild(this._elRight.lastChild);
+      // Coalesce with previous identical message and type
+      if (this._lastText === text && this._lastType === type) {
+        this._lastCount += 1;
+        // Update the very top entry to reflect repeat count: "message (xN)"
+        const first = el.firstChild;
+        if (first && first.textContent) {
+          // find the base part before (xN)
+          const base = this._lastText.replace(/\s+\(x\d+\)$/, "");
+          first.textContent = `${base} (x${this._lastCount + 1})`;
+        }
+        // Mirror update
+        if (this._elRight && this._elRight.firstChild) {
+          const firstR = this._elRight.firstChild;
+          if (firstR && firstR.textContent) {
+            const baseR = this._lastText.replace(/\s+\(x\d+\)$/, "");
+            firstR.textContent = `${baseR} (x${this._lastCount + 1})`;
           }
         }
+        return;
       }
+
+      // New message: reset run
+      this._lastText = text;
+      this._lastType = type;
+      this._lastCount = 0;
+
+      this._prepend(el, type, text);
+      this._mirror(type, text);
     }
   };
 

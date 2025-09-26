@@ -1564,7 +1564,7 @@
     return false;
   }
 
-  function leaveTownNow() {
+  function returnToOverworldFromTown(msg = "You return to the overworld.") {
     mode = "world";
     map = world.map;
     npcs = [];
@@ -1576,9 +1576,13 @@
     recomputeFOV();
     updateCamera();
     updateUI();
-    log("You return to the overworld.", "notice");
+    log(msg, "notice");
     if (window.UI && typeof UI.hideTownExitButton === "function") UI.hideTownExitButton();
     requestDraw();
+  }
+
+  function leaveTownNow() {
+    returnToOverworldFromTown("You return to the overworld.");
   }
 
   function requestLeaveTown() {
@@ -2512,10 +2516,8 @@
     const eq = player.equipment || {};
     const amtMain = light ? randFloat(0.6, 1.6, 1) : randFloat(1.0, 2.2, 1);
     if (usingTwoHanded()) {
-      // Two-handed: same item is referenced in both hands; applying to both intentionally doubles wear.
-      // If we ever want to apply once per swing, change to a single decayEquipped on one hand.
+      // Two-handed: apply wear once per swing
       if (eq.left) decayEquipped("left", amtMain);
-      if (eq.right) decayEquipped("right", amtMain);
       return;
     }
     // prefer decaying a hand with attack stat
@@ -2536,9 +2538,8 @@
     const eq = player.equipment || {};
     const amt = randFloat(0.6, 1.6, 1);
     if (usingTwoHanded()) {
-      // Two-handed: same object on both hands; decaying both sides doubles the wear when blocking.
+      // Two-handed: apply wear once per block
       if (eq.left) decayEquipped("left", amt);
-      if (eq.right) decayEquipped("right", amt);
       return;
     }
     const leftDef = (eq.left && typeof eq.left.def === "number") ? eq.left.def : 0;
