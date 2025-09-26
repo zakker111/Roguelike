@@ -189,7 +189,7 @@
         }
       }
 
-      // player - add backdrop marker to improve visibility on overworld tiles
+      // player - add backdrop marker + outlined glyph to improve visibility on overworld tiles
       if (player.x >= startX && player.x <= endX && player.y >= startY && player.y <= endY) {
         const screenX = (player.x - startX) * TILE - tileOffsetX;
         const screenY = (player.y - startY) * TILE - tileOffsetY;
@@ -201,9 +201,15 @@
         ctx2d.strokeStyle = "rgba(255,255,255,0.35)";
         ctx2d.lineWidth = 1;
         ctx2d.strokeRect(screenX + 4.5, screenY + 4.5, TILE - 9, TILE - 9);
-        ctx2d.restore();
 
-        drawGlyphScreen(ctx2d, screenX, screenY, "@", COLORS.player || "#9ece6a", TILE);
+        // outlined glyph
+        const half = TILE / 2;
+        ctx2d.lineWidth = 2;
+        ctx2d.strokeStyle = "#0b0f16";
+        ctx2d.strokeText("@", screenX + half, screenY + half + 1);
+        ctx2d.fillStyle = COLORS.player || "#9ece6a";
+        ctx2d.fillText("@", screenX + half, screenY + half + 1);
+        ctx2d.restore();
       }
       return;
     }
@@ -280,7 +286,7 @@
         }
       }
 
-      // player - add subtle backdrop so it stands out in town view
+      // player - add subtle backdrop + outlined glyph so it stands out in town view
       if (player.x >= startX && player.x <= endX && player.y >= startY && player.y <= endY) {
         const screenX = (player.x - startX) * TILE - tileOffsetX;
         const screenY = (player.y - startY) * TILE - tileOffsetY;
@@ -291,9 +297,15 @@
         ctx2d.strokeStyle = "rgba(255,255,255,0.35)";
         ctx2d.lineWidth = 1;
         ctx2d.strokeRect(screenX + 4.5, screenY + 4.5, TILE - 9, TILE - 9);
-        ctx2d.restore();
 
-        drawGlyphScreen(ctx2d, screenX, screenY, "@", COLORS.player || "#9ece6a", TILE);
+        // outlined glyph
+        const half = TILE / 2;
+        ctx2d.lineWidth = 2;
+        ctx2d.strokeStyle = "#0b0f16";
+        ctx2d.strokeText("@", screenX + half, screenY + half + 1);
+        ctx2d.fillStyle = COLORS.player || "#9ece6a";
+        ctx2d.fillText("@", screenX + half, screenY + half + 1);
+        ctx2d.restore();
       }
       return;
     }

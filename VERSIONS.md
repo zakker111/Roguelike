@@ -9,6 +9,9 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v0.8.4 — Stronger Player Marker (World + Town)
+- UI: Player '@' now renders with an outlined glyph (black stroke) on top of the white backdrop in both overworld and town, improving contrast further.
+
 v0.8.3 — Improve Player Visibility in Town
 - UI: Added the same subtle white backdrop and outline behind the player glyph '@' in town mode to match the overworld visibility tweak.
 
