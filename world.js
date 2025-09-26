@@ -234,6 +234,26 @@
       (x, y) => { map[y][x] = TILES.TOWN; towns.push({ x, y }); }
     );
 
+    // Helper: pick dungeon size with probabilities influenced by terrain
+    function pickDungeonSizeFor(tile) {
+      // Base weights: small 0.45, medium 0.40, large 0.15
+      let wSmall = 0.45, wMed = 0.40, wLarge = 0.15;
+      // Bias by terrain
+      if (tile === TILES.MOUNTAIN) { wLarge += 0.15; wMed += 0.05; wSmall -= 0.20; }
+      else if (tile === TILES.FOREST) { wMed += 0.10; wLarge += 0.05; wSmall -= 0.15; }
+      else if (tile === TILES.GRASS) { wSmall += 0.10; wMed += 0.05; wLarge -= 0.15; }
+      else if (tile === TILES.SWAMP) { wMed += 0.10; wSmall += 0.05; wLarge -= 0.15; }
+      else if (tile === TILES.DESERT) { wMed += 0.10; wLarge += 0.05; wSmall -= 0.15; }
+      else if (tile === TILES.SNOW) { wMed += 0.10; wSmall += 0.05; wLarge -= 0.15; }
+      // normalize
+      const sum = Math.max(0.001, wSmall + wMed + wLarge);
+      const ps = [wSmall / sum, wMed / sum, wLarge / sum];
+      const r = rng();
+      if (r < ps[0]) return "small";
+      if (r < ps[0] + ps[1]) return "medium";
+      return "large";
+    }
+
     placeWithPredicate(
       wantDungeons,
       (x, y) => {
@@ -243,13 +263,13 @@
         return false;
       },
       (x, y) => {
+        const t = map[y][x];
         map[y][x] = TILES.DUNGEON;
         // Assign a dungeon level (difficulty) and size
         // Level: 1..5 skewed toward mid-range
         const level = 1 + ((rng() * rng() * 5) | 0); // bias toward 1..3
-        // Size: small/medium/large
-        const roll = rng();
-        const size = roll < 0.4 ? "small" : roll < 0.8 ? "medium" : "large";
+        // Size chosen with terrain-weighted probabilities
+        const size = pickDungeonSizeFor(t);
         dungeons.push({ x, y, level, size });
       }
     );
