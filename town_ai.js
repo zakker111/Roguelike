@@ -242,7 +242,7 @@
       }
     })();
 
-    // Residents
+    // Residents (initial pass)
     (function spawnResidents() {
       if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
       const targetFraction = 0.6;
@@ -313,6 +313,40 @@
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: null },
             _work: (rng() < 0.5 && shops && shops.length) ? { x: shops[0].x, y: shops[0].y }
                   : (townPlaza ? { x: townPlaza.x, y: townPlaza.y } : null),
+          });
+        }
+      }
+    })();
+
+    // Ensure occupancy: add at least one resident to every non-shop building
+    (function ensureOccupantsPerBuilding() {
+      if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
+      const linesHome = ["Home sweet home.","A quiet day indoors.","Just tidying up."];
+      const shopDoorSet = new Set((shops || []).map(s => `${s.building?.x},${s.building?.y},${s.building?.w},${s.building?.h}`));
+      function buildingKey(b) { return `${b.x},${b.y},${b.w},${b.h}`; }
+      for (const b of townBuildings) {
+        const key = buildingKey(b);
+        // Count current residents with home in this building
+        const hasResident = npcs.some(n => n.isResident && n._home && n._home.building && buildingKey(n._home.building) === key);
+        const isShopBuilding = shopDoorSet.has(key);
+        if (!hasResident) {
+          const pos = randomInteriorSpot(ctx, b) || { x: Math.max(b.x + 1, Math.min(b.x + b.w - 2, b.door.x)), y: Math.max(b.y + 1, Math.min(b.y + b.h - 2, b.door.y)) };
+          if (!pos) continue;
+          if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
+          // Errand: prefer plaza; shop door if exists
+          let errand = null;
+          if (townPlaza && rng() < 0.7) errand = { x: townPlaza.x, y: townPlaza.y };
+          else if (shops && shops.length) {
+            const s = shops[randInt(ctx, 0, shops.length - 1)];
+            errand = { x: s.x, y: s.y };
+          }
+          npcs.push({
+            x: pos.x, y: pos.y,
+            name: `Resident`,
+            lines: linesHome,
+            isResident: true,
+            _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: null },
+            _work: errand,
           });
         }
       }
