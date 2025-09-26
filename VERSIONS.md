@@ -9,6 +9,11 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v1.0.1 — Town FOV Rendering + See-through Windows
+- UI: Town renderer now respects FOV: unseen tiles are hidden; seen-but-not-currently-visible tiles are dimmed, matching dungeon behavior.
+- Changed: Props/NPCs/shop glyphs in towns render only when their tiles are currently visible.
+- Note: Windows already allow light through; this keeps interiors dark until you have line-of-sight via doors/windows.
+
 v1.0 — Overworld Connectivity Guaranteed
 - Added: Post-generation pass connects all towns and dungeons by carving walkable paths:
   - Converts river crossings to BEACH tiles (ford/bridge) and mountain passes to GRASS.

@@ -227,10 +227,24 @@
 
       for (let y = startY; y <= endY; y++) {
         const rowMap = map[y];
+        const rowSeen = seen[y] || [];
+        const rowVis = visible[y] || [];
         for (let x = startX; x <= endX; x++) {
           const screenX = (x - startX) * TILE - tileOffsetX;
           const screenY = (y - startY) * TILE - tileOffsetY;
           const type = rowMap[x];
+          const vis = !!rowVis[x];
+          const everSeen = !!rowSeen[x];
+
+          if (!everSeen) {
+            // Unknown tiles: draw dark
+            ctx2d.fillStyle = COLORS.wallDark;
+            ctx2d.fillRect(screenX, screenY, TILE, TILE);
+            if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
+            continue;
+          }
+
+          // Draw base tile
           let fill = TCOL.floor;
           if (type === TILES.WALL) fill = TCOL.wall;
           else if (type === TILES.WINDOW) fill = TCOL.window;
@@ -239,17 +253,24 @@
           ctx2d.fillRect(screenX, screenY, TILE, TILE);
           if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
 
-          // shop glyph overlay if provided
-          if (Array.isArray(shops) && shops.some(s => s.x === x && s.y === y)) {
+          // If shop door, overlay S (only when visible)
+          if (vis && Array.isArray(shops) && shops.some(s => s.x === x && s.y === y)) {
             drawGlyphScreen(ctx2d, screenX, screenY, "S", TCOL.shop, TILE);
+          }
+
+          // If not currently visible, dim it
+          if (!vis && everSeen) {
+            ctx2d.fillStyle = COLORS.dim;
+            ctx2d.fillRect(screenX, screenY, TILE, TILE);
           }
         }
       }
 
-      // draw props (wells, benches, lamps, stalls, fountain, trees, interiors)
+      // draw props (wells, benches, lamps, stalls, fountain, trees, interiors) only if visible
       if (Array.isArray(ctx.townProps)) {
         for (const p of ctx.townProps) {
           if (p.x < startX || p.x > endX || p.y < startY || p.y > endY) continue;
+          if (!visible[p.y] || !visible[p.y][p.x]) continue;
           const screenX = (p.x - startX) * TILE - tileOffsetX;
           const screenY = (p.y - startY) * TILE - tileOffsetY;
           let glyph = "?";
@@ -268,23 +289,26 @@
         }
       }
 
-      // draw NPCs
+      // draw NPCs only if visible
       if (Array.isArray(npcs)) {
         for (const n of npcs) {
           if (n.x < startX || n.x > endX || n.y < startY || n.y > endY) continue;
+          if (!visible[n.y] || !visible[n.y][n.x]) continue;
           const screenX = (n.x - startX) * TILE - tileOffsetX;
           const screenY = (n.y - startY) * TILE - tileOffsetY;
           drawGlyphScreen(ctx2d, screenX, screenY, "n", "#b4f9f8", TILE);
         }
       }
 
-      // draw gate 'G' at townExitAt
+      // draw gate 'G' at townExitAt (only if visible)
       if (ctx.townExitAt) {
         const gx = ctx.townExitAt.x, gy = ctx.townExitAt.y;
         if (gx >= startX && gx <= endX && gy >= startY && gy <= endY) {
-          const screenX = (gx - startX) * TILE - tileOffsetX;
-          const screenY = (gy - startY) * TILE - tileOffsetY;
-          drawGlyphScreen(ctx2d, screenX, screenY, "G", "#9ece6a", TILE);
+          if (visible[gy] && visible[gy][gx]) {
+            const screenX = (gx - startX) * TILE - tileOffsetX;
+            const screenY = (gy - startY) * TILE - tileOffsetY;
+            drawGlyphScreen(ctx2d, screenX, screenY, "G", "#9ece6a", TILE);
+          }
         }
       }
 
