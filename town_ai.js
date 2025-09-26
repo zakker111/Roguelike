@@ -197,6 +197,34 @@
     );
   }
 
+  // Ensure at least one bed exists inside the building; return a bed spot
+  function ensureBedInBuilding(ctx, building) {
+    let beds = bedsFor(ctx, building);
+    if (beds.length > 0) {
+      const b = beds[Math.floor(ctx.rng() * beds.length)];
+      return { x: b.x, y: b.y };
+    }
+    // Create a bed on a free interior tile
+    const spot = randomInteriorSpot(ctx, building);
+    if (spot && addProp(ctx, spot.x, spot.y, "bed", "Bed")) {
+      return { x: spot.x, y: spot.y };
+    }
+    // Fallback: try neighbors inside building border
+    const door = building.door || { x: building.x + ((building.w / 2) | 0), y: building.y };
+    const adj = [{dx:0,dy:1},{dx:0,dy:-1},{dx:1,dy:0},{dx:-1,dy:0}];
+    for (const d of adj) {
+      const x = door.x + d.dx, y = door.y + d.dy;
+      if (isFreeTileInterior(ctx, x, y, building) && addProp(ctx, x, y, "bed", "Bed")) {
+        return { x, y };
+      }
+    }
+    // As last resort, return center interior tile (may overlap furniture visually but is non-blocking for movement)
+    const cx = Math.max(building.x + 1, Math.min(building.x + building.w - 2, (building.x + (building.w / 2)) | 0));
+    const cy = Math.max(building.y + 1, Math.min(building.y + building.h - 2, (building.y + (building.h / 2)) | 0));
+    if (addProp(ctx, cx, cy, "bed", "Bed")) return { x: cx, y: cy };
+    return { x: cx, y: cy };
+  }
+
   function populateTown(ctx) {
     const { shops, npcs, townBuildings, townPlaza, rng } = ctx;
 
@@ -274,7 +302,6 @@
         const area = b.w * b.h;
         // More residents per larger building, up to 4, with a 50% chance of +1
         const residentCount = Math.max(1, Math.min(4, Math.floor(area / 24))) + (rng() < 0.5 ? 1 : 0);
-        const bedList = bedsFor(ctx, b);
         for (let i = 0; i < residentCount; i++) {
           const pos = randomInteriorSpot(ctx, b);
           if (!pos) continue;
@@ -287,11 +314,8 @@
             const sd = pickRandomShopDoor();
             if (sd) errand = sd;
           }
-          let sleepSpot = null;
-          if (bedList.length) {
-            const bidx = randInt(ctx, 0, bedList.length - 1);
-            sleepSpot = { x: bedList[bidx].x, y: bedList[bidx].y };
-          }
+          // Ensure a bed exists and assign it
+          const sleepSpot = ensureBedInBuilding(ctx, b);
           npcs.push({
             x: pos.x, y: pos.y,
             name: rng() < 0.25 ? `Child` : `Resident`,
@@ -310,13 +334,14 @@
           const pos = randomInteriorSpot(ctx, b);
           if (!pos) continue;
           if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
+          const sleepSpot = ensureBedInBuilding(ctx, b);
           npcs.push({
             x: pos.x, y: pos.y,
             name: `Resident`,
             lines: linesHome,
             isResident: true,
             _homebound: rng() < 0.55,
-            _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: null },
+            _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: sleepSpot },
             _work: (rng() < 0.5 && shops && shops.length) ? { x: shops[0].x, y: shops[0].y }
                   : (townPlaza ? { x: townPlaza.x, y: townPlaza.y } : null),
           });
@@ -342,30 +367,32 @@
             const s = shops[randInt(ctx, 0, shops.length - 1)];
             errand = { x: s.x, y: s.y };
           }
+          const bedSpot = ensureBedInBuilding(ctx, b);
           npcs.push({
             x: pos.x, y: pos.y,
             name: `Resident`,
             lines: linesHome,
             isResident: true,
             _homebound: true, // guaranteed occupant tends to stay inside
-            _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: null },
+            _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: bedSpot },
             _work: errand,
           });
         } else {
-          // For large buildings, ensure multiple occupants
+          // For large buildings, ensure multiple occupants (and enough beds)
           const area = b.w * b.h;
           const target = Math.max(1, Math.min(4, Math.floor(area / 28)));
           while (occupants.length < target) {
             const pos2 = randomInteriorSpot(ctx, b);
             if (!pos2) break;
             if (npcs.some(n => n.x === pos2.x && n.y === pos2.y)) break;
+            const bedSpot2 = ensureBedInBuilding(ctx, b);
             npcs.push({
               x: pos2.x, y: pos2.y,
               name: `Resident`,
               lines: linesHome,
               isResident: true,
               _homebound: rng() < 0.6,
-              _home: { building: b, x: pos2.x, y: pos2.y, door: { x: b.door.x, y: b.door.y }, bed: null },
+              _home: { building: b, x: pos2.x, y: pos2.y, door: { x: b.door.x, y: b.door.y }, bed: bedSpot2 },
               _work: (townPlaza && rng() < 0.4) ? { x: townPlaza.x, y: townPlaza.y } : null,
             });
             occupants.push(true);
