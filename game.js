@@ -1711,7 +1711,13 @@
           return;
         }
         if (isShopOpenNow()) {
-          log(`The ${s.name || "shop"} is open. (Trading coming soon)`, "
+          log(`The ${s.name || "shop"} is open. (Trading coming soon)`, "notice");
+        } else {
+          log(`The ${s.name || "shop"} is closed. Come back during the day.`, "warn");
+        }
+        requestDraw();
+        return;
+      }
       // Interact with props first, then attempt to talk to an NPC
       if (interactTownProps()) return;
       if (talkNearbyNPC()) return;
