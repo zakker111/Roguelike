@@ -2362,13 +2362,26 @@
         if (rng() < 0.9) continue;
       }
 
-      // Residents: more purposeful routine (home mornings/evenings, errands by day)
+      // Residents: more purposeful routine (home mornings/evenings with sleep, errands by day)
       if (n.isResident) {
-        // High idle chance indoors
-        if (phase === "morning" || phase === "evening") {
-          if (rng() < 0.6) continue;
-          const target = n._home ? { x: n._home.x, y: n._home.y } : null;
-          if (target) { stepTowards(n, target.x, target.y); continue; }
+        // Wake up in the morning
+        if (phase === "morning" && n._sleeping) {
+          n._sleeping = false;
+        }
+
+        if (phase === "evening") {
+          const home = n._home ? { x: n._home.x, y: n._home.y } : null;
+          // Go home; once home, go to sleep (no movement)
+          if (home) {
+            if (n.x === home.x && n.y === home.y) {
+              n._sleeping = true;
+              // Sleeping residents do not move
+              continue;
+            }
+            // Move towards home with strong intent
+            stepTowards(n, home.x, home.y);
+            continue;
+          }
         } else if (phase === "day") {
           // Errand: go to bench near plaza or a shop door; linger when arrived
           const target = n._work || (townPlaza ? { x: townPlaza.x, y: townPlaza.y } : null);
@@ -2380,6 +2393,18 @@
               continue;
             }
             stepTowards(n, target.x, target.y);
+            continue;
+          }
+        } else if (phase === "morning") {
+          // Morning: remain at home with high idle chance; gentle wiggle
+          const home = n._home ? { x: n._home.x, y: n._home.y } : null;
+          if (home) {
+            if (n.x === home.x && n.y === home.y) {
+              if (rng() < 0.85) continue;
+              stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+              continue;
+            }
+            stepTowards(n, home.x, home.y);
             continue;
           }
         }
