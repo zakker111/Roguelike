@@ -280,11 +280,20 @@
         }
       }
 
-      // player
+      // player - add subtle backdrop so it stands out in town view
       if (player.x >= startX && player.x <= endX && player.y >= startY && player.y <= endY) {
         const screenX = (player.x - startX) * TILE - tileOffsetX;
         const screenY = (player.y - startY) * TILE - tileOffsetY;
-        drawGlyphScreen(ctx2d, screenX, screenY, "@", COLORS.player, TILE);
+
+        ctx2d.save();
+        ctx2d.fillStyle = "rgba(255,255,255,0.16)";
+        ctx2d.fillRect(screenX + 4, screenY + 4, TILE - 8, TILE - 8);
+        ctx2d.strokeStyle = "rgba(255,255,255,0.35)";
+        ctx2d.lineWidth = 1;
+        ctx2d.strokeRect(screenX + 4.5, screenY + 4.5, TILE - 9, TILE - 9);
+        ctx2d.restore();
+
+        drawGlyphScreen(ctx2d, screenX, screenY, "@", COLORS.player || "#9ece6a", TILE);
       }
       return;
     }

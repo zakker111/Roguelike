@@ -9,6 +9,9 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v0.8.3 — Improve Player Visibility in Town
+- UI: Added the same subtle white backdrop and outline behind the player glyph '@' in town mode to match the overworld visibility tweak.
+
 v0.8.2 — Furnished Buildings (Interiors)
 - Added: Building interiors are now furnished with:
   - Fireplaces (∩) generally placed along inside walls
