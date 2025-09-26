@@ -41,7 +41,20 @@
     const { player, npcs, townProps } = ctx;
     if (player.x === x && player.y === y) return false;
     if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
-    if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y)) return false;
+    // Street props (benches, stalls, lamps, trees, signs, well, fountain) are blocking;
+    // interior furniture is non-blocking for movement.
+    const blockingTypes = new Set(["well","fountain","bench","lamp","stall","tree","sign"]);
+    if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y && blockingTypes.has(p.type))) return false;
+    return true;
+  }
+
+  // Interior-only free check: ignores props and requires being inside the building
+  function isFreeTileInterior(ctx, x, y, building) {
+    if (!isWalkTown(ctx, x, y)) return false;
+    if (!insideBuilding(building, x, y)) return false;
+    const { player, npcs } = ctx;
+    if (player.x === x && player.y === y) return false;
+    if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
     return true;
   }
 
@@ -376,20 +389,40 @@
       if (!insideNow) {
         const door = building.door || nearestFreeAdjacent(ctx, building.x + ((building.w / 2) | 0), building.y, null);
         if (door) {
+          // If on the door, step one tile inside using interior-aware free check
           if (n.x === door.x && n.y === door.y) {
-            // Step just inside
-            const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building) || targetInside || { x: door.x, y: door.y };
-            stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
-            return true;
+            // Prefer targetInside if valid; else pick nearest interior free tile adjacent to door
+            let inSpot = null;
+            if (targetInside && isFreeTileInterior(ctx, targetInside.x, targetInside.y, building)) {
+              inSpot = targetInside;
+            } else {
+              const adj = [{dx:0,dy:1},{dx:0,dy:-1},{dx:1,dy:0},{dx:-1,dy:0}];
+              for (const d of adj) {
+                const ix = door.x + d.dx, iy = door.y + d.dy;
+                if (isFreeTileInterior(ctx, ix, iy, building)) { inSpot = { x: ix, y: iy }; break; }
+              }
+              if (!inSpot) {
+                // fallback: nearestFreeAdjacent constrained to building interior
+                inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building);
+              }
+            }
+            if (inSpot) {
+              stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
+              return true;
+            }
           }
+          // Otherwise, move toward the door
           stepTowards(ctx, occ, n, door.x, door.y);
           return true;
         }
       } else {
         // Already inside: go to targetInside or nearest free interior tile
-        const inSpot = (targetInside && isFreeTile(ctx, targetInside.x, targetInside.y))
-          ? targetInside
-          : nearestFreeAdjacent(ctx, targetInside ? targetInside.x : n.x, targetInside ? targetInside.y : n.y, building);
+        let inSpot = null;
+        if (targetInside && isFreeTileInterior(ctx, targetInside.x, targetInside.y, building)) {
+          inSpot = targetInside;
+        } else {
+          inSpot = nearestFreeAdjacent(ctx, targetInside ? targetInside.x : n.x, targetInside ? targetInside.y : n.y, building);
+        }
         if (inSpot) {
           stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
           return true;
