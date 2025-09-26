@@ -328,6 +328,36 @@
         }
       }
 
+      // Lamp light glow at night/dusk/dawn
+      try {
+        const time = ctx.time;
+        if (time && (time.phase === "night" || time.phase === "dusk" || time.phase === "dawn")) {
+          if (Array.isArray(ctx.townProps)) {
+            ctx2d.save();
+            ctx2d.globalCompositeOperation = "lighter";
+            for (const p of ctx.townProps) {
+              if (p.type !== "lamp") continue;
+              const px = p.x, py = p.y;
+              if (px < startX || px > endX || py < startY || py > endY) continue;
+              if (!visible[py] || !visible[py][px]) continue;
+
+              const cx = (px - startX) * TILE - tileOffsetX + TILE / 2;
+              const cy = (py - startY) * TILE - tileOffsetY + TILE / 2;
+              const r = TILE * 2.2;
+              const grad = ctx2d.createRadialGradient(cx, cy, 4, cx, cy, r);
+              grad.addColorStop(0, "rgba(255, 220, 120, 0.60)");
+              grad.addColorStop(0.4, "rgba(255, 180, 80, 0.25)");
+              grad.addColorStop(1, "rgba(255, 160, 40, 0.0)");
+              ctx2d.fillStyle = grad;
+              ctx2d.beginPath();
+              ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
+              ctx2d.fill();
+            }
+            ctx2d.restore();
+          }
+        }
+      } catch (_) {}
+
       // draw gate 'G' at townExitAt (only if visible)
       if (ctx.townExitAt) {
         const gx = ctx.townExitAt.x, gy = ctx.townExitAt.y;

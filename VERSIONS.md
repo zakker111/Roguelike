@@ -9,6 +9,16 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v1.3 — Shops + Night Lamps + Resting
+- Added: Lamp posts cast a warm light glow at night/dusk/dawn.
+- Added: Shops have opening hours (day only). Interacting on a shop door:
+  - Open (day): logs that trading is coming soon.
+  - Closed (dawn/dusk/night): logs closed message.
+- Added: Rest systems:
+  - Benches: if used at night/dawn/dusk, rest until 06:00 with a light heal.
+  - Inn: stand on the Inn door and press G to sleep until morning; fully heal.
+- Dev: Exposed shopAt()/isShopOpenNow()/rest helpers; time advancement converts minutes to turns.
+
 v1.2 — Day/Night Cycle and Turn Time
 - Added: Global time-of-day system shared across all modes (world/town/dungeon).
   - Full day = 24 hours (1440 minutes).

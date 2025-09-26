@@ -746,6 +746,47 @@
     return true;
   }
 
+  // Town shops helpers and resting
+  function shopAt(x, y) {
+    if (!Array.isArray(shops)) return null;
+    return shops.find(s => s.x === x && s.y === y) || null;
+  }
+  function isShopOpenNow() {
+    const phase = getClock().phase;
+    return phase === "day"; // open only during day hours
+  }
+  function minutesUntil(hourTarget /*0-23*/, minuteTarget = 0) {
+    const t = getClock();
+    const cur = t.hours * 60 + t.minutes;
+    const goal = (hourTarget * 60 + minuteTarget + DAY_MINUTES) % DAY_MINUTES;
+    let delta = goal - cur;
+    if (delta <= 0) delta += DAY_MINUTES;
+    return delta;
+  }
+  function advanceTimeMinutes(mins) {
+    const turns = Math.ceil(mins / MINUTES_PER_TURN);
+    turnCounter = (turnCounter + turns) | 0;
+  }
+  function restUntilMorning(healFraction = 0.25) {
+    const mins = minutesUntil(6, 0); // rest until 06:00 dawn
+    advanceTimeMinutes(mins);
+    const heal = Math.max(1, Math.floor(player.maxHp * healFraction));
+    const prev = player.hp;
+    player.hp = Math.min(player.maxHp, player.hp + heal);
+    log(`You rest until morning (${getClock().hhmm}). HP ${prev.toFixed(1)} -> ${player.hp.toFixed(1)}.`, "good");
+    updateUI();
+    requestDraw();
+  }
+  function restAtInn() {
+    const mins = minutesUntil(6, 0);
+    advanceTimeMinutes(mins);
+    const prev = player.hp;
+    player.hp = player.maxHp;
+    log(`You spend the night at the inn. You wake up fully rested at ${getClock().hhmm}.`, "good");
+    updateUI();
+    requestDraw();
+  }
+
   function generateTown() {
     // Structured town: walls with a gate, main road to a central plaza, secondary roads, buildings aligned to blocks, shops near plaza
     const W = MAP_COLS, H = MAP_ROWS;
@@ -1503,9 +1544,16 @@
       case "fountain":
         log("You watch the fountain for a moment. You feel calmer.", "info");
         break;
-      case "bench":
-        log("You sit on the bench and rest a moment.", "info");
+      case "bench": {
+        const phase = getClock().phase;
+        if (phase !== "day") {
+          log("You relax on the bench and drift to sleep...", "info");
+          restUntilMorning(0.25); // light heal to 25% of max
+        } else {
+          log("You sit on the bench and rest a moment.", "info");
+        }
         break;
+      }
       case "lamp":
         log("The lamp flickers warmly.", "info");
         break;
@@ -1537,6 +1585,22 @@
   function lootCorpse() {
     if (isDead) return;
     if (mode === "town") {
+      // Interact with shop if standing on a shop door
+      const s = shopAt(player.x, player.y);
+      if (s) {
+        if (s.name && s.name.toLowerCase() === "inn") {
+          log("You enter the inn.", "notice");
+          restAtInn();
+          return;
+        }
+        if (isShopOpenNow()) {
+          log(`The ${s.name || "shop"} is open. (Trading coming soon)`, "notice");
+        } else {
+          log(`The ${s.name || "shop"} is closed. Come back during the day.`, "warn");
+        }
+        requestDraw();
+        return;
+      }
       // Interact with props first, then attempt to talk to an NPC
       if (interactTownProps()) return;
       if (talkNearbyNPC()) return;
