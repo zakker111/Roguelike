@@ -245,6 +245,78 @@
       (x, y) => { map[y][x] = TILES.DUNGEON; dungeons.push({ x, y }); }
     );
 
+    // Ensure connectivity between all towns and dungeons by carving walkable paths
+    const POIS = towns.concat(dungeons);
+    const walkable = (x, y) => inBounds(x, y, width, height) && isWalkable(map[y][x]);
+
+    function bfsReachable(sx, sy) {
+      const q = [{ x: sx, y: sy }];
+      const seen = new Set([`${sx},${sy}`]);
+      const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+      while (q.length) {
+        const cur = q.shift();
+        for (const d of dirs) {
+          const nx = cur.x + d.dx, ny = cur.y + d.dy;
+          const key = `${nx},${ny}`;
+          if (seen.has(key) || !inBounds(nx, ny, width, height)) continue;
+          if (!isWalkable(map[ny][nx])) continue;
+          seen.add(key);
+          q.push({ x: nx, y: ny });
+        }
+      }
+      return seen;
+    }
+
+    function carvePath(x0, y0, x1, y1) {
+      // Bresenham-ish line, carve blockers into walkable tiles
+      let x = x0, y = y0;
+      const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+      const sx = x0 < x1 ? 1 : -1;
+      const sy = y0 < y1 ? 1 : -1;
+      let err = dx - dy;
+      while (true) {
+        if (inBounds(x, y, width, height)) {
+          const t = map[y][x];
+          if (t === TILES.WATER || t === TILES.RIVER) map[y][x] = TILES.BEACH;
+          else if (t === TILES.MOUNTAIN) map[y][x] = TILES.GRASS;
+          // leave forests/grass as is; towns/dungeons untouched
+        }
+        if (x === x1 && y === y1) break;
+        const e2 = 2 * err;
+        if (e2 > -dy) { err -= dy; x += sx; }
+        if (e2 < dx) { err += dx; y += sy; }
+      }
+    }
+
+    function ensureConnectivity() {
+      if (POIS.length === 0) return;
+      // Start from first POI; connect others one by one to the growing connected set
+      let connected = new Set();
+      // pick first POI as seed
+      const seed = POIS[0];
+      connected.add(`${seed.x},${seed.y}`);
+      let reach = bfsReachable(seed.x, seed.y);
+
+      for (let i = 1; i < POIS.length; i++) {
+        const p = POIS[i];
+        if (reach.has(`${p.x},${p.y}`)) continue;
+        // find nearest already-reachable tile to p to carve a corridor to
+        let best = null, bestDist = Infinity;
+        for (const key of reach) {
+          const [sx, sy] = key.split(",").map(Number);
+          const d = Math.abs(sx - p.x) + Math.abs(sy - p.y);
+          if (d < bestDist) { bestDist = d; best = { x: sx, y: sy }; }
+        }
+        if (best) {
+          carvePath(best.x, best.y, p.x, p.y);
+          // update reachability after carving
+          reach = bfsReachable(seed.x, seed.y);
+        }
+      }
+    }
+
+    ensureConnectivity();
+
     return { map, width, height, towns, dungeons };
   }
 

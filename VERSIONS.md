@@ -9,6 +9,13 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v1.0 — Overworld Connectivity Guaranteed
+- Added: Post-generation pass connects all towns and dungeons by carving walkable paths:
+  - Converts river crossings to BEACH tiles (ford/bridge) and mountain passes to GRASS.
+  - Uses a line-based path to connect any unreachable POIs to the main region.
+- Changed: World remains visually similar; bridges/passes are subtle walkable corridors.
+- Note: Overworld stays fully revealed. Towns keep FOV.
+
 v0.9 — Town FOV + Windows
 - Added: Windows tile in towns (non-walkable, light passes) placed along building walls; rendered as blue-gray.
 - Changed: Towns now use proper fog-of-war with FOV, like dungeons (overworld still fully visible).
