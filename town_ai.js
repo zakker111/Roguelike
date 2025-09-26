@@ -28,6 +28,29 @@
     return t === TILES.FLOOR || t === TILES.DOOR;
   }
 
+  function insideBuilding(b, x, y) {
+    return x > b.x && x < b.x + b.w - 1 && y > b.y && y < b.y + b.h - 1;
+  }
+
+  function isFreeTile(ctx, x, y) {
+    if (!isWalkTown(ctx, x, y)) return false;
+    const { player, npcs, townProps } = ctx;
+    if (player.x === x && player.y === y) return false;
+    if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
+    if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y)) return false;
+    return true;
+  }
+
+  function nearestFreeAdjacent(ctx, x, y, constrainToBuilding = null) {
+    const dirs = [{dx:0,dy:0},{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1},{dx:1,dy:1},{dx:1,dy:-1},{dx:-1,dy:1},{dx:-1,dy:-1}];
+    for (const d of dirs) {
+      const nx = x + d.dx, ny = y + d.dy;
+      if (constrainToBuilding && !insideBuilding(constrainToBuilding, nx, ny)) continue;
+      if (isFreeTile(ctx, nx, ny)) return { x: nx, y: ny };
+    }
+    return null;
+  }
+
   function stepTowards(ctx, occ, n, tx, ty) {
     if (typeof tx !== "number" || typeof ty !== "number") return false;
     const { map, player } = ctx;
@@ -343,6 +366,34 @@
       const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
     }
 
+    function routeIntoBuilding(ctx, occ, n, building, targetInside) {
+      // If outside the building, aim for the door first
+      const insideNow = insideBuilding(building, n.x, n.y);
+      if (!insideNow) {
+        const door = building.door || nearestFreeAdjacent(ctx, building.x + ((building.w / 2) | 0), building.y, null);
+        if (door) {
+          if (n.x === door.x && n.y === door.y) {
+            // Step just inside
+            const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building) || targetInside || { x: door.x, y: door.y };
+            stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
+            return true;
+          }
+          stepTowards(ctx, occ, n, door.x, door.y);
+          return true;
+        }
+      } else {
+        // Already inside: go to targetInside or nearest free interior tile
+        const inSpot = (targetInside && isFreeTile(ctx, targetInside.x, targetInside.y))
+          ? targetInside
+          : nearestFreeAdjacent(ctx, targetInside ? targetInside.x : n.x, targetInside ? targetInside.y : n.y, building);
+        if (inSpot) {
+          stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
+          return true;
+        }
+      }
+      return false;
+    }
+
     for (const idx of order) {
       const n = npcs[idx];
       ensureHome(ctx, n);
@@ -364,33 +415,22 @@
         const shouldBeAtWorkZone = inWindow(arriveStart, leaveEnd, minutes, 1440);
         const openNow = isOpenAt(shop, minutes, 1440);
 
-        let target = null;
+        let handled = false;
         if (shouldBeAtWorkZone) {
-          if (openNow && n._workInside) {
-            if (ctx.rng() < 0.15 && shop && shop.building) {
-              const bx = randInt(ctx, shop.building.x + 1, shop.building.x + shop.building.w - 2);
-              const by = randInt(ctx, shop.building.y + 1, shop.building.y + shop.building.h - 2);
-              target = { x: bx, y: by };
-            } else {
-              target = { x: n._workInside.x, y: n._workInside.y };
-            }
+          if (openNow && n._workInside && shop && shop.building) {
+            handled = routeIntoBuilding(ctx, occ, n, shop.building, n._workInside);
           } else if (n._work) {
-            target = { x: n._work.x, y: n._work.y };
+            handled = stepTowards(ctx, occ, n, n._work.x, n._work.y);
           }
-        } else {
-          if (n._home) target = { x: n._home.x, y: n._home.y };
+        } else if (n._home && n._home.building) {
+          // Off hours: go home, via door then inside
+          const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+          handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
         }
 
-        if (target && n.x === target.x && n.y === target.y) {
-          const idleChance = openNow ? 0.90 : 0.92;
-          if (ctx.rng() < idleChance) continue;
-          stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
-          continue;
-        }
-        if (target) {
-          stepTowards(ctx, occ, n, target.x, target.y);
-          continue;
-        }
+        if (handled) continue;
+
+        // idle jiggle
         if (ctx.rng() < 0.9) continue;
       }
 
@@ -401,14 +441,15 @@
           else continue;
         }
         if (phase === "evening") {
-          const home = n._home ? (n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y }) : null;
-          if (home) {
-            if (n.x === home.x && n.y === home.y) {
+          if (n._home && n._home.building) {
+            const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+            // If at sleep target, go to sleep
+            if (n.x === sleepTarget.x && n.y === sleepTarget.y) {
               n._sleeping = true;
               continue;
             }
-            stepTowards(ctx, occ, n, home.x, home.y);
-            continue;
+            // Otherwise route via door and inside
+            if (routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget)) continue;
           }
         } else if (phase === "day") {
           const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
@@ -422,15 +463,9 @@
             continue;
           }
         } else if (phase === "morning") {
-          const home = n._home ? { x: n._home.x, y: n._home.y } : null;
-          if (home) {
-            if (n.x === home.x && n.y === home.y) {
-              if (ctx.rng() < 0.85) continue;
-              stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
-              continue;
-            }
-            stepTowards(ctx, occ, n, home.x, home.y);
-            continue;
+          if (n._home && n._home.building) {
+            const homeTarget = { x: n._home.x, y: n._home.y };
+            if (routeIntoBuilding(ctx, occ, n, n._home.building, homeTarget)) continue;
           }
         }
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
