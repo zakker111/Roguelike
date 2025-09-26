@@ -218,6 +218,7 @@
     if (mode === "town") {
       const TCOL = {
         wall: "#2f2b26",       // building
+        window: "#295b6e",     // windows
         floor: "#0f1620",      // street/plaza
         door: "#6f5b3e",
         shop: "#d7ba7d",
@@ -232,6 +233,7 @@
           const type = rowMap[x];
           let fill = TCOL.floor;
           if (type === TILES.WALL) fill = TCOL.wall;
+          else if (type === TILES.WINDOW) fill = TCOL.window;
           else if (type === TILES.DOOR) fill = TCOL.door;
           ctx2d.fillStyle = fill;
           ctx2d.fillRect(screenX, screenY, TILE, TILE);

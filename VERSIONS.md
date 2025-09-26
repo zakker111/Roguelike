@@ -9,6 +9,11 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v0.9 — Town FOV + Windows
+- Added: Windows tile in towns (non-walkable, light passes) placed along building walls; rendered as blue-gray.
+- Changed: Towns now use proper fog-of-war with FOV, like dungeons (overworld still fully visible).
+- Dev: recomputeFOV now only auto-reveals in world mode; town initializes seen/visible as false.
+
 v0.8.4 — Stronger Player Marker (World + Town)
 - UI: Player '@' now renders with an outlined glyph (black stroke) on top of the white backdrop in both overworld and town, improving contrast further.
 

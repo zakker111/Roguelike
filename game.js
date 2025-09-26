@@ -49,6 +49,7 @@
     FLOOR: 1,
     DOOR: 2,
     STAIRS: 3,
+    WINDOW: 4, // town-only: blocks movement, lets light through
   };
 
   const COLORS = {
@@ -591,8 +592,8 @@
   }
 
   function recomputeFOV() {
-    if (mode === "world" || mode === "town") {
-      // In overworld and town, reveal entire map (no fog-of-war)
+    if (mode === "world") {
+      // In overworld, reveal entire map (no fog-of-war)
       const rows = map.length;
       const cols = map[0] ? map[0].length : 0;
       const shapeOk = Array.isArray(visible) && visible.length === rows && (rows === 0 || (visible[0] && visible[0].length === cols));
@@ -867,6 +868,39 @@
       }
     }
 
+    // Add windows to building walls (block movement but allow FOV to pass)
+    function placeWindowsOnBuilding(b) {
+      const sides = [
+        { // top edge
+          pts: Array.from({ length: Math.max(0, b.w - 2) }, (_, i) => ({ x: b.x + 1 + i, y: b.y }))
+        },
+        { // bottom
+          pts: Array.from({ length: Math.max(0, b.w - 2) }, (_, i) => ({ x: b.x + 1 + i, y: b.y + b.h - 1 }))
+        },
+        { // left
+          pts: Array.from({ length: Math.max(0, b.h - 2) }, (_, i) => ({ x: b.x, y: b.y + 1 + i }))
+        },
+        { // right
+          pts: Array.from({ length: Math.max(0, b.h - 2) }, (_, i) => ({ x: b.x + b.w - 1, y: b.y + 1 + i }))
+        }
+      ];
+      for (const s of sides) {
+        // choose up to 2 window locations per side
+        let candidates = s.pts.filter(p => inBounds(p.x, p.y) && map[p.y][p.x] === TILES.WALL);
+        // avoid door tiles
+        candidates = candidates.filter(p => map[p.y][p.x] !== TILES.DOOR);
+        if (candidates.length === 0) continue;
+        const count = rng() < 0.5 ? 1 : 2;
+        for (let k = 0; k < count && candidates.length; k++) {
+          const idx = randInt(0, candidates.length - 1);
+          const p = candidates[idx];
+          map[p.y][p.x] = TILES.WINDOW;
+          candidates.splice(idx, 1);
+        }
+      }
+    }
+    for (const b of buildings) placeWindowsOnBuilding(b);
+
     // Props in plaza and parks + building interiors
     townProps = [];
     const addProp = (x, y, type, name) => {
@@ -974,9 +1008,9 @@
       placed++;
     }
 
-    // Visibility
-    seen = Array.from({ length: H }, () => Array(W).fill(true));
-    visible = Array.from({ length: H }, () => Array(W).fill(true));
+    // Visibility (start unseen; FOV will reveal)
+    seen = Array.from({ length: H }, () => Array(W).fill(false));
+    visible = Array.from({ length: H }, () => Array(W).fill(false));
     enemies = [];
     corpses = [];
     decals = [];
@@ -1091,6 +1125,7 @@
       log("You enter the town. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.", "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
+      recomputeFOV();
       requestDraw();
       return true;
     }
