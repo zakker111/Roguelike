@@ -129,6 +129,9 @@
       mode,
       world,
       npcs,
+      shops,
+      townProps,
+      time: getClock(),
       requestDraw,
       log,
       isWalkable, inBounds,
@@ -1080,6 +1083,43 @@
 
     // Town NPCs around plaza and along main road, avoid player adjacency
     npcs = [];
+
+    // First, assign shopkeepers to each shop and station them at the shop door.
+    (function spawnShopkeepers() {
+      if (!Array.isArray(shops) || shops.length === 0) return;
+      const keeperLines = [
+        "Open during the day!",
+        "Browse our wares soon.",
+        "Welcome in!",
+      ];
+      function findNearbyFree(x, y) {
+        // prefer the exact door, else try neighbors
+        if (isFreeTownFloor(x, y)) return { x, y };
+        const neigh = [
+          { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+          { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 },
+        ];
+        for (const d of neigh) {
+          const nx = x + d.dx, ny = y + d.dy;
+          if (isFreeTownFloor(nx, ny)) return { x: nx, y: ny };
+        }
+        return { x, y };
+      }
+      for (const s of shops) {
+        const spot = findNearbyFree(s.x, s.y);
+        // Avoid overlap with already-placed keepers
+        if (npcs.some(n => n.x === spot.x && n.y === spot.y)) continue;
+        const name = s.name ? `${s.name} Keeper` : "Shopkeeper";
+        npcs.push({
+          x: spot.x, y: spot.y,
+          name,
+          lines: keeperLines,
+          isShopkeeper: true,
+          _work: { x: s.x, y: s.y },
+        });
+      }
+    })();
+
     const lines = [
       "Welcome to our town.",
       "Shops are marked with S.",
@@ -2083,6 +2123,29 @@
       const n = npcs[idx];
       ensureHome(n);
 
+      // Shopkeepers: stay stationed at their shop during the day; go home otherwise.
+      if (n.isShopkeeper) {
+        let target = null;
+        if (phase === "day") {
+          target = n._work || (n._home ? { x: n._home.x, y: n._home.y } : null);
+        } else {
+          target = n._home ? { x: n._home.x, y: n._home.y } : null;
+        }
+        // If already at target, mostly idle
+        if (target && n.x === target.x && n.y === target.y) {
+          if (rng() < 0.9) continue; // high idle chance at post
+          // tiny wiggle around spot
+          stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+          continue;
+        }
+        if (target) {
+          stepTowards(n, target.x, target.y);
+          continue;
+        }
+        // No target fallback: idle
+        if (rng() < 0.9) continue;
+      }
+
       // Small idle chance
       if (rng() < 0.25) continue;
 
@@ -2104,7 +2167,6 @@
       // Greedy step towards target
       stepTowards(n, target.x, target.y);
     }
-  }
 
   function occupied(x, y) {
     if (player.x === x && player.y === y) return true;
