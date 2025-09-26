@@ -1444,7 +1444,9 @@
     return true;
   }
 
-  function manhattan(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
+  const manhattan = (typeof window !== "undefined" && window.PlayerUtils && typeof PlayerUtils.manhattan === "function")
+    ? PlayerUtils.manhattan
+    : function (ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); };
 
   function clearAdjacentNPCsAroundPlayer() {
     // Ensure the four cardinal neighbors around the player are not all occupied by NPCs
@@ -1602,25 +1604,30 @@
     return false;
   }
 
+  function returnToOverworldFromDungeon(msg = "You return to the overworld.") {
+    // Save current dungeon state before leaving
+    saveCurrentDungeonState();
+    mode = "world";
+    enemies = [];
+    corpses = [];
+    decals = [];
+    map = world.map;
+    if (worldReturnPos) {
+      player.x = worldReturnPos.x;
+      player.y = worldReturnPos.y;
+    }
+    recomputeFOV();
+    updateCamera();
+    updateUI();
+    log(msg, "notice");
+    requestDraw();
+  }
+
   function returnToWorldIfAtExit() {
     if (mode !== "dungeon" || !cameFromWorld || !world) return false;
     if (floor !== 1) return false;
     if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y) {
-      mode = "world";
-      enemies = [];
-      corpses = [];
-      decals = [];
-      map = world.map;
-      // restore world position (either returnPos or keep)
-      if (worldReturnPos) {
-        player.x = worldReturnPos.x;
-        player.y = worldReturnPos.y;
-      }
-      recomputeFOV();
-      updateCamera();
-      updateUI();
-      log("You return to the overworld.", "notice");
-      requestDraw();
+      returnToOverworldFromDungeon("You return to the overworld.");
       return true;
     }
     log("Return to the dungeon entrance to go back to the overworld.", "info");
@@ -2019,23 +2026,7 @@
     if (mode === "dungeon") {
       // Using G on the entrance hole returns to the overworld
       if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y && cameFromWorld && world) {
-        // Save current dungeon state before leaving
-        saveCurrentDungeonState();
-        // Return to world immediately
-        mode = "world";
-        enemies = [];
-        corpses = [];
-        decals = [];
-        map = world.map;
-        if (worldReturnPos) {
-          player.x = worldReturnPos.x;
-          player.y = worldReturnPos.y;
-        }
-        recomputeFOV();
-        updateCamera();
-        updateUI();
-        log("You climb back to the overworld.", "notice");
-        requestDraw();
+        returnToOverworldFromDungeon("You climb back to the overworld.");
         return;
       }
     }
@@ -2439,10 +2430,7 @@
     }
   }
   
-  function occupied(x, y) {
-    if (player.x === x && player.y === y) return true;
-    return enemies.some(e => e.x === x && e.y === y);
-  }
+  
 
   
   function turn() {

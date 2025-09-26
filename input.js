@@ -28,6 +28,14 @@
       window.removeEventListener("keydown", _onKey);
     }
     _onKey = (e) => {
+      // Ignore system-level shortcuts (let browser/UI handle them)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // Ignore when typing in editable fields
+      const el = e.target;
+      const tag = (el && el.tagName) ? el.tagName.toLowerCase() : "";
+      const isEditable = el && (el.isContentEditable || tag === "input" || tag === "textarea" || tag === "select");
+      if (isEditable) return;
       
       if (_handlers.isDead && _handlers.isDead()) {
         if (e.key && (e.key.toLowerCase() === "r" || e.key === "Enter")) {

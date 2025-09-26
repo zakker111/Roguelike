@@ -6,7 +6,9 @@
  */
 (function () {
   function randInt(ctx, a, b) { return Math.floor(ctx.rng() * (b - a + 1)) + a; }
-  function manhattan(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
+  const manhattan = (typeof window !== "undefined" && window.PlayerUtils && typeof PlayerUtils.manhattan === "function")
+    ? PlayerUtils.manhattan
+    : function (ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); };
 
   // ---- Schedules ----
   function inWindow(start, end, m, dayMinutes) {
