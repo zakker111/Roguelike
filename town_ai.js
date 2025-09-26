@@ -367,7 +367,13 @@
     const occ = new Set();
     occ.add(`${player.x},${player.y}`);
     for (const n of npcs) occ.add(`${n.x},${n.y}`);
-    if (Array.isArray(townProps)) for (const p of townProps) occ.add(`${p.x},${p.y}`);
+    // Only street props block movement; interior furniture should not block.
+    const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree","sign"]);
+    if (Array.isArray(townProps)) {
+      for (const p of townProps) {
+        if (blockingProps.has(p.type)) occ.add(`${p.x},${p.y}`);
+      }
+    }
 
     const t = ctx.time;
     const minutes = t ? (t.hours * 60 + t.minutes) : 12 * 60;
