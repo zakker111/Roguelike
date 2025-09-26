@@ -1336,9 +1336,9 @@
     (function spawnShopkeepers() {
       if (!Array.isArray(shops) || shops.length === 0) return;
       const keeperLines = [
-        "Open during the day!",
-        "Browse our wares soon.",
+        "We open on schedule.",
         "Welcome in!",
+        "Back soon.",
       ];
       function findNearbyFree(x, y) {
         // prefer the exact door, else try neighbors
@@ -1366,6 +1366,7 @@
           lines: keeperLines,
           isShopkeeper: true,
           _work: { x: s.x, y: s.y },
+          _shopRef: s,
         });
       }
     })();
@@ -2676,17 +2677,15 @@
         continue;
       }
 
-      // Shopkeepers: stay stationed at their shop during the day; go home otherwise.
+      // Shopkeepers: stand at their shop door while the shop is open; go home otherwise.
       if (n.isShopkeeper) {
-        let target = null;
-        if (phase === "day") {
-          target = n._work || (n._home ? { x: n._home.x, y: n._home.y } : null);
-        } else {
-          target = n._home ? { x: n._home.x, y: n._home.y } : null;
-        }
+        const shop = n._shopRef || null;
+        const openNow = shop ? isShopOpenNow(shop) : (phase === "day");
+        const target = openNow ? (n._work || (n._home ? { x: n._home.x, y: n._home.y } : null))
+                               : (n._home ? { x: n._home.x, y: n._home.y } : (n._work || null));
         // If already at target, mostly idle
         if (target && n.x === target.x && n.y === target.y) {
-          if (rng() < 0.9) continue; // high idle chance at post
+          if (rng() < 0.92) continue; // high idle chance at post
           // tiny wiggle around spot
           stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
           continue;
