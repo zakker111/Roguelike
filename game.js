@@ -2249,7 +2249,8 @@
       // Greedy step towards target
       stepTowards(n, target.x, target.y);
     }
-
+  }
+  
   function occupied(x, y) {
     if (player.x === x && player.y === y) return true;
     return enemies.some(e => e.x === x && e.y === y);
