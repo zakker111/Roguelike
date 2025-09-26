@@ -34,6 +34,7 @@
   let townPlaza = null;      // central plaza coordinates {x,y}
   let tavern = null;         // tavern info: { building:{x,y,w,h,door}, door:{x,y} }
   let townTick = 0;          // simple turn counter for town routines
+  let townName = null;       // current town's generated name
 
   // World/town/dungeon transition anchors
   let townExitAt = null;     // gate position inside town used to exit back to overworld
@@ -833,6 +834,18 @@
     player.x = gate.x; player.y = gate.y;
     townExitAt = { x: gate.x, y: gate.y };
 
+    // Generate a town name (simple syllable-based)
+    const makeTownName = () => {
+      const prefixes = ["Oak", "Ash", "Pine", "River", "Stone", "Iron", "Silver", "Gold", "Wolf", "Fox", "Moon", "Star", "Red", "White", "Black", "Green"];
+      const suffixes = ["dale", "ford", "field", "burg", "ton", "stead", "haven", "fall", "gate", "port", "wick", "shire", "crest", "view", "reach"];
+      const mid = ["", "wood", "water", "brook", "hill", "rock", "ridge"];
+      const p = prefixes[randInt(0, prefixes.length - 1)];
+      const m = mid[randInt(0, mid.length - 1)];
+      const s = suffixes[randInt(0, suffixes.length - 1)];
+      return [p, m, s].filter(Boolean).join("") ;
+    };
+    townName = makeTownName();
+
     // Central plaza (rectangle)
     const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
     townPlaza = { x: plaza.x, y: plaza.y };
@@ -1035,6 +1048,9 @@
       }
       return false;
     };
+
+    // Place a welcome sign near the town gate
+    addSignNear(gate.x, gate.y, `Welcome to ${townName}`);
 
     // Fill building interiors with fireplaces, tables, beds, chests
     function fillBuildingInterior(b) {
@@ -1272,8 +1288,8 @@
     })();
 
     const lines = [
-      "Welcome to our town.",
-      "Shops are marked with S.",
+      `Welcome to ${townName || "our town"}.`,
+      "ShopsS.",
       "Rest your feet a while.",
       "The dungeon is dangerous.",
       "Buy supplies before you go.",
@@ -1406,7 +1422,7 @@
     ];
     const names = ["Ava", "Borin", "Cora", "Darin", "Eda", "Finn", "Goro", "Hana"];
     const lines = [
-      "Welcome to our town.",
+      `Welcome to ${townName || "our town"}.`,
       "Shops are marked with S.",
       "Stay as long as you like.",
       "The plaza is at the center.",
@@ -1441,7 +1457,8 @@
       townExitAt = { x: player.x, y: player.y };
       // Make entry calmer: reduce greeters to avoid surrounding the player
       spawnGateGreeters(0);
-      log("You enter the town. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.", "notice");
+      log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice")</;
+");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
       recomputeFOV();
