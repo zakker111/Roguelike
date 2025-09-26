@@ -1289,7 +1289,7 @@
 
     const lines = [
       `Welcome to ${townName || "our town"}.`,
-      "ShopsS.",
+      "Shops are marked with S.",
       "Rest your feet a while.",
       "The dungeon is dangerous.",
       "Buy supplies before you go.",
@@ -1457,8 +1457,7 @@
       townExitAt = { x: player.x, y: player.y };
       // Make entry calmer: reduce greeters to avoid surrounding the player
       spawnGateGreeters(0);
-      log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice")</;
-");
+      log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
       recomputeFOV();
