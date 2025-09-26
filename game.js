@@ -32,6 +32,7 @@
   let townProps = [];        // interactive town props: [{x,y,type,name}]
   let townBuildings = [];    // town buildings: [{x,y,w,h,door:{x,y}}]
   let townPlaza = null;      // central plaza coordinates {x,y}
+  let tavern = null;         // tavern info: { building:{x,y,w,h,door}, door:{x,y} }
   let townTick = 0;          // simple turn counter for town routines
 
   // Global time-of-day cycle (shared across modes)
@@ -1059,6 +1060,69 @@
     }
     for (const b of buildings) fillBuildingInterior(b);
 
+    // Ensure at least one large tavern with benches and a desk, plus a barkeeper NPC.
+    (function ensureTavern() {
+      if (!buildings.length) return;
+      // Score buildings by size and closeness to plaza
+      let best = null, bestScore = -1;
+      for (const b of buildings) {
+        const area = b.w * b.h;
+        if (area < 20) continue; // prefer larger interiors
+        const d = Math.abs((b.x + (b.w / 2)) - plaza.x) + Math.abs((b.y + (b.h / 2)) - plaza.y);
+        const score = area - d * 2; // weight by area, penalize distance
+        if (score > bestScore) { bestScore = score; best = b; }
+      }
+      if (!best) {
+        // fallback to largest building
+        best = buildings.slice().sort((a, b) => (b.w * b.h) - (a.w * a.h))[0];
+      }
+      if (!best) return;
+      const door = getExistingDoor(best);
+      tavern = { building: best, door };
+
+      // Add "Tavern" as a shop marker at the door so it's easy to find
+      shops.push({ x: door.x, y: door.y, type: "shop", name: "Tavern" });
+
+      // Place a "desk" using a table just inside the door and several benches inside
+      function isInside(bx, by) {
+        return bx > best.x && bx < best.x + best.w - 1 && by > best.y && by < best.y + best.h - 1;
+      }
+      // Find a tile just inside the door for the desk/table
+      const inward = [
+        { dx: 0, dy: 1 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }
+      ];
+      let deskPos = null;
+      for (const dxy of inward) {
+        const ix = door.x + dxy.dx, iy = door.y + dxy.dy;
+        if (isInside(ix, iy) && map[iy][ix] === TILES.FLOOR) { deskPos = { x: ix, y: iy }; break; }
+      }
+      if (!deskPos) {
+        deskPos = { x: Math.max(best.x + 1, Math.min(best.x + best.w - 2, door.x)), y: Math.max(best.y + 1, Math.min(best.y + best.h - 2, door.y)) };
+      }
+      addProp(deskPos.x, deskPos.y, "table", "Bar Desk");
+
+      // Benches: create a few along the inner area
+      let benchesPlaced = 0, triesB = 0;
+      while (benchesPlaced < 6 && triesB++ < 200) {
+        const bx = randInt(best.x + 1, best.x + best.w - 2);
+        const by = randInt(best.y + 1, best.y + best.h - 2);
+        if (map[by][bx] !== TILES.FLOOR) continue;
+        if (townProps.some(p => p.x === bx && p.y === by)) continue;
+        addProp(bx, by, "bench", "Bench");
+        benchesPlaced++;
+      }
+
+      // Barkeeper NPC stationed at desk or door
+      const kp = deskPos || door;
+      npcs.push({
+        x: kp.x, y: kp.y,
+        name: "Barkeep",
+        lines: ["Welcome to the tavern.", "Grab a seat.", "Ale's fresh today."],
+        isBarkeeper: true,
+        _work: { x: kp.x, y: kp.y },
+      });
+    })();
+
     // Plaza fixtures
     addProp(plaza.x, plaza.y, "well", "Town Well");
     addProp(plaza.x - 6, plaza.y - 4, "lamp", "Lamp Post");
@@ -1147,7 +1211,7 @@
       if (manhattan(player.x, player.y, x, y) <= 1) continue;
       if (npcs.some(n => n.x === x && n.y === y)) continue;
       if (townProps.some(p => p.x === x && p.y === y)) continue;
-      npcs.push({ x, y, name: `Villager ${placed + 1}`, lines });
+      npcs.push({ x, y, name: `Villager ${placed + 1}`, lines, _likesTavern: rng() < 0.45 });
       placed++;
     }
 
@@ -1628,19 +1692,26 @@
       // Interact with shop if standing on a shop door
       const s = shopAt(player.x, player.y);
       if (s) {
-        if (s.name && s.name.toLowerCase() === "inn") {
+        const sname = (s.name || "").toLowerCase();
+        if (sname === "inn") {
           log("You enter the inn.", "notice");
           restAtInn();
           return;
         }
-        if (isShopOpenNow()) {
-          log(`The ${s.name || "shop"} is open. (Trading coming soon)`, "notice");
-        } else {
-          log(`The ${s.name || "shop"} is closed. Come back during the day.`, "warn");
+        if (sname === "tavern") {
+          const phase = getClock().phase;
+          if (phase === "night" || phase === "dusk") {
+            log("You step into the tavern. It's lively inside.", "notice");
+          } else if (phase === "day") {
+            log("You enter the tavern. A few patrons sit quietly.", "info");
+          } else {
+            log("You enter the tavern.", "info");
+          }
+          requestDraw();
+          return;
         }
-        requestDraw();
-        return;
-      }
+        if (isShopOpenNow()) {
+          log(`The ${s.name || "shop"} is open. (Trading coming soon)`, "
       // Interact with props first, then attempt to talk to an NPC
       if (interactTownProps()) return;
       if (talkNearbyNPC()) return;
@@ -2155,7 +2226,12 @@
       } else if (phase === "day") {
         target = (n._work || townPlaza);
       } else {
-        target = n._home ? { x: n._home.x, y: n._home.y } : null;
+        // evening/night: some villagers go to the tavern instead of straight home
+        if (tavern && n._likesTavern) {
+          target = { x: tavern.door.x, y: tavern.door.y };
+        } else {
+          target = n._home ? { x: n._home.x, y: n._home.y } : null;
+        }
       }
 
       // If no target, random drift
