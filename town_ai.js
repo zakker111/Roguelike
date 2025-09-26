@@ -294,6 +294,7 @@
             name: rng() < 0.2 ? `Child` : `Resident`,
             lines: linesHome,
             isResident: true,
+            _homebound: rng() < 0.5, // a subset prefers staying inside
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: sleepSpot },
             _work: errand,
           });
@@ -310,6 +311,7 @@
             name: `Resident`,
             lines: linesHome,
             isResident: true,
+            _homebound: rng() < 0.5,
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: null },
             _work: (rng() < 0.5 && shops && shops.length) ? { x: shops[0].x, y: shops[0].y }
                   : (townPlaza ? { x: townPlaza.x, y: townPlaza.y } : null),
@@ -318,24 +320,20 @@
       }
     })();
 
-    // Ensure occupancy: add at least one resident to every non-shop building
+    // Ensure occupancy: add at least one resident to every building
     (function ensureOccupantsPerBuilding() {
       if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
       const linesHome = ["Home sweet home.","A quiet day indoors.","Just tidying up."];
-      const shopDoorSet = new Set((shops || []).map(s => `${s.building?.x},${s.building?.y},${s.building?.w},${s.building?.h}`));
       function buildingKey(b) { return `${b.x},${b.y},${b.w},${b.h}`; }
       for (const b of townBuildings) {
         const key = buildingKey(b);
-        // Count current residents with home in this building
         const hasResident = npcs.some(n => n.isResident && n._home && n._home.building && buildingKey(n._home.building) === key);
-        const isShopBuilding = shopDoorSet.has(key);
         if (!hasResident) {
           const pos = randomInteriorSpot(ctx, b) || { x: Math.max(b.x + 1, Math.min(b.x + b.w - 2, b.door.x)), y: Math.max(b.y + 1, Math.min(b.y + b.h - 2, b.door.y)) };
           if (!pos) continue;
           if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
-          // Errand: prefer plaza; shop door if exists
           let errand = null;
-          if (townPlaza && rng() < 0.7) errand = { x: townPlaza.x, y: townPlaza.y };
+          if (townPlaza && rng() < 0.5) errand = { x: townPlaza.x, y: townPlaza.y };
           else if (shops && shops.length) {
             const s = shops[randInt(ctx, 0, shops.length - 1)];
             errand = { x: s.x, y: s.y };
@@ -345,6 +343,7 @@
             name: `Resident`,
             lines: linesHome,
             isResident: true,
+            _homebound: true, // guaranteed occupant tends to stay inside
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: null },
             _work: errand,
           });
@@ -511,25 +510,42 @@
         if (ctx.rng() < 0.9) continue;
       }
 
-      // Residents: sleep system
+      // Residents: homebound behavior + sleep system
       if (n.isResident) {
+        const hasHome = !!(n._home && n._home.building);
+        const insideNow = hasHome ? insideBuilding(n._home.building, n.x, n.y) : false;
+
+        // If sleeping, only wake in morning
         if (n._sleeping) {
           if (phase === "morning") n._sleeping = false;
           else continue;
         }
-        if (phase === "evening") {
-          if (n._home && n._home.building) {
-            const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-            // If at sleep target, go to sleep
-            if (n.x === sleepTarget.x && n.y === sleepTarget.y) {
-              n._sleeping = true;
-              continue;
-            }
-            // Otherwise route via door and inside
-            if (routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget)) continue;
+
+        if (hasHome && (phase === "evening" || phase === "night")) {
+          const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+          // If at sleep target, go to sleep
+          if (n.x === sleepTarget.x && n.y === sleepTarget.y) {
+            n._sleeping = true;
+            continue;
+          }
+          // Otherwise route via door and inside
+          if (routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget)) continue;
+          // If already inside but not at target, small interior jiggle toward target
+          if (insideNow) {
+            stepTowards(ctx, occ, n, sleepTarget.x, sleepTarget.y);
+            continue;
           }
         } else if (phase === "day") {
           const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
+          // Homebound residents prefer staying inside during daytime as well
+          const stayInside = n._homebound && hasHome && insideNow && ctx.rng() < 0.85;
+          if (stayInside) {
+            // occasional small interior jiggle
+            if (ctx.rng() < 0.3) {
+              stepTowards(ctx, occ, n, n._home.x, n._home.y);
+            }
+            continue;
+          }
           if (target) {
             if (n.x === target.x && n.y === target.y) {
               if (ctx.rng() < 0.8) continue;
@@ -540,11 +556,24 @@
             continue;
           }
         } else if (phase === "morning") {
-          if (n._home && n._home.building) {
+          if (hasHome) {
             const homeTarget = { x: n._home.x, y: n._home.y };
+            // Homebound residents prefer to remain inside in morning too
+            if (n._homebound && insideNow) {
+              if (ctx.rng() < 0.4) stepTowards(ctx, occ, n, homeTarget.x, homeTarget.y);
+              continue;
+            }
             if (routeIntoBuilding(ctx, occ, n, n._home.building, homeTarget)) continue;
           }
         }
+
+        // default small wander (prefer interior if homebound and inside)
+        if (n._homebound && hasHome && insideNow) {
+          const goal = { x: n._home.x, y: n._home.y };
+          if (ctx.rng() < 0.5) stepTowards(ctx, occ, n, goal.x, goal.y);
+          continue;
+        }
+
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
