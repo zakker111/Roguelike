@@ -2577,24 +2577,82 @@
       }
     }
 
+    // Pathfinding helper (BFS) for a single next step toward (tx,ty)
     function stepTowards(n, tx, ty) {
       if (typeof tx !== "number" || typeof ty !== "number") return false;
-      const dirs = [
-        { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
-      ];
-      // order by distance improvement
-      dirs.sort((a, b) => (Math.abs((n.x + a.dx) - tx) + Math.abs((n.y + a.dy) - ty)) -
-                          (Math.abs((n.x + b.dx) - tx) + Math.abs((n.y + b.dy) - ty)));
-      for (const d of dirs) {
+      const rows = map.length, cols = map[0] ? map[0].length : 0;
+      const inB = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows;
+      const start = { x: n.x, y: n.y };
+      const goal = { x: tx, y: ty };
+
+      // Fast-path: if adjacent, try direct
+      const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+      for (const d of dirs4) {
         const nx = n.x + d.dx, ny = n.y + d.dy;
-        if (!isWalkTown(nx, ny)) continue;
-        if (manhattan(player.x, player.y, nx, ny) <= 0) continue; // don't step onto player
-        const key = `${nx},${ny}`;
-        if (occ.has(key)) continue;
-        // move
+        if (nx === goal.x && ny === goal.y && isWalkTown(nx, ny) && !occ.has(`${nx},${ny}`) && !(player.x === nx && player.y === ny)) {
+          occ.delete(`${n.x},${n.y}`); n.x = nx; n.y = ny; occ.add(`${nx},${ny}`); return true;
+        }
+      }
+
+      // BFS to find next step around walls/blocks
+      const q = [];
+      const seenB = new Set();
+      const prev = new Map();
+      const key = (x, y) => `${x},${y}`;
+      q.push(start);
+      seenB.add(key(start.x, start.y));
+      let found = null;
+      // Limit nodes to avoid heavy CPU
+      const MAX_NODES = 1200;
+
+      let nodes = 0;
+      while (q.length && nodes < MAX_NODES) {
+        nodes++;
+        const cur = q.shift();
+        if (cur.x === goal.x && cur.y === goal.y) { found = cur; break; }
+        for (const d of dirs4) {
+          const nx = cur.x + d.dx, ny = cur.y + d.dy;
+          const k = key(nx, ny);
+          if (!inB(nx, ny)) continue;
+          if (seenB.has(k)) continue;
+          if (!isWalkTown(nx, ny)) continue;
+          // Avoid stepping onto player or occupied tiles (except goal can be occupied by NPC that may move; still avoid to reduce collisions)
+          if (player.x === nx && player.y === ny) continue;
+          if (occ.has(k) && !(nx === goal.x && ny === goal.y)) continue;
+          seenB.add(k);
+          prev.set(k, cur);
+          q.push({ x: nx, y: ny });
+        }
+      }
+
+      if (!found) {
+        // Fallback to greedy step as last resort
+        const dirs = dirs4.slice().sort((a, b) =>
+          (Math.abs((n.x + a.dx) - tx) + Math.abs((n.y + a.dy) - ty)) -
+          (Math.abs((n.x + b.dx) - tx) + Math.abs((n.y + b.dy) - ty))
+        );
+        for (const d of dirs) {
+          const nx = n.x + d.dx, ny = n.y + d.dy;
+          if (!isWalkTown(nx, ny)) continue;
+          if (player.x === nx && player.y === ny) continue;
+          if (occ.has(`${nx},${ny}`)) continue;
+          occ.delete(`${n.x},${n.y}`); n.x = nx; n.y = ny; occ.add(`${nx},${ny}`); return true;
+        }
+        return false;
+      }
+
+      // Reconstruct first step from start to found
+      let cur = found;
+      let back = prev.get(key(cur.x, cur.y));
+      while (back && !(back.x === start.x && back.y === start.y)) {
+        cur = back;
+        back = prev.get(key(cur.x, cur.y));
+      }
+      // 'cur' is now the next step from start
+      if (cur && isWalkTown(cur.x, cur.y) && !(player.x === cur.x && player.y === cur.y) && !occ.has(key(cur.x, cur.y))) {
         occ.delete(`${n.x},${n.y}`);
-        n.x = nx; n.y = ny;
-        occ.add(key);
+        n.x = cur.x; n.y = cur.y;
+        occ.add(`${n.x},${n.y}`);
         return true;
       }
       return false;
