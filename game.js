@@ -1752,7 +1752,16 @@
       const ny = player.y + dy;
       if (!inBounds(nx, ny)) return;
       if (npcs.some(n => n.x === nx && n.y === ny)) {
-        log("Excuse me!", "info");
+        // Treat bumping into an NPC as a "hit"/interaction: they respond with a line
+        const npc = npcs.find(n => n.x === nx && n.y === ny);
+        if (npc) {
+          const lines = Array.isArray(npc.lines) && npc.lines.length ? npc.lines : ["Hey!", "Watch it!", "Careful there."];
+          const li = randInt(0, lines.length - 1);
+          log(`${npc.name || "Villager"}: ${lines[li]}`, "info");
+          requestDraw();
+        } else {
+          log("Excuse me!", "info");
+        }
         return;
       }
       if (isWalkable(nx, ny)) {
