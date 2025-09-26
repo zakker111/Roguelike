@@ -3,12 +3,32 @@
  * Exports (window.TownAI):
  *  - populateTown(ctx): spawn shopkeepers, residents, pets, greeters
  *  - townNPCsAct(ctx): per-turn movement and routines
+ *  - configure(opts): override movement tunables at runtime
+ *  - getConfig(): snapshot of current config
  */
 (function () {
   function randInt(ctx, a, b) { return Math.floor(ctx.rng() * (b - a + 1)) + a; }
   const manhattan = (typeof window !== "undefined" && window.PlayerUtils && typeof PlayerUtils.manhattan === "function")
     ? PlayerUtils.manhattan
     : function (ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); };
+
+  // ---- Tunables (exposed) ----
+  const _defaults = {
+    petSkipProb: 0.4,                 // probability to skip pet movement per tick
+    shopkeeperIdleSkipProb: 0.6,      // probability shopkeeper skips idle jiggle
+    residentAtTargetSkipProb: 0.5,    // probability resident skips micro-move when at target
+    genericSkipProb: 0.1,             // probability generic NPC skips acting
+    doorNudgeOnBlock: true,           // nudge when door-step into interior fails
+    pathFailNudge: true               // nudge when pathfinding step fails
+  };
+  let _cfg = Object.assign({}, _defaults);
+  function configure(opts) {
+    if (!opts || typeof opts !== "object") return;
+    _cfg = Object.assign(_cfg, opts);
+  }
+  function getConfig() {
+    return Object.assign({}, _cfg);
+  }
 
   // ---- Schedules ----
   function inWindow(start, end, m, dayMinutes) {
@@ -379,7 +399,9 @@
             const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building) || targetInside || { x: door.x, y: door.y };
             if (!stepTowards(ctx, occ, n, inSpot.x, inSpot.y)) {
               // small nudge to avoid being stuck on door tile
-              stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+              if (_cfg.doorNudgeOnBlock) {
+                stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+              }
             }
             return true;
           }
@@ -405,7 +427,7 @@
 
       // Pets
       if (n.isPet) {
-        if (ctx.rng() < 0.4) continue; // increase movement frequency
+        if (ctx.rng() &lt; _cfg.petSkipProb) continue; // configurable movement frequency
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
@@ -435,8 +457,8 @@
 
         if (handled) continue;
 
-        // idle jiggle (more active)
-        if (ctx.rng() < 0.6) continue;
+        // idle jiggle (configurable)
+        if (ctx.rng() &lt; _cfg.shopkeeperIdleSkipProb) continue;
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
@@ -462,13 +484,15 @@
           const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
           if (target) {
             if (n.x === target.x && n.y === target.y) {
-              if (ctx.rng() < 0.5) continue; // more frequent micro-moves at target
+              if (ctx.rng() &lt; _cfg.residentAtTargetSkipProb) continue; // configurable micro-move frequency
               stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
               continue;
             }
             if (!stepTowards(ctx, occ, n, target.x, target.y)) {
               // fallback nudge on path failure
-              stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+              if (_cfg.pathFailNudge) {
+                stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+              }
             }
             continue;
           }
@@ -482,8 +506,8 @@
         continue;
       }
 
-      // Generic NPCs (more likely to act)
-      if (ctx.rng() < 0.1) continue;
+      // Generic NPCs (configurable activity)
+      if (ctx.rng() &lt; _cfg.genericSkipProb) continue;
       let target = null;
       if (phase === "morning") target = n._home ? { x: n._home.x, y: n._home.y } : null;
       else if (phase === "day") target = (n._work || ctx.townPlaza);
@@ -495,7 +519,9 @@
       }
       if (!stepTowards(ctx, occ, n, target.x, target.y)) {
         // fallback nudge on path failure
-        stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+        if (_cfg.pathFailNudge) {
+          stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+        }
       }
     }
   }
@@ -503,5 +529,7 @@
   window.TownAI = {
     populateTown,
     townNPCsAct,
+    configure,
+    getConfig
   };
 })();
