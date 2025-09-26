@@ -251,7 +251,8 @@
           residentAtTargetSkipProb: 0.5,
           genericSkipProb: 0.1,
           doorNudgeOnBlock: true,
-          pathFailNudge: true
+          pathFailNudge: true,
+          townAuto: true
         };
         // Read current from TownAI if available, fallback to localStorage or defaults
         let base = cfgDefaults;
@@ -263,6 +264,7 @@
           genericSkipProb: get("TOWN_GENERIC_SKIP", base.genericSkipProb),
           doorNudgeOnBlock: get("TOWN_DOOR_NUDGE", base.doorNudgeOnBlock),
           pathFailNudge: get("TOWN_PATH_NUDGE", base.pathFailNudge),
+          townAuto: get("TOWN_AUTO", base.townAuto),
         };
 
         // Elements
@@ -277,6 +279,7 @@
           genV: document.getElementById("god-town-generic-skip-val"),
           doorNudge: document.getElementById("god-town-door-nudge"),
           pathNudge: document.getElementById("god-town-path-nudge"),
+          townAuto: document.getElementById("god-town-auto"),
         };
 
         // Helpers
@@ -293,6 +296,9 @@
                 pathFailNudge: !!cfg.pathFailNudge
               });
             }
+            if (typeof UIref.handlers.onGodSetTownAuto === "function") {
+              UIref.handlers.onGodSetTownAuto(!!cfg.townAuto);
+            }
           } catch (_) {}
         };
         const syncInputs = () => {
@@ -306,6 +312,7 @@
           if (els.genV) els.genV.value = String(cfg.genericSkipProb);
           if (els.doorNudge) els.doorNudge.checked = !!cfg.doorNudgeOnBlock;
           if (els.pathNudge) els.pathNudge.checked = !!cfg.pathFailNudge;
+          if (els.townAuto) els.townAuto.checked = !!cfg.townAuto;
         };
 
         // Init values
@@ -342,6 +349,13 @@
           els.pathNudge.addEventListener("change", () => {
             cfg.pathFailNudge = !!els.pathNudge.checked;
             set("TOWN_PATH_NUDGE", cfg.pathFailNudge);
+            apply();
+          });
+        }
+        if (els.townAuto) {
+          els.townAuto.addEventListener("change", () => {
+            cfg.townAuto = !!els.townAuto.checked;
+            set("TOWN_AUTO", cfg.townAuto);
             apply();
           });
         }

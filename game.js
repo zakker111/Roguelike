@@ -783,6 +783,47 @@
 
   
 
+  // Town auto-tick support
+  let townAutoTimer = null;
+  let townAutoEnabled = (() => {
+    try {
+      const v = localStorage.getItem("TOWN_AUTO");
+      if (v != null) return JSON.parse(v);
+    } catch (_) {}
+    return true;
+  })();
+  function setTownAutoEnabled(v) {
+    townAutoEnabled = !!v;
+    try { localStorage.setItem("TOWN_AUTO", JSON.stringify(townAutoEnabled)); } catch (_) {}
+    if (townAutoEnabled) startTownAutoTick();
+    else stopTownAutoTick();
+  }
+  function startTownAutoTick() {
+    stopTownAutoTick();
+    if (!townAutoEnabled) return;
+    townAutoTimer = setInterval(() => {
+      if (mode !== "town") { stopTownAutoTick(); return; }
+      // Pause if a modal/panel is open
+      try {
+        if (window.UI && (
+          (UI.isInventoryOpen && UI.isInventoryOpen()) ||
+          (UI.isLootOpen && UI.isLootOpen()) ||
+          (UI.isGodOpen && UI.isGodOpen())
+        )) {
+          return;
+        }
+      } catch (_) {}
+      // Advance one turn (NPCs act, time advances)
+      turn();
+    }, 700);
+  }
+  function stopTownAutoTick() {
+    if (townAutoTimer) {
+      clearInterval(townAutoTimer);
+      townAutoTimer = null;
+    }
+  }
+
   function initWorld() {
     if (!(window.World && typeof World.generate === "function")) {
       log("World module missing; generating dungeon instead.", "warn");
@@ -809,6 +850,7 @@
     updateUI();
     log("You arrive in the overworld. Towns (T) and Dungeons (D): press Enter on T to enter a town, or on D to enter a dungeon.", "notice");
     if (window.UI && typeof UI.hideTownExitButton === "function") UI.hideTownExitButton();
+    stopTownAutoTick();
     requestDraw();
   }
 
@@ -1512,6 +1554,7 @@
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
       recomputeFOV();
+      if (townAutoEnabled) startTownAutoTick();
       requestDraw();
       return true;
     }
@@ -1578,6 +1621,7 @@
     updateUI();
     log(msg, "notice");
     if (window.UI && typeof UI.hideTownExitButton === "function") UI.hideTownExitButton();
+    stopTownAutoTick();
     requestDraw();
   }
 
@@ -1624,6 +1668,7 @@
     updateCamera();
     updateUI();
     log(msg, "notice");
+    stopTownAutoTick(); // ensure stopped; will be started on entering town
     requestDraw();
   }
 
@@ -2502,6 +2547,7 @@
           onGodApplySeed: (seed) => applySeed(seed),
           onGodRerollSeed: () => rerollSeed(),
           onTownExit: () => requestLeaveTown(),
+          onGodSetTownAuto: (v) => setTownAutoEnabled(v),
         });
       }
     }
