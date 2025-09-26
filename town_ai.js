@@ -236,7 +236,7 @@
       const b = beds[Math.floor(ctx.rng() * beds.length)];
       return { x: b.x, y: b.y };
     }
-    // Create a bed on a free interior tile
+    // Create a bed on a free interior tile (ignore furniture; we only need a floor and interior)
     const spot = randomInteriorSpot(ctx, building);
     if (spot && addProp(ctx, spot.x, spot.y, "bed", "Bed")) {
       return { x: spot.x, y: spot.y };
@@ -255,6 +255,56 @@
     const cy = Math.max(building.y + 1, Math.min(building.y + building.h - 2, (building.y + (building.h / 2)) | 0));
     if (addProp(ctx, cx, cy, "bed", "Bed")) return { x: cx, y: cy };
     return { x: cx, y: cy };
+  }
+
+  // After population, make sure each resident has a unique bed in their building.
+  function ensureBedsForResidents(ctx) {
+    const byBuilding = new Map();
+    for (const n of ctx.npcs) {
+      if (!n.isResident || !n._home || !n._home.building) continue;
+      const b = n._home.building;
+      const key = `${b.x},${b.y},${b.w},${b.h}`;
+      if (!byBuilding.has(key)) byBuilding.set(key, { building: b, residents: [], beds: bedsFor(ctx, b).map(p => ({ x: p.x, y: p.y })) });
+      byBuilding.get(key).residents.push(n);
+    }
+
+    for (const [key, group] of byBuilding.entries()) {
+      const { building, residents } = group;
+      let bedList = group.beds;
+
+      // Ensure enough beds (>= residents count)
+      while (bedList.length < residents.length) {
+        const spot = randomInteriorSpot(ctx, building);
+        if (!spot) break;
+        if (!ctx.townProps.some(p => p.x === spot.x && p.y === spot.y)) {
+          if (addProp(ctx, spot.x, spot.y, "bed", "Bed")) {
+            bedList.push({ x: spot.x, y: spot.y });
+          }
+        } else {
+          // Try a neighbor inside
+          const adj = [{dx:0,dy:1},{dx:0,dy:-1},{dx:1,dy:0},{dx:-1,dy:0}];
+          for (const d of adj) {
+            const x = spot.x + d.dx, y = spot.y + d.dy;
+            if (isFreeTileInterior(ctx, x, y, building) && !ctx.townProps.some(p => p.x === x && p.y === y)) {
+              if (addProp(ctx, x, y, "bed", "Bed")) { bedList.push({ x, y }); break; }
+            }
+          }
+        }
+        // Safety: avoid infinite loops
+        if (bedList.length >= residents.length) break;
+      }
+
+      // Assign unique beds to residents
+      const shuffledBeds = bedList.slice();
+      for (let i = shuffledBeds.length - 1; i > 0; i--) {
+        const j = Math.floor(ctx.rng() * (i + 1)); const t = shuffledBeds[i]; shuffledBeds[i] = shuffledBeds[j]; shuffledBeds[j] = t;
+      }
+      for (let i = 0; i < residents.length; i++) {
+        const n = residents[i];
+        const bed = shuffledBeds[i % shuffledBeds.length] || ensureBedInBuilding(ctx, building);
+        n._home.bed = { x: bed.x, y: bed.y };
+      }
+    }
   }
 
   function populateTown(ctx) {
@@ -455,6 +505,9 @@
         ctx.npcs.push({ x: spot.x, y: spot.y, name: namesDog[i % namesDog.length], lines: ["Woof."], isPet: true, kind: "dog" });
       }
     })();
+
+    // Finalize: ensure unique beds assigned per resident
+    ensureBedsForResidents(ctx);
   }
 
   function ensureHome(ctx, n) {
