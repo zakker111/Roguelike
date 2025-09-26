@@ -1,4 +1,5 @@
 # Game Version History
+Last updated: 2025-09-26 00:00 UTC
 
 This file tracks notable changes to the game across iterations. Versions here reflect functional milestones rather than semantic releases.
 
