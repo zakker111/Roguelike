@@ -2698,24 +2698,27 @@
         if (rng() < 0.9) continue;
       }
 
-      // Residents: more purposeful routine (home mornings/evenings with sleep, errands by day)
+      // Residents: purposeful routine (sleep at night on bed/home, errands by day)
       if (n.isResident) {
-        // Wake up in the morning
-        if (phase === "morning" && n._sleeping) {
-          n._sleeping = false;
+        // Handle sleep state
+        if (n._sleeping) {
+          if (phase === "morning") {
+            n._sleeping = false; // wake up in the morning
+          } else {
+            continue; // remain asleep otherwise
+          }
         }
 
         if (phase === "evening") {
-          const home = n._home ? { x: n._home.x, y: n._home.y } : null;
-          // Go home; once home, go to sleep (no movement)
-          if (home) {
-            if (n.x === home.x && n.y === home.y) {
+          // Go to bed if known, else home position; sleep when arrived
+          const hasHome = !!n._home;
+          if (hasHome) {
+            const sleepSpot = (n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y });
+            if (n.x === sleepSpot.x && n.y === sleepSpot.y) {
               n._sleeping = true;
-              // Sleeping residents do not move
               continue;
             }
-            // Move towards home with strong intent
-            stepTowards(n, home.x, home.y);
+            stepTowards(n, sleepSpot.x, sleepSpot.y);
             continue;
           }
         } else if (phase === "day") {

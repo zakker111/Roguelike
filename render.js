@@ -331,7 +331,13 @@
           if (!visible[n.y] || !visible[n.y][n.x]) continue;
           const screenX = (n.x - startX) * TILE - tileOffsetX;
           const screenY = (n.y - startY) * TILE - tileOffsetY;
-          drawGlyphScreen(ctx2d, screenX, screenY, "n", "#b4f9f8", TILE);
+          // Pets: cat 'c', dog 'd'; others 'n'
+          let glyph = "n";
+          if (n.isPet) {
+            if (n.kind === "cat") glyph = "c";
+            else if (n.kind === "dog") glyph = "d";
+          }
+          drawGlyphScreen(ctx2d, screenX, screenY, glyph, "#b4f9f8", TILE);
         }
       }
 
