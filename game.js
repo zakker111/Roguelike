@@ -1190,11 +1190,13 @@
       }
     })();
 
-    // Residents inside buildings: 1–2 per selected buildings
+    // Residents inside buildings: 1–2 per selected buildings, scaled by building count
     (function spawnBuildingResidents() {
       if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
-      const pickCount = Math.min(6, Math.max(2, Math.floor(townBuildings.length / 6)));
-      const picked = townBuildings.slice().sort(() => rng() < 0.5 ? -1 : 1).slice(0, pickCount);
+      const pickCount = Math.min(Math.max(3, Math.floor(townBuildings.length / 4)), 10); // scale with buildings
+      const shuffled = townBuildings.slice();
+      for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = t; }
+      const picked = shuffled.slice(0, pickCount);
       const linesHome = [
         "Home sweet home.",
         "A quiet day indoors.",
@@ -1212,22 +1214,41 @@
         if (!spots.length) return { x: b.door.x, y: b.door.y };
         return spots[randInt(0, spots.length - 1)];
       }
+      // Helper lists for errands
+      const benches = (townProps || []).filter(p => p.type === "bench");
+      const pickBenchNearPlaza = () => {
+        if (!benches.length) return null;
+        const candidates = benches.slice().sort((a, b) => manhattan(a.x, a.y, townPlaza.x, townPlaza.y) - manhattan(b.x, b.y, townPlaza.x, townPlaza.y));
+        return candidates[0] || null;
+      };
+      const pickRandomShopDoor = () => {
+        if (!shops || !shops.length) return null;
+        const s = shops[randInt(0, shops.length - 1)];
+        return { x: s.x, y: s.y };
+      };
+
       for (const b of picked) {
         const residentCount = 1 + (rng() < 0.5 ? 1 : 0); // 1–2
         for (let i = 0; i < residentCount; i++) {
           const pos = randomInteriorIn(b);
           if (!pos) continue;
           if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
+          // Precompute a possible daytime errand target
+          let errand = null;
+          if (rng() < 0.5) {
+            const pb = pickBenchNearPlaza();
+            if (pb) errand = { x: pb.x, y: pb.y };
+          } else {
+            const sd = pickRandomShopDoor();
+            if (sd) errand = sd;
+          }
           npcs.push({
             x: pos.x, y: pos.y,
             name: `Resident`,
             lines: linesHome,
             isResident: true,
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y } },
-            // Residents mostly stay home; occasional daytime stroll near plaza
-            _work: (rng() < 0.3 && townPlaza) ? { x: Math.max(1, Math.min(map[0].length - 2, townPlaza.x + randInt(-2, 2))),
-                                                 y: Math.max(1, Math.min(map.length - 2, townPlaza.y + randInt(-2, 2))) }
-                                              : null,
+            _work: errand, // daytime errand target (bench or shop door)
           });
         }
       }
@@ -1242,8 +1263,10 @@
       "Lovely day on the plaza.",
       "Care for a drink at the well?",
     ];
+    // Scale roaming villagers count by buildings (cap within range)
+    const roamTarget = Math.min(14, Math.max(6, Math.floor((townBuildings?.length || 12) / 2)));
     let placed = 0, tries = 0;
-    while (placed < 8 && tries++ < 500) {
+    while (placed < roamTarget && tries++ < 800) {
       const onRoad = rng() < 0.4;
       let x, y;
       if (onRoad) {
@@ -2301,6 +2324,32 @@
         }
         // No target fallback: idle
         if (rng() < 0.9) continue;
+      }
+
+      // Residents: more purposeful routine (home mornings/evenings, errands by day)
+      if (n.isResident) {
+        // High idle chance indoors
+        if (phase === "morning" || phase === "evening") {
+          if (rng() < 0.6) continue;
+          const target = n._home ? { x: n._home.x, y: n._home.y } : null;
+          if (target) { stepTowards(n, target.x, target.y); continue; }
+        } else if (phase === "day") {
+          // Errand: go to bench near plaza or a shop door; linger when arrived
+          const target = n._work || (townPlaza ? { x: townPlaza.x, y: townPlaza.y } : null);
+          if (target) {
+            if (n.x === target.x && n.y === target.y) {
+              // Linger with high idle, small wiggle
+              if (rng() < 0.8) continue;
+              stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+              continue;
+            }
+            stepTowards(n, target.x, target.y);
+            continue;
+          }
+        }
+        // fallback drift
+        stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+        continue;
       }
 
       // Small idle chance
