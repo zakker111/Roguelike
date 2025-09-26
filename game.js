@@ -1690,7 +1690,8 @@
     return false;
   }
 
-  function descendIfPossible() {
+  // Context-sensitive action button (G): enter/exit/interact depending on mode/state
+  function doAction() {
     hideLootPanel();
 
     if (mode === "world") {
@@ -1702,8 +1703,27 @@
     }
 
     if (mode === "town") {
-      // Exit town if at gate
-      returnToWorldFromTown();
+      // Exit town if at gate; otherwise interact/talk/shop
+      if (returnToWorldFromTown()) return;
+      // fall back to town interactions
+      lootCorpse(); // already handles shop/props/NPC talk
+      return;
+    }
+
+    if (mode === "dungeon") {
+      // If at entrance hole, leave to overworld; else loot/interact here
+      lootCorpse(); // already handles exit on hole and normal looting
+      return;
+    }
+
+    // Fallback
+    lootCorpse();
+  }
+
+  function descendIfPossible() {
+    // Keep Enter/N behavior, but delegate to doAction for world/town, and show hint in dungeon
+    if (mode === "world" || mode === "town") {
+      doAction();
       return;
     }
 
@@ -1745,8 +1765,8 @@
         },
         onMove: (dx, dy) => tryMovePlayer(dx, dy),
         onWait: () => turn(),
-        onLoot: () => lootCorpse(),
-        onDescend: () => descendIfPossible(),
+        onLoot: () => doAction(),
+        onDescend: () => descendIfPossiblele(),
         adjustFov: (delta) => adjustFov(delta),
       });
     }
