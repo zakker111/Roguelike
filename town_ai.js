@@ -157,12 +157,13 @@
   }
 
   function randomInteriorSpot(ctx, b) {
-    const { map, townProps, rng } = ctx;
+    const { map, rng } = ctx;
     const spots = [];
     for (let y = b.y + 1; y < b.y + b.h - 1; y++) {
       for (let x = b.x + 1; x < b.x + b.w - 1; x++) {
+        // Must be floor and inside building; ignore interior furniture (non-blocking)
         if (map[y][x] !== ctx.TILES.FLOOR) continue;
-        if (townProps.some(p => p.x === x && p.y === y)) continue;
+        if (!isFreeTileInterior(ctx, x, y, b)) continue;
         spots.push({ x, y });
       }
     }
