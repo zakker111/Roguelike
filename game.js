@@ -792,39 +792,54 @@
           map[yy][xx] = isBorder ? TILES.WALL : TILES.FLOOR;
         }
       }
-      buildings.push({ x: bx, y: by, w: bw, h: bh });
+      const b = { x: bx, y: by, w: bw, h: bh };
+      buildings.push(b);
+      return b;
     };
 
     // Iterate grid and try to place buildings in areas not roads
+    // Block cell nominal size ~10x8; we inset by 1 for sidewalk, then choose random w/h that fit.
     for (let by = 2; by < H - 10; by += 8) {
       for (let bx = 2; bx < W - 12; bx += 10) {
         // skip if near plaza
         if (Math.abs((bx + 5) - plaza.x) < 9 && Math.abs((by + 4) - plaza.y) < 7) continue;
         // ensure area is floor and not road lines
         let clear = true;
-        for (let yy = by; yy < by + 7 && clear; yy++) {
-          for (let xx = bx; xx < bx + 8; xx++) {
+        const blockW = 8, blockH = 6; // usable space inside each block cell
+        for (let yy = by; yy < by + (blockH + 1) && clear; yy++) {
+          for (let xx = bx; xx < bx + (blockW + 1); xx++) {
             if (map[yy][xx] !== TILES.FLOOR) { clear = false; break; }
           }
         }
-        if (clear) {
-          const w = 8, h = 6;
-          placeBuilding(bx + 1, by + 1, w, h);
-        }
+        if (!clear) continue;
+
+        // Randomize building size within the block with at least 2x2 interior
+        const w = randInt(6, blockW);   // 6..8
+        const h = randInt(4, blockH);   // 4..6
+        const ox = randInt(0, Math.max(0, blockW - w));
+        const oy = randInt(0, Math.max(0, blockH - h));
+        placeBuilding(bx + 1 + ox, by + 1 + oy, w, h);
       }
     }
 
     // Doors and shops near plaza/main road
-    function placeDoor(b) {
-      const options = [
-        { x: b.x + ((b.w / 2) | 0), y: b.y },                 // top
-        { x: b.x + b.w - 1, y: b.y + ((b.h / 2) | 0) },      // right
-        { x: b.x + ((b.w / 2) | 0), y: b.y + b.h - 1 },      // bottom
-        { x: b.x, y: b.y + ((b.h / 2) | 0) }                 // left
+    function candidateDoors(b) {
+      // candidate door positions on building border with outside tile
+      return [
+        { x: b.x + ((b.w / 2) | 0), y: b.y, ox: 0, oy: -1 },                      // top
+        { x: b.x + b.w - 1, y: b.y + ((b.h / 2) | 0), ox: +1, oy: 0 },            // right
+        { x: b.x + ((b.w / 2) | 0), y: b.y + b.h - 1, ox: 0, oy: +1 },            // bottom
+        { x: b.x, y: b.y + ((b.h / 2) | 0), ox: -1, oy: 0 },                      // left
       ];
-      const d = options[randInt(0, options.length - 1)];
-      if (d.x >= 0 && d.y >= 0 && d.x < W && d.y < H) map[d.y][d.x] = TILES.DOOR;
-      return d;
+    }
+    function ensureDoor(b) {
+      // If any door already present, leave it; else choose a side with floor outside
+      const cands = candidateDoors(b);
+      // prefer candidates with outside floor
+      const good = cands.filter(d => inBounds(d.x + d.ox, d.y + d.oy) && map[d.y + d.oy][d.x + d.ox] === TILES.FLOOR);
+      const pick = (good.length ? good : cands)[randInt(0, (good.length ? good : cands).length - 1)];
+      if (inBounds(pick.x, pick.y)) map[pick.y][pick.x] = TILES.DOOR;
+      return pick;
     }
 
     shops = [];
@@ -834,8 +849,22 @@
     scored.sort((a, b) => a.d - b.d);
     const shopCount = Math.min(8, scored.length);
     for (let i = 0; i < shopCount; i++) {
-      const door = placeDoor(scored[i].b);
+      const door = ensureDoor(scored[i].b);
       shops.push({ x: door.x, y: door.y, type: "shop", name: shopNames[i % shopNames.length] });
+    }
+    // Ensure every non-shop building also has at least one door
+    const shopDoorSet = new Set(shops.map(s => `${s.x},${s.y}`));
+    for (const b of buildings) {
+      // check if any of the border tiles is already a DOOR
+      const cd = candidateDoors(b);
+      let hasDoor = cd.some(d => inBounds(d.x, d.y) && map[d.y][d.x] === TILES.DOOR);
+      if (!hasDoor) {
+        const d = ensureDoor(b);
+        // not a shop; just a house
+        if (!shopDoorSet.has(`${d.x},${d.y}`)) {
+          // no need to add to shops array for normal houses
+        }
+      }
     }
 
     // Props in plaza and parks

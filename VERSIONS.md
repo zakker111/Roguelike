@@ -9,6 +9,12 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v0.8 — Town Buildings: Guaranteed Doors and Varied Sizes
+- Added: Every town building now has at least one door carved into its perimeter.
+- Changed: Building sizes are now varied per block (randomized within block bounds) for a more organic layout.
+- Changed: Shop doors are still preferred near the plaza; non-shop houses also get doors automatically.
+- Dev: Refactored door placement to prefer doors facing sidewalks/roads when possible.
+
 v0.7 — Structured Towns, Wandering NPCs, and Interactions
 - Added: Structured town generation with:
   - Walled perimeter with a proper gate aligned to entry point
