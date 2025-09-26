@@ -615,7 +615,7 @@
     }
 
     // Helper: aggressively move resident home in evening/night with multiple steps per turn
-    function forceHomeProgress(ctx, occSet, n, maxSteps = 3) {
+    function forceHomeProgress(ctx, occSet, n, maxSteps = 5) {
       if (!(n._home && n._home.building)) return false;
       const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
       for (let s = 0; s < maxSteps; s++) {
@@ -628,7 +628,18 @@
             stepTowards(ctx, occSet, n, door.x, door.y);
           }
         } else {
-          stepTowards(ctx, occSet, n, sleepTarget.x, sleepTarget.y);
+          // Inside: use relaxed occupancy; if very close, try a final step aggressively
+          const close = Math.abs(n.x - sleepTarget.x) + Math.abs(n.y - sleepTarget.y) <= 2;
+          if (!stepTowards(ctx, occSet, n, sleepTarget.x, sleepTarget.y) && close) {
+            // Try again ignoring other NPC occupancy by crafting a minimal occ that only blocks player and street props
+            const occInsideRelaxed = new Set();
+            occInsideRelaxed.add(`${ctx.player.x},${ctx.player.y}`);
+            const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree"]);
+            for (const p of (ctx.townProps || [])) {
+              if (blockingProps.has(p.type)) occInsideRelaxed.add(`${p.x},${p.y}`);
+            }
+            stepTowards(ctx, occInsideRelaxed, n, sleepTarget.x, sleepTarget.y);
+          }
         }
       }
       return true;
@@ -663,8 +674,8 @@
             handled = stepTowards(ctx, occ, n, n._work.x, n._work.y);
           }
         } else if (n._home && n._home.building) {
-          // Off hours: go home, via door then inside
-          handled = forceHomeProgress(ctx, occRelaxed, n, 2);
+          // Off hours: go home, via door then inside (more steps to ensure progress)
+          handled = forceHomeProgress(ctx, occRelaxed, n, 3);
         }
 
         if (handled) continue;
@@ -731,8 +742,16 @@
         continue;
       }
 
-      // Generic NPCs: prefer going home in evening/night if they have one
+      // Generic NPCs:
       if (ctx.rng() < 0.25) continue;
+      if (phase === "evening" || phase === "night") {
+        // Strongly prefer going home if they have one; take multiple steps
+        if (n._home && n._home.building) {
+          forceHomeProgress(ctx, occRelaxed, n, 4);
+          continue;
+        }
+      }
+
       let target = null;
       if (phase === "morning") target = n._home ? { x: n._home.x, y: n._home.y } : null;
       else if (phase === "day") target = (n._work || ctx.townPlaza);
