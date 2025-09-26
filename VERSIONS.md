@@ -1,4 +1,5 @@
 # Game Version History
+Last updated: 2025-09-26 00:00 UTC
 
 This file tracks notable changes to the game across iterations. Versions here reflect functional milestones rather than semantic releases.
 
@@ -8,6 +9,18 @@ Conventions
 - Fixed: bug fixes
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
+
+v1.4 — Tavern, Barkeeper, and Shopkeepers
+- Added: Guaranteed Tavern in town (chooses a large building near the plaza).
+- Added: Interior furnishing for Tavern: bar desk (table) and several benches.
+- Added: Barkeeper NPC stationed at the bar desk during day; returns home at night.
+- Added: Each shop now has a dedicated shopkeeper NPC who stands at the shop door during the day and goes home at night.
+- Changed: Evening/night routines: a subset of villagers (those with a tavern preference) go to the Tavern instead of heading straight home.
+- Dev: Context now exposes shops, townProps, and time to FOV; declared transition anchors (townExitAt, worldReturnPos, dungeonExitAt, cameFromWorld) used across mode changes.
+- Fixed: Runtime issues introduced during iteration:
+  - Unterminated template string in lootCorpse() shop interaction.
+  - Missing closing brace after townNPCsAct().
+  - Missing declarations for townExitAt/worldReturnPos/dungeonExitAt.
 
 v1.3 — Shops + Night Lamps + Resting
 - Added: Lamp posts cast a warm light glow at night/dusk/dawn.

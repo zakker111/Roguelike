@@ -402,7 +402,7 @@
       if (typeof onTownExit === "function") this.handlers.onTownExit = onTownExit;
     },
 
-    updateStats(player, floor, getAtk, getDef) {
+    updateStats(player, floor, getAtk, getDef, time) {
       if (this.els.hpEl) {
         const parts = [`HP: ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}`];
         const statuses = [];
@@ -412,8 +412,12 @@
         this.els.hpEl.textContent = parts.join("");
       }
       if (this.els.floorEl) {
-        // Shorter labels to fit better on small screens
-        this.els.floorEl.textContent = `F: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
+        // Shorter labels to fit better on small screens; include time
+        const t = time || {};
+        const hhmm = t.hhmm || "";
+        const phase = t.phase ? t.phase : "";
+        const timeStr = hhmm ? `  Time: ${hhmm}${phase ? ` (${phase})` : ""}` : "";
+        this.els.floorEl.textContent = `F: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}${timeStr}`;
       }
       if (this.els.invStatsEl && typeof getAtk === "function" && typeof getDef === "function") {
         this.els.invStatsEl.textContent = `Attack: ${getAtk().toFixed(1)}   Defense: ${getDef().toFixed(1)}`;
