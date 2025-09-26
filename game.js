@@ -2508,10 +2508,7 @@
     // Advance global time
     turnCounter = (turnCounter + 1) | 0;
 
-    // If you have a timed equipment decay helper, call it; otherwise skip
-    if (typeof decayEquippedOverTime === "function") {
-      try { decayEquippedOverTime(); } catch (_) {}
-    }
+    
 
     if (mode === "dungeon") {
       enemiesAct();
