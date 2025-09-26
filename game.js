@@ -30,10 +30,40 @@
   let npcs = [];             // simple NPCs for town mode: { x, y, name, lines:[] }
   let shops = [];            // shops in town mode: [{x,y,type,name}]
   let townProps = [];        // interactive town props: [{x,y,type,name}]
-  let cameFromWorld = false; // true if current dungeon was entered from world
-  let worldReturnPos = null; // { x, y } to return to when exiting dungeon or town
-  let dungeonExitAt = null;  // { x, y } tile in dungeon floor 1 acting as exit back to world
-  let townExitAt = null;     // { x, y } tile in town acting as gate back to world
+  let townBuildings = [];    // town buildings: [{x,y,w,h,door:{x,y}}]
+  let townPlaza = null;      // central plaza coordinates {x,y}
+  let tavern = null;         // tavern info: { building:{x,y,w,h,door}, door:{x,y} }
+  let townTick = 0;          // simple turn counter for town routines
+
+  // World/town/dungeon transition anchors
+  let townExitAt = null;     // gate position inside town used to exit back to overworld
+  let worldReturnPos = null; // overworld position to return to after leaving town/dungeon
+  let dungeonExitAt = null;  // dungeon tile to return to overworld
+  let cameFromWorld = false; // whether we entered dungeon from overworld
+
+  // Global time-of-day cycle (shared across modes)
+  // We model a 24h day (1440 minutes). One full day spans CYCLE_TURNS turns.
+  const DAY_MINUTES = 24 * 60;    // 1440
+  const CYCLE_TURNS = 360;        // 360 turns per day -> 4 minutes/turn
+  const MINUTES_PER_TURN = DAY_MINUTES / CYCLE_TURNS; // 4.0
+  let turnCounter = 0;            // total turns elapsed since start
+
+  // Compute in-game clock and phase from turnCounter
+  function getClock() {
+    const totalMinutes = Math.floor(turnCounter * MINUTES_PER_TURN) % DAY_MINUTES;
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    const hh = String(h).padStart(2, "0");
+    const mm = String(m).padStart(2, "0");
+    // Day phases (rough cut)
+    // Night: 20:00-05:59, Dawn: 06:00-07:59, Day: 08:00-17:59, Dusk: 18:00-19:59
+    let phase = "day";
+    if (h >= 20 || h < 6) phase = "night";
+    else if (h < 8) phase = "dawn";
+    else if (h < 18) phase = "day";
+    else phase = "dusk";
+    return { hours: h, minutes: m, hhmm: `${hh}:${mm}`, phase, totalMinutes, minutesPerTurn: MINUTES_PER_TURN, cycleTurns: CYCLE_TURNS, turnCounter };
+  }
 
   
   const camera = {
@@ -49,6 +79,7 @@
     FLOOR: 1,
     DOOR: 2,
     STAIRS: 3,
+    WINDOW: 4, // town-only: blocks movement, lets light through
   };
 
   const COLORS = {
@@ -105,6 +136,9 @@
       mode,
       world,
       npcs,
+      shops,
+      townProps,
+      time: getClock(),
       requestDraw,
       log,
       isWalkable, inBounds,
@@ -591,8 +625,8 @@
   }
 
   function recomputeFOV() {
-    if (mode === "world" || mode === "town") {
-      // In overworld and town, reveal entire map (no fog-of-war)
+    if (mode === "world") {
+      // In overworld, reveal entire map (no fog-of-war)
       const rows = map.length;
       const cols = map[0] ? map[0].length : 0;
       const shapeOk = Array.isArray(visible) && visible.length === rows && (rows === 0 || (visible[0] && visible[0].length === cols));
@@ -654,6 +688,7 @@
       townProps,
       townExitAt,
       enemyColor: (t) => enemyColor(t),
+      time: getClock(),
     };
   }
 
@@ -721,6 +756,47 @@
     return true;
   }
 
+  // Town shops helpers and resting
+  function shopAt(x, y) {
+    if (!Array.isArray(shops)) return null;
+    return shops.find(s => s.x === x && s.y === y) || null;
+  }
+  function isShopOpenNow() {
+    const phase = getClock().phase;
+    return phase === "day"; // open only during day hours
+  }
+  function minutesUntil(hourTarget /*0-23*/, minuteTarget = 0) {
+    const t = getClock();
+    const cur = t.hours * 60 + t.minutes;
+    const goal = (hourTarget * 60 + minuteTarget + DAY_MINUTES) % DAY_MINUTES;
+    let delta = goal - cur;
+    if (delta <= 0) delta += DAY_MINUTES;
+    return delta;
+  }
+  function advanceTimeMinutes(mins) {
+    const turns = Math.ceil(mins / MINUTES_PER_TURN);
+    turnCounter = (turnCounter + turns) | 0;
+  }
+  function restUntilMorning(healFraction = 0.25) {
+    const mins = minutesUntil(6, 0); // rest until 06:00 dawn
+    advanceTimeMinutes(mins);
+    const heal = Math.max(1, Math.floor(player.maxHp * healFraction));
+    const prev = player.hp;
+    player.hp = Math.min(player.maxHp, player.hp + heal);
+    log(`You rest until morning (${getClock().hhmm}). HP ${prev.toFixed(1)} -> ${player.hp.toFixed(1)}.`, "good");
+    updateUI();
+    requestDraw();
+  }
+  function restAtInn() {
+    const mins = minutesUntil(6, 0);
+    advanceTimeMinutes(mins);
+    const prev = player.hp;
+    player.hp = player.maxHp;
+    log(`You spend the night at the inn. You wake up fully rested at ${getClock().hhmm}.`, "good");
+    updateUI();
+    requestDraw();
+  }
+
   function generateTown() {
     // Structured town: walls with a gate, main road to a central plaza, secondary roads, buildings aligned to blocks, shops near plaza
     const W = MAP_COLS, H = MAP_ROWS;
@@ -759,6 +835,7 @@
 
     // Central plaza (rectangle)
     const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
+    townPlaza = { x: plaza.x, y: plaza.y };
     const plazaW = 14, plazaH = 12;
     for (let yy = (plaza.y - (plazaH / 2)) | 0; yy <= (plaza.y + (plazaH / 2)) | 0; yy++) {
       for (let xx = (plaza.x - (plazaW / 2)) | 0; xx <= (plaza.x + (plazaW / 2)) | 0; xx++) {
@@ -841,6 +918,15 @@
       if (inBounds(pick.x, pick.y)) map[pick.y][pick.x] = TILES.DOOR;
       return pick;
     }
+    function getExistingDoor(b) {
+      const cds = candidateDoors(b);
+      for (const d of cds) {
+        if (inBounds(d.x, d.y) && map[d.y][d.x] === TILES.DOOR) return { x: d.x, y: d.y };
+      }
+      // ensure and return if none
+      const dd = ensureDoor(b);
+      return { x: dd.x, y: dd.y };
+    }
 
     shops = [];
     const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn", "Fletcher", "Herbalist", "Fishmonger"];
@@ -866,6 +952,67 @@
         }
       }
     }
+
+    // Add windows to building walls (block movement but allow FOV to pass)
+    function placeWindowsOnBuilding(b) {
+      const sides = [
+        { // top edge (exclude corners)
+          pts: Array.from({ length: Math.max(0, b.w - 2) }, (_, i) => ({ x: b.x + 1 + i, y: b.y }))
+        },
+        { // bottom
+          pts: Array.from({ length: Math.max(0, b.w - 2) }, (_, i) => ({ x: b.x + 1 + i, y: b.y + b.h - 1 }))
+        },
+        { // left
+          pts: Array.from({ length: Math.max(0, b.h - 2) }, (_, i) => ({ x: b.x, y: b.y + 1 + i }))
+        },
+        { // right
+          pts: Array.from({ length: Math.max(0, b.h - 2) }, (_, i) => ({ x: b.x + b.w - 1, y: b.y + 1 + i }))
+        }
+      ];
+
+      // Collect all candidate wall tiles (not doors)
+      let candidates = [];
+      for (const s of sides) {
+        for (const p of s.pts) {
+          if (!inBounds(p.x, p.y)) continue;
+          const t = map[p.y][p.x];
+          if (t !== TILES.WALL) continue;
+          candidates.push(p);
+        }
+      }
+      if (candidates.length === 0) return;
+
+      // Limit total windows per building based on size, with a small cap.
+      const limit = Math.min(3, Math.max(1, Math.floor((b.w + b.h) / 10)));
+
+      // Helper: avoid adjacent windows
+      const placed = [];
+      const isAdjacent = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) <= 1;
+
+      // Randomly place up to 'limit' windows without adjacency
+      let attempts = 0;
+      while (placed.length < limit && candidates.length > 0 && attempts++ < candidates.length * 2) {
+        const idx = randInt(0, candidates.length - 1);
+        const p = candidates[idx];
+        // Skip if adjacent to existing window
+        if (placed.some(q => isAdjacent(p, q))) {
+          candidates.splice(idx, 1);
+          continue;
+        }
+        // Place window
+        map[p.y][p.x] = TILES.WINDOW;
+        placed.push(p);
+        // Remove neighbors to keep spacing
+        candidates = candidates.filter(c => !isAdjacent(c, p));
+      }
+    }
+    for (const b of buildings) placeWindowsOnBuilding(b);
+
+    // Store buildings globally with their doors for NPC homes/routines
+    townBuildings = buildings.map(b => {
+      const door = getExistingDoor(b);
+      return { x: b.x, y: b.y, w: b.w, h: b.h, door };
+    });
 
     // Props in plaza and parks + building interiors
     townProps = [];
@@ -919,6 +1066,69 @@
     }
     for (const b of buildings) fillBuildingInterior(b);
 
+    // Ensure at least one large tavern with benches and a desk, plus a barkeeper NPC.
+    (function ensureTavern() {
+      if (!buildings.length) return;
+      // Score buildings by size and closeness to plaza
+      let best = null, bestScore = -1;
+      for (const b of buildings) {
+        const area = b.w * b.h;
+        if (area < 20) continue; // prefer larger interiors
+        const d = Math.abs((b.x + (b.w / 2)) - plaza.x) + Math.abs((b.y + (b.h / 2)) - plaza.y);
+        const score = area - d * 2; // weight by area, penalize distance
+        if (score > bestScore) { bestScore = score; best = b; }
+      }
+      if (!best) {
+        // fallback to largest building
+        best = buildings.slice().sort((a, b) => (b.w * b.h) - (a.w * a.h))[0];
+      }
+      if (!best) return;
+      const door = getExistingDoor(best);
+      tavern = { building: best, door };
+
+      // Add "Tavern" as a shop marker at the door so it's easy to find
+      shops.push({ x: door.x, y: door.y, type: "shop", name: "Tavern" });
+
+      // Place a "desk" using a table just inside the door and several benches inside
+      function isInside(bx, by) {
+        return bx > best.x && bx < best.x + best.w - 1 && by > best.y && by < best.y + best.h - 1;
+      }
+      // Find a tile just inside the door for the desk/table
+      const inward = [
+        { dx: 0, dy: 1 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }
+      ];
+      let deskPos = null;
+      for (const dxy of inward) {
+        const ix = door.x + dxy.dx, iy = door.y + dxy.dy;
+        if (isInside(ix, iy) && map[iy][ix] === TILES.FLOOR) { deskPos = { x: ix, y: iy }; break; }
+      }
+      if (!deskPos) {
+        deskPos = { x: Math.max(best.x + 1, Math.min(best.x + best.w - 2, door.x)), y: Math.max(best.y + 1, Math.min(best.y + best.h - 2, door.y)) };
+      }
+      addProp(deskPos.x, deskPos.y, "table", "Bar Desk");
+
+      // Benches: create a few along the inner area
+      let benchesPlaced = 0, triesB = 0;
+      while (benchesPlaced < 6 && triesB++ < 200) {
+        const bx = randInt(best.x + 1, best.x + best.w - 2);
+        const by = randInt(best.y + 1, best.y + best.h - 2);
+        if (map[by][bx] !== TILES.FLOOR) continue;
+        if (townProps.some(p => p.x === bx && p.y === by)) continue;
+        addProp(bx, by, "bench", "Bench");
+        benchesPlaced++;
+      }
+
+      // Barkeeper NPC stationed at desk or door
+      const kp = deskPos || door;
+      npcs.push({
+        x: kp.x, y: kp.y,
+        name: "Barkeep",
+        lines: ["Welcome to the tavern.", "Grab a seat.", "Ale's fresh today."],
+        isBarkeeper: true,
+        _work: { x: kp.x, y: kp.y },
+      });
+    })();
+
     // Plaza fixtures
     addProp(plaza.x, plaza.y, "well", "Town Well");
     addProp(plaza.x - 6, plaza.y - 4, "lamp", "Lamp Post");
@@ -943,6 +1153,43 @@
 
     // Town NPCs around plaza and along main road, avoid player adjacency
     npcs = [];
+
+    // First, assign shopkeepers to each shop and station them at the shop door.
+    (function spawnShopkeepers() {
+      if (!Array.isArray(shops) || shops.length === 0) return;
+      const keeperLines = [
+        "Open during the day!",
+        "Browse our wares soon.",
+        "Welcome in!",
+      ];
+      function findNearbyFree(x, y) {
+        // prefer the exact door, else try neighbors
+        if (isFreeTownFloor(x, y)) return { x, y };
+        const neigh = [
+          { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+          { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 },
+        ];
+        for (const d of neigh) {
+          const nx = x + d.dx, ny = y + d.dy;
+          if (isFreeTownFloor(nx, ny)) return { x: nx, y: ny };
+        }
+        return { x, y };
+      }
+      for (const s of shops) {
+        const spot = findNearbyFree(s.x, s.y);
+        // Avoid overlap with already-placed keepers
+        if (npcs.some(n => n.x === spot.x && n.y === spot.y)) continue;
+        const name = s.name ? `${s.name} Keeper` : "Shopkeeper";
+        npcs.push({
+          x: spot.x, y: spot.y,
+          name,
+          lines: keeperLines,
+          isShopkeeper: true,
+          _work: { x: s.x, y: s.y },
+        });
+      }
+    })();
+
     const lines = [
       "Welcome to our town.",
       "Shops are marked with S.",
@@ -970,13 +1217,13 @@
       if (manhattan(player.x, player.y, x, y) <= 1) continue;
       if (npcs.some(n => n.x === x && n.y === y)) continue;
       if (townProps.some(p => p.x === x && p.y === y)) continue;
-      npcs.push({ x, y, name: `Villager ${placed + 1}`, lines });
+      npcs.push({ x, y, name: `Villager ${placed + 1}`, lines, _likesTavern: rng() < 0.45 });
       placed++;
     }
 
-    // Visibility
-    seen = Array.from({ length: H }, () => Array(W).fill(true));
-    visible = Array.from({ length: H }, () => Array(W).fill(true));
+    // Visibility (start unseen; FOV will reveal)
+    seen = Array.from({ length: H }, () => Array(W).fill(false));
+    visible = Array.from({ length: H }, () => Array(W).fill(false));
     enemies = [];
     corpses = [];
     decals = [];
@@ -1091,6 +1338,7 @@
       log("You enter the town. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.", "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
+      recomputeFOV();
       requestDraw();
       return true;
     }
@@ -1406,9 +1654,16 @@
       case "fountain":
         log("You watch the fountain for a moment. You feel calmer.", "info");
         break;
-      case "bench":
-        log("You sit on the bench and rest a moment.", "info");
+      case "bench": {
+        const phase = getClock().phase;
+        if (phase !== "day") {
+          log("You relax on the bench and drift to sleep...", "info");
+          restUntilMorning(0.25); // light heal to 25% of max
+        } else {
+          log("You sit on the bench and rest a moment.", "info");
+        }
         break;
+      }
       case "lamp":
         log("The lamp flickers warmly.", "info");
         break;
@@ -1440,6 +1695,35 @@
   function lootCorpse() {
     if (isDead) return;
     if (mode === "town") {
+      // Interact with shop if standing on a shop door
+      const s = shopAt(player.x, player.y);
+      if (s) {
+        const sname = (s.name || "").toLowerCase();
+        if (sname === "inn") {
+          log("You enter the inn.", "notice");
+          restAtInn();
+          return;
+        }
+        if (sname === "tavern") {
+          const phase = getClock().phase;
+          if (phase === "night" || phase === "dusk") {
+            log("You step into the tavern. It's lively inside.", "notice");
+          } else if (phase === "day") {
+            log("You enter the tavern. A few patrons sit quietly.", "info");
+          } else {
+            log("You enter the tavern.", "info");
+          }
+          requestDraw();
+          return;
+        }
+        if (isShopOpenNow()) {
+          log(`The ${s.name || "shop"} is open. (Trading coming soon)`, "notice");
+        } else {
+          log(`The ${s.name || "shop"} is closed. Come back during the day.`, "warn");
+        }
+        requestDraw();
+        return;
+      }
       // Interact with props first, then attempt to talk to an NPC
       if (interactTownProps()) return;
       if (talkNearbyNPC()) return;
@@ -1823,7 +2107,7 @@
   
   function updateUI() {
     if (window.UI && typeof UI.updateStats === "function") {
-      UI.updateStats(player, floor, getPlayerAttack, getPlayerDefense);
+      UI.updateStats(player, floor, getPlayerAttack, getPlayerDefense, getClock());
       return;
     }
     // Fallback if UI module not loaded
@@ -1831,7 +2115,8 @@
     const floorEl = document.getElementById("floor");
     const gold = (player.inventory.find(i => i.kind === "gold")?.amount) || 0;
     if (hpEl) hpEl.textContent = `HP: ${player.hp.toFixed(1)}/${player.maxHp.toFixed(1)}  Gold: ${gold}`;
-    if (floorEl) floorEl.textContent = `Floor: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}`;
+    const t = getClock();
+    if (floorEl) floorEl.textContent = `Floor: ${floor}  Lv: ${player.level}  XP: ${player.xp}/${player.xpNext}  Time: ${t.hhmm} (${t.phase})`;
   }
 
   
@@ -1844,49 +2129,135 @@
 
   function townNPCsAct() {
     if (mode !== "town" || !Array.isArray(npcs) || npcs.length === 0) return;
-    const dirs = [
-      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
-    ];
-    // create occupancy set including props and player
+
+    const isWalkTown = (x, y) => inBounds(x, y) && (map[y][x] === TILES.FLOOR || map[y][x] === TILES.DOOR);
     const occ = new Set();
     occ.add(`${player.x},${player.y}`);
     for (const n of npcs) occ.add(`${n.x},${n.y}`);
     if (Array.isArray(townProps)) for (const p of townProps) occ.add(`${p.x},${p.y}`);
 
-    // shuffle order
-    const idxs = npcs.map((_, i) => i);
-    for (let i = idxs.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      const tmp = idxs[i]; idxs[i] = idxs[j]; idxs[j] = tmp;
+    // Map global time phases to local routine states
+    const clockPhase = getClock().phase;
+    const phase = (clockPhase === "night") ? "evening"
+                 : (clockPhase === "dawn") ? "morning"
+                 : (clockPhase === "dusk") ? "evening"
+                 : "day";
+
+    function randomInteriorInBuilding(b) {
+      const spots = [];
+      for (let y = b.y + 1; y < b.y + b.h - 1; y++) {
+        for (let x = b.x + 1; x < b.x + b.w - 1; x++) {
+          if (map[y][x] !== TILES.FLOOR) continue;
+          if (townProps.some(p => p.x === x && p.y === y)) continue;
+          spots.push({ x, y });
+        }
+      }
+      if (!spots.length) return { x: b.door.x, y: b.door.y };
+      return spots[randInt(0, spots.length - 1)];
     }
 
-    for (const i of idxs) {
-      const n = npcs[i];
-      if (rng() >= 0.5) continue; // ~50% chance to attempt movement
-      // shuffle directions
-      const order = [0,1,2,3];
-      for (let k = order.length - 1; k > 0; k--) {
-        const j = Math.floor(rng() * (k + 1));
-        const tmp = order[k]; order[k] = order[j]; order[j] = tmp;
+    function ensureHome(n) {
+      if (n._home) return;
+      if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
+      const b = townBuildings[randInt(0, townBuildings.length - 1)];
+      const pos = randomInteriorInBuilding(b);
+      n._home = { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y } };
+      // optional work spot: pick near plaza or a random shop door
+      if (shops && shops.length && rng() < 0.6) {
+        const s = shops[randInt(0, shops.length - 1)];
+        n._work = { x: s.x, y: s.y };
+      } else if (townPlaza) {
+        // pick a tile near plaza
+        n._work = { x: Math.max(1, Math.min(map[0].length - 2, townPlaza.x + randInt(-2, 2))),
+                    y: Math.max(1, Math.min(map.length - 2, townPlaza.y + randInt(-2, 2))) };
       }
-      for (const oi of order) {
-        const d = dirs[oi];
+    }
+
+    function stepTowards(n, tx, ty) {
+      if (typeof tx !== "number" || typeof ty !== "number") return false;
+      const dirs = [
+        { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
+      ];
+      // order by distance improvement
+      dirs.sort((a, b) => (Math.abs((n.x + a.dx) - tx) + Math.abs((n.y + a.dy) - ty)) -
+                          (Math.abs((n.x + b.dx) - tx) + Math.abs((n.y + b.dy) - ty)));
+      for (const d of dirs) {
         const nx = n.x + d.dx, ny = n.y + d.dy;
-        // don't crowd the player
-        if (manhattan(player.x, player.y, nx, ny) <= 1) continue;
-        if (!inBounds(nx, ny)) continue;
-        if (map[ny][nx] !== TILES.FLOOR && map[ny][nx] !== TILES.DOOR) continue;
+        if (!isWalkTown(nx, ny)) continue;
+        if (manhattan(player.x, player.y, nx, ny) <= 0) continue; // don't step onto player
         const key = `${nx},${ny}`;
         if (occ.has(key)) continue;
         // move
         occ.delete(`${n.x},${n.y}`);
         n.x = nx; n.y = ny;
         occ.add(key);
-        break;
+        return true;
       }
+      return false;
+    }
+
+    // shuffle iteration to reduce collisions
+    const order = npcs.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+    }
+
+    for (const idx of order) {
+      const n = npcs[idx];
+      ensureHome(n);
+
+      // Shopkeepers: stay stationed at their shop during the day; go home otherwise.
+      if (n.isShopkeeper) {
+        let target = null;
+        if (phase === "day") {
+          target = n._work || (n._home ? { x: n._home.x, y: n._home.y } : null);
+        } else {
+          target = n._home ? { x: n._home.x, y: n._home.y } : null;
+        }
+        // If already at target, mostly idle
+        if (target && n.x === target.x && n.y === target.y) {
+          if (rng() < 0.9) continue; // high idle chance at post
+          // tiny wiggle around spot
+          stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+          continue;
+        }
+        if (target) {
+          stepTowards(n, target.x, target.y);
+          continue;
+        }
+        // No target fallback: idle
+        if (rng() < 0.9) continue;
+      }
+
+      // Small idle chance
+      if (rng() < 0.25) continue;
+
+      let target = null;
+      if (phase === "morning") {
+        target = n._home ? { x: n._home.x, y: n._home.y } : null;
+      } else if (phase === "day") {
+        target = (n._work || townPlaza);
+      } else {
+        // evening/night: some villagers go to the tavern instead of straight home
+        if (tavern && n._likesTavern) {
+          target = { x: tavern.door.x, y: tavern.door.y };
+        } else {
+          target = n._home ? { x: n._home.x, y: n._home.y } : null;
+        }
+      }
+
+      // If no target, random drift
+      if (!target) {
+        stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+        continue;
+      }
+
+      // Greedy step towards target
+      stepTowards(n, target.x, target.y);
     }
   }
-
+  
   function occupied(x, y) {
     if (player.x === x && player.y === y) return true;
     return enemies.some(e => e.x === x && e.y === y);
@@ -1895,6 +2266,10 @@
   
   function turn() {
     if (isDead) return;
+
+    // Advance global time
+    turnCounter = (turnCounter + 1) | 0;
+
     // If you have a timed equipment decay helper, call it; otherwise skip
     if (typeof decayEquippedOverTime === "function") {
       try { decayEquippedOverTime(); } catch (_) {}
@@ -1918,6 +2293,7 @@
       // clamp corpse list length
       if (corpses.length > 50) corpses = corpses.slice(-50);
     } else if (mode === "town") {
+      townTick = (townTick + 1) | 0;
       townNPCsAct();
     }
 

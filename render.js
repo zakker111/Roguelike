@@ -106,18 +106,26 @@
         }
       }
 
-      // Biome label
+      // Biome label + clock
       try {
+        let labelWidth = 260;
+        let biomeName = "";
         if (WT && typeof World.biomeName === "function") {
           const tile = map[player.y] && map[player.y][player.x];
-          const name = World.biomeName(tile);
-          ctx2d.fillStyle = "rgba(13,16,24,0.8)";
-          ctx2d.fillRect(8, 8, 260, 26);
-          ctx2d.fillStyle = "#e5e7eb";
-          ctx2d.textAlign = "left";
-          ctx2d.fillText(`Biome: ${name}`, 18, 8 + 13);
-          ctx2d.textAlign = "center";
+          biomeName = World.biomeName(tile);
         }
+        const time = ctx.time || null;
+        const clock = time ? time.hhmm : null;
+
+        // background
+        const text = `Biome: ${biomeName}${clock ? "   |   Time: " + clock : ""}`;
+        labelWidth = Math.max(260, 16 * (text.length / 2));
+        ctx2d.fillStyle = "rgba(13,16,24,0.8)";
+        ctx2d.fillRect(8, 8, labelWidth, 26);
+        ctx2d.fillStyle = "#e5e7eb";
+        ctx2d.textAlign = "left";
+        ctx2d.fillText(text, 18, 8 + 13);
+        ctx2d.textAlign = "center";
       } catch (_) {}
 
       // Minimap (top-right)
@@ -211,6 +219,26 @@
         ctx2d.fillText("@", screenX + half, screenY + half + 1);
         ctx2d.restore();
       }
+
+      // Day/night tint overlay
+      try {
+        const time = ctx.time;
+        if (time && time.phase) {
+          ctx2d.save();
+          if (time.phase === "night") {
+            ctx2d.fillStyle = "rgba(0,0,0,0.35)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          } else if (time.phase === "dusk") {
+            ctx2d.fillStyle = "rgba(255,120,40,0.12)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          } else if (time.phase === "dawn") {
+            ctx2d.fillStyle = "rgba(120,180,255,0.10)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          }
+          ctx2d.restore();
+        }
+      } catch (_) {}
+
       return;
     }
 
@@ -218,6 +246,7 @@
     if (mode === "town") {
       const TCOL = {
         wall: "#2f2b26",       // building
+        window: "#295b6e",     // windows
         floor: "#0f1620",      // street/plaza
         door: "#6f5b3e",
         shop: "#d7ba7d",
@@ -226,28 +255,50 @@
 
       for (let y = startY; y <= endY; y++) {
         const rowMap = map[y];
+        const rowSeen = seen[y] || [];
+        const rowVis = visible[y] || [];
         for (let x = startX; x <= endX; x++) {
           const screenX = (x - startX) * TILE - tileOffsetX;
           const screenY = (y - startY) * TILE - tileOffsetY;
           const type = rowMap[x];
+          const vis = !!rowVis[x];
+          const everSeen = !!rowSeen[x];
+
+          if (!everSeen) {
+            // Unknown tiles: draw dark
+            ctx2d.fillStyle = COLORS.wallDark;
+            ctx2d.fillRect(screenX, screenY, TILE, TILE);
+            if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
+            continue;
+          }
+
+          // Draw base tile
           let fill = TCOL.floor;
           if (type === TILES.WALL) fill = TCOL.wall;
+          else if (type === TILES.WINDOW) fill = TCOL.window;
           else if (type === TILES.DOOR) fill = TCOL.door;
           ctx2d.fillStyle = fill;
           ctx2d.fillRect(screenX, screenY, TILE, TILE);
           if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
 
-          // shop glyph overlay if provided
-          if (Array.isArray(shops) && shops.some(s => s.x === x && s.y === y)) {
+          // If shop door, overlay S (only when visible)
+          if (vis && Array.isArray(shops) && shops.some(s => s.x === x && s.y === y)) {
             drawGlyphScreen(ctx2d, screenX, screenY, "S", TCOL.shop, TILE);
+          }
+
+          // If not currently visible, dim it
+          if (!vis && everSeen) {
+            ctx2d.fillStyle = COLORS.dim;
+            ctx2d.fillRect(screenX, screenY, TILE, TILE);
           }
         }
       }
 
-      // draw props (wells, benches, lamps, stalls, fountain, trees, interiors)
+      // draw props (wells, benches, lamps, stalls, fountain, trees, interiors) only if visible
       if (Array.isArray(ctx.townProps)) {
         for (const p of ctx.townProps) {
           if (p.x < startX || p.x > endX || p.y < startY || p.y > endY) continue;
+          if (!visible[p.y] || !visible[p.y][p.x]) continue;
           const screenX = (p.x - startX) * TILE - tileOffsetX;
           const screenY = (p.y - startY) * TILE - tileOffsetY;
           let glyph = "?";
@@ -266,23 +317,56 @@
         }
       }
 
-      // draw NPCs
+      // draw NPCs only if visible
       if (Array.isArray(npcs)) {
         for (const n of npcs) {
           if (n.x < startX || n.x > endX || n.y < startY || n.y > endY) continue;
+          if (!visible[n.y] || !visible[n.y][n.x]) continue;
           const screenX = (n.x - startX) * TILE - tileOffsetX;
           const screenY = (n.y - startY) * TILE - tileOffsetY;
           drawGlyphScreen(ctx2d, screenX, screenY, "n", "#b4f9f8", TILE);
         }
       }
 
-      // draw gate 'G' at townExitAt
+      // Lamp light glow at night/dusk/dawn
+      try {
+        const time = ctx.time;
+        if (time && (time.phase === "night" || time.phase === "dusk" || time.phase === "dawn")) {
+          if (Array.isArray(ctx.townProps)) {
+            ctx2d.save();
+            ctx2d.globalCompositeOperation = "lighter";
+            for (const p of ctx.townProps) {
+              if (p.type !== "lamp") continue;
+              const px = p.x, py = p.y;
+              if (px < startX || px > endX || py < startY || py > endY) continue;
+              if (!visible[py] || !visible[py][px]) continue;
+
+              const cx = (px - startX) * TILE - tileOffsetX + TILE / 2;
+              const cy = (py - startY) * TILE - tileOffsetY + TILE / 2;
+              const r = TILE * 2.2;
+              const grad = ctx2d.createRadialGradient(cx, cy, 4, cx, cy, r);
+              grad.addColorStop(0, "rgba(255, 220, 120, 0.60)");
+              grad.addColorStop(0.4, "rgba(255, 180, 80, 0.25)");
+              grad.addColorStop(1, "rgba(255, 160, 40, 0.0)");
+              ctx2d.fillStyle = grad;
+              ctx2d.beginPath();
+              ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
+              ctx2d.fill();
+            }
+            ctx2d.restore();
+          }
+        }
+      } catch (_) {}
+
+      // draw gate 'G' at townExitAt (only if visible)
       if (ctx.townExitAt) {
         const gx = ctx.townExitAt.x, gy = ctx.townExitAt.y;
         if (gx >= startX && gx <= endX && gy >= startY && gy <= endY) {
-          const screenX = (gx - startX) * TILE - tileOffsetX;
-          const screenY = (gy - startY) * TILE - tileOffsetY;
-          drawGlyphScreen(ctx2d, screenX, screenY, "G", "#9ece6a", TILE);
+          if (visible[gy] && visible[gy][gx]) {
+            const screenX = (gx - startX) * TILE - tileOffsetX;
+            const screenY = (gy - startY) * TILE - tileOffsetY;
+            drawGlyphScreen(ctx2d, screenX, screenY, "G", "#9ece6a", TILE);
+          }
         }
       }
 
@@ -307,6 +391,26 @@
         ctx2d.fillText("@", screenX + half, screenY + half + 1);
         ctx2d.restore();
       }
+
+      // Day/night tint overlay for town
+      try {
+        const time = ctx.time;
+        if (time && time.phase) {
+          ctx2d.save();
+          if (time.phase === "night") {
+            ctx2d.fillStyle = "rgba(0,0,0,0.35)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          } else if (time.phase === "dusk") {
+            ctx2d.fillStyle = "rgba(255,120,40,0.12)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          } else if (time.phase === "dawn") {
+            ctx2d.fillStyle = "rgba(120,180,255,0.10)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          }
+          ctx2d.restore();
+        }
+      } catch (_) {}
+
       return;
     }
 

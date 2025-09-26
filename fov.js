@@ -8,7 +8,11 @@
  * {
  *   fovRadius:number, player:{x,y}, map:number[][], TILES:{WALL:number},
  *   inBounds(x,y):boolean, seen:boolean[][], visible:boolean[][],
- *   enemies:Array, enemyThreatLabel(e), log(msg,type?)
+ *   enemies:Array, enemyThreatLabel(e), log(msg,type?),
+ *   // optional extras for town lighting
+ *   mode?: "world"|"town"|"dungeon",
+ *   time?: { phase?: "dawn"|"day"|"dusk"|"night" },
+ *   townProps?: Array<{x:number,y:number,type:string}>
  * }
  */
 (function () {
@@ -92,7 +96,7 @@
       }
     }
 
-    
+    // Player-centered visibility
     if (ctx.inBounds(player.x, player.y)) {
       visible[player.y][player.x] = true;
       ctx.seen[player.y][player.x] = true;
@@ -106,6 +110,33 @@
     castLight(player.x, player.y, 1, 1.0, 0.0, radius, 0, 1, -1, 0);  // S-SW
     castLight(player.x, player.y, 1, 1.0, 0.0, radius, 0, -1, 1, 0);  // N-NE
     castLight(player.x, player.y, 1, 1.0, 0.0, radius, 0, -1, -1, 0); // N-NW
+
+    // Dynamic lamp lighting in towns at night/dawn/dusk: extend visibility from lamps
+    try {
+      const isTown = ctx.mode === "town";
+      const phase = ctx.time && ctx.time.phase;
+      const lampActive = isTown && (phase === "night" || phase === "dusk" || phase === "dawn");
+      if (lampActive && Array.isArray(ctx.townProps)) {
+        const lampRadius = Math.max(2, Math.min(6, Math.floor((radius + 2) / 3))); // small local glow (typically 3-4)
+        for (const p of ctx.townProps) {
+          if (!p || p.type !== "lamp") continue;
+          const lx = p.x | 0, ly = p.y | 0;
+          if (!ctx.inBounds(lx, ly)) continue;
+          // Mark lamp tile itself visible
+          visible[ly][lx] = true;
+          ctx.seen[ly][lx] = true;
+          // Cast limited light from lamp (respecting walls/windows via isTransparent)
+          castLight(lx, ly, 1, 1.0, 0.0, lampRadius, 1, 0, 0, 1);
+          castLight(lx, ly, 1, 1.0, 0.0, lampRadius, 1, 0, 0, -1);
+          castLight(lx, ly, 1, 1.0, 0.0, lampRadius, -1, 0, 0, 1);
+          castLight(lx, ly, 1, 1.0, 0.0, lampRadius, -1, 0, 0, -1);
+          castLight(lx, ly, 1, 1.0, 0.0, lampRadius, 0, 1, 1, 0);
+          castLight(lx, ly, 1, 1.0, 0.0, lampRadius, 0, 1, -1, 0);
+          castLight(lx, ly, 1, 1.0, 0.0, lampRadius, 0, -1, 1, 0);
+          castLight(lx, ly, 1, 1.0, 0.0, lampRadius, 0, -1, -1, 0);
+        }
+      }
+    } catch (_) {}
 
     ctx.visible = visible;
 
