@@ -529,6 +529,26 @@
       return false;
     }
 
+    // Helper: aggressively move resident home in evening/night with multiple steps per turn
+    function forceHomeProgress(ctx, occSet, n, maxSteps = 3) {
+      if (!(n._home && n._home.building)) return false;
+      const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+      for (let s = 0; s < maxSteps; s++) {
+        if (n.x === sleepTarget.x && n.y === sleepTarget.y) { n._sleeping = true; return true; }
+        // Step via door if outside; otherwise toward target
+        if (!insideBuilding(n._home.building, n.x, n.y)) {
+          if (!routeIntoBuilding(ctx, occSet, n, n._home.building, sleepTarget)) {
+            // If routeIntoBuilding fails, try a straight step toward door or target
+            const door = n._home.door || { x: n._home.building.x + ((n._home.building.w / 2) | 0), y: n._home.building.y };
+            stepTowards(ctx, occSet, n, door.x, door.y);
+          }
+        } else {
+          stepTowards(ctx, occSet, n, sleepTarget.x, sleepTarget.y);
+        }
+      }
+      return true;
+    }
+
     for (const idx of order) {
       const n = npcs[idx];
       ensureHome(ctx, n);
@@ -559,8 +579,7 @@
           }
         } else if (n._home && n._home.building) {
           // Off hours: go home, via door then inside
-          const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-          handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
+          handled = forceHomeProgress(ctx, occRelaxed, n, 2);
         }
 
         if (handled) continue;
@@ -581,19 +600,9 @@
         }
 
         if (hasHome && (phase === "evening" || phase === "night")) {
-          const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-          // If at sleep target, go to sleep
-          if (n.x === sleepTarget.x && n.y === sleepTarget.y) {
-            n._sleeping = true;
-            continue;
-          }
-          // Otherwise route via door and inside (use relaxed occupancy to cut through crowds)
-          if (routeIntoBuilding(ctx, occRelaxed, n, n._home.building, sleepTarget)) continue;
-          // If already inside but not at target, small interior jiggle toward target
-          if (insideNow) {
-            stepTowards(ctx, occRelaxed, n, sleepTarget.x, sleepTarget.y);
-            continue;
-          }
+          // Aggressively make progress home with multiple steps per turn using relaxed occupancy
+          forceHomeProgress(ctx, occRelaxed, n, 3);
+          continue;
         } else if (phase === "day") {
           const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
           // Homebound residents prefer staying inside during daytime as well
@@ -637,18 +646,20 @@
         continue;
       }
 
-      // Generic NPCs
+      // Generic NPCs: prefer going home in evening/night if they have one
       if (ctx.rng() < 0.25) continue;
       let target = null;
       if (phase === "morning") target = n._home ? { x: n._home.x, y: n._home.y } : null;
       else if (phase === "day") target = (n._work || ctx.townPlaza);
-      else target = (ctx.tavern && n._likesTavern) ? { x: ctx.tavern.door.x, y: ctx.tavern.door.y }
-                                                   : (n._home ? { x: n._home.x, y: n._home.y } : null);
+      else {
+        // evening/night: bias to home over tavern
+        target = (n._home ? { x: n._home.x, y: n._home.y } : (ctx.tavern && n._likesTavern) ? { x: ctx.tavern.door.x, y: ctx.tavern.door.y } : null);
+      }
       if (!target) {
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
-      stepTowards(ctx, occ, n, target.x, target.y);
+      stepTowards(ctx, (phase === "evening" || phase === "night") ? occRelaxed : occ, n, target.x, target.y);
     }
   }
 
