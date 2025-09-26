@@ -33,10 +33,30 @@
   let townBuildings = [];    // town buildings: [{x,y,w,h,door:{x,y}}]
   let townPlaza = null;      // central plaza coordinates {x,y}
   let townTick = 0;          // simple turn counter for town routines
-  let cameFromWorld = false; // true if current dungeon was entered from world
-  let worldReturnPos = null; // { x, y } to return to when exiting dungeon or town
-  let dungeonExitAt = null;  // { x, y } tile in dungeon floor 1 acting as exit back to world
-  let townExitAt = null;     // { x, y } tile in town acting as gate back to world
+
+  // Global time-of-day cycle (shared across modes)
+  // We model a 24h day (1440 minutes). One full day spans CYCLE_TURNS turns.
+  const DAY_MINUTES = 24 * 60;    // 1440
+  const CYCLE_TURNS = 360;        // 360 turns per day -> 4 minutes/turn
+  const MINUTES_PER_TURN = DAY_MINUTES / CYCLE_TURNS; // 4.0
+  let turnCounter = 0;            // total turns elapsed since start
+
+  // Compute in-game clock and phase from turnCounter
+  function getClock() {
+    const totalMinutes = Math.floor(turnCounter * MINUTES_PER_TURN) % DAY_MINUTES;
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    const hh = String(h).padStart(2, "0");
+    const mm = String(m).padStart(2, "0");
+    // Day phases (rough cut)
+    // Night: 20:00-05:59, Dawn: 06:00-07:59, Day: 08:00-17:59, Dusk: 18:00-19:59
+    let phase = "day";
+    if (h >= 20 || h < 6) phase = "night";
+    else if (h < 8) phase = "dawn";
+    else if (h < 18) phase = "day";
+    else phase = "dusk";
+    return { hours: h, minutes: m, hhmm: `${hh}:${mm}`, phase, totalMinutes, minutesPerTurn: MINUTES_PER_TURN, cycleTurns: CYCLE_TURNS, turnCounter };
+  }
 
   
   const camera = {
@@ -658,6 +678,7 @@
       townProps,
       townExitAt,
       enemyColor: (t) => enemyColor(t),
+      time: getClock(),
     };
   }
 
@@ -1927,12 +1948,12 @@
     for (const n of npcs) occ.add(`${n.x},${n.y}`);
     if (Array.isArray(townProps)) for (const p of townProps) occ.add(`${p.x},${p.y}`);
 
-    const phase = (() => {
-      const t = townTick % 360; // simple day cycle
-      if (t < 120) return "morning";   // at home
-      if (t < 270) return "day";       // out and about
-      return "evening";                // head home
-    })();
+    // Map global time phases to local routine states
+    const clockPhase = getClock().phase;
+    const phase = (clockPhase === "night") ? "evening"
+                 : (clockPhase === "dawn") ? "morning"
+                 : (clockPhase === "dusk") ? "evening"
+                 : "day";
 
     function randomInteriorInBuilding(b) {
       const spots = [];
@@ -2029,6 +2050,10 @@
   
   function turn() {
     if (isDead) return;
+
+    // Advance global time
+    turnCounter = (turnCounter + 1) | 0;
+
     // If you have a timed equipment decay helper, call it; otherwise skip
     if (typeof decayEquippedOverTime === "function") {
       try { decayEquippedOverTime(); } catch (_) {}

@@ -9,6 +9,16 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v1.2 — Day/Night Cycle and Turn Time
+- Added: Global time-of-day system shared across all modes (world/town/dungeon).
+  - Full day = 24 hours (1440 minutes).
+  - Cycle length = 360 turns per day.
+  - Minutes per turn = 1440 / 360 = 4 minutes per turn.
+- UI: Time shown in the overworld HUD next to the biome label; scene tint changes per phase:
+  - Dawn (cool tint), Day (normal), Dusk (warm tint), Night (darkened).
+  - Same tinting applied in towns.
+- Dev: getClock() exposes hours, minutes, hhmm, phase, minutesPerTurn, cycleTurns, and turnCounter to renderer and AI.
+
 v1.1 — Town Life: Homes and Routines
 - Added: Each villager is assigned a home inside a building; also gets a daytime destination (plaza or shop).
 - Changed: NPCs follow a simple daily routine driven by a turn counter:

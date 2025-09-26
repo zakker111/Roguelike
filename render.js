@@ -106,18 +106,26 @@
         }
       }
 
-      // Biome label
+      // Biome label + clock
       try {
+        let labelWidth = 260;
+        let biomeName = "";
         if (WT && typeof World.biomeName === "function") {
           const tile = map[player.y] && map[player.y][player.x];
-          const name = World.biomeName(tile);
-          ctx2d.fillStyle = "rgba(13,16,24,0.8)";
-          ctx2d.fillRect(8, 8, 260, 26);
-          ctx2d.fillStyle = "#e5e7eb";
-          ctx2d.textAlign = "left";
-          ctx2d.fillText(`Biome: ${name}`, 18, 8 + 13);
-          ctx2d.textAlign = "center";
+          biomeName = World.biomeName(tile);
         }
+        const time = ctx.time || null;
+        const clock = time ? time.hhmm : null;
+
+        // background
+        const text = `Biome: ${biomeName}${clock ? "   |   Time: " + clock : ""}`;
+        labelWidth = Math.max(260, 16 * (text.length / 2));
+        ctx2d.fillStyle = "rgba(13,16,24,0.8)";
+        ctx2d.fillRect(8, 8, labelWidth, 26);
+        ctx2d.fillStyle = "#e5e7eb";
+        ctx2d.textAlign = "left";
+        ctx2d.fillText(text, 18, 8 + 13);
+        ctx2d.textAlign = "center";
       } catch (_) {}
 
       // Minimap (top-right)
@@ -211,6 +219,26 @@
         ctx2d.fillText("@", screenX + half, screenY + half + 1);
         ctx2d.restore();
       }
+
+      // Day/night tint overlay
+      try {
+        const time = ctx.time;
+        if (time && time.phase) {
+          ctx2d.save();
+          if (time.phase === "night") {
+            ctx2d.fillStyle = "rgba(0,0,0,0.35)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          } else if (time.phase === "dusk") {
+            ctx2d.fillStyle = "rgba(255,120,40,0.12)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          } else if (time.phase === "dawn") {
+            ctx2d.fillStyle = "rgba(120,180,255,0.10)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          }
+          ctx2d.restore();
+        }
+      } catch (_) {}
+
       return;
     }
 
@@ -333,6 +361,26 @@
         ctx2d.fillText("@", screenX + half, screenY + half + 1);
         ctx2d.restore();
       }
+
+      // Day/night tint overlay for town
+      try {
+        const time = ctx.time;
+        if (time && time.phase) {
+          ctx2d.save();
+          if (time.phase === "night") {
+            ctx2d.fillStyle = "rgba(0,0,0,0.35)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          } else if (time.phase === "dusk") {
+            ctx2d.fillStyle = "rgba(255,120,40,0.12)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          } else if (time.phase === "dawn") {
+            ctx2d.fillStyle = "rgba(120,180,255,0.10)";
+            ctx2d.fillRect(0, 0, cam.width, cam.height);
+          }
+          ctx2d.restore();
+        }
+      } catch (_) {}
+
       return;
     }
 
