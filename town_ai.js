@@ -377,7 +377,10 @@
           if (n.x === door.x && n.y === door.y) {
             // Step just inside
             const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building) || targetInside || { x: door.x, y: door.y };
-            stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
+            if (!stepTowards(ctx, occ, n, inSpot.x, inSpot.y)) {
+              // small nudge to avoid being stuck on door tile
+              stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+            }
             return true;
           }
           stepTowards(ctx, occ, n, door.x, door.y);
@@ -402,7 +405,7 @@
 
       // Pets
       if (n.isPet) {
-        if (ctx.rng() < 0.6) continue;
+        if (ctx.rng() < 0.4) continue; // increase movement frequency
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
@@ -432,8 +435,10 @@
 
         if (handled) continue;
 
-        // idle jiggle
-        if (ctx.rng() < 0.9) continue;
+        // idle jiggle (more active)
+        if (ctx.rng() < 0.6) continue;
+        stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+        continue;
       }
 
       // Residents: sleep system
@@ -457,11 +462,14 @@
           const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
           if (target) {
             if (n.x === target.x && n.y === target.y) {
-              if (ctx.rng() < 0.8) continue;
+              if (ctx.rng() < 0.5) continue; // more frequent micro-moves at target
               stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
               continue;
             }
-            stepTowards(ctx, occ, n, target.x, target.y);
+            if (!stepTowards(ctx, occ, n, target.x, target.y)) {
+              // fallback nudge on path failure
+              stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+            }
             continue;
           }
         } else if (phase === "morning") {
@@ -474,8 +482,8 @@
         continue;
       }
 
-      // Generic NPCs
-      if (ctx.rng() < 0.25) continue;
+      // Generic NPCs (more likely to act)
+      if (ctx.rng() < 0.1) continue;
       let target = null;
       if (phase === "morning") target = n._home ? { x: n._home.x, y: n._home.y } : null;
       else if (phase === "day") target = (n._work || ctx.townPlaza);
@@ -485,7 +493,10 @@
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
-      stepTowards(ctx, occ, n, target.x, target.y);
+      if (!stepTowards(ctx, occ, n, target.x, target.y)) {
+        // fallback nudge on path failure
+        stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+      }
     }
   }
 
