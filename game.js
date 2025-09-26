@@ -815,21 +815,9 @@
   
 
   function talkNearbyNPC() {
-    if (mode !== "town") return false;
-    const targets = [];
-    for (const n of npcs) {
-      const d = Math.abs(n.x - player.x) + Math.abs(n.y - player.y);
-      if (d <= 1) targets.push(n);
-    }
-    if (targets.length === 0) {
-      log("There is no one to talk to here.");
-      return false;
-    }
-    const npc = targets[randInt(0, targets.length - 1)];
-    const line = npc.lines[randInt(0, npc.lines.length - 1)];
-    log(`${npc.name}: ${line}`, "info");
-    requestDraw();
-    return true;
+    if (!(window.TownAI && typeof TownAI.talkNearbyNPC === "function")) return false;
+    const ctx = getCtx();
+    return TownAI.talkNearbyNPC(ctx);
   }
 
   // Town shops helpers and resting
@@ -1401,14 +1389,15 @@
   }
 
   function ensureTownSpawnClear() {
-    // Make sure the player isn't inside a building (WALL).
-    // If current tile is not walkable, move to the nearest FLOOR/DOOR tile.
+    if (window.TownAI && typeof TownAI.ensureTownSpawnClear === "function") {
+      TownAI.ensureTownSpawnClear(getCtx());
+      return;
+    }
+    // fallback to local behavior if TownAI not present
     const H = map.length;
     const W = map[0] ? map[0].length : 0;
     const isWalk = (x, y) => x >= 0 && y >= 0 && x < W && y < H && (map[y][x] === TILES.FLOOR || map[y][x] === TILES.DOOR);
     if (isWalk(player.x, player.y)) return;
-
-    // BFS from current position to nearest walkable
     const q = [];
     const seenB = new Set();
     q.push({ x: player.x, y: player.y, d: 0 });
@@ -1422,20 +1411,19 @@
         if (seenB.has(key)) continue;
         seenB.add(key);
         if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-        if (isWalk(nx, ny)) {
-          player.x = nx; player.y = ny;
-          return;
-        }
-        // expand through walls minimally to escape building
+        if (isWalk(nx, ny)) { player.x = nx; player.y = ny; return; }
         q.push({ x: nx, y: ny, d: cur.d + 1 });
       }
     }
-    // Fallback to center
     player.x = (W / 2) | 0;
     player.y = (H / 2) | 0;
   }
 
   function isFreeTownFloor(x, y) {
+    if (window.TownAI && typeof TownAI.isFreeTownFloor === "function") {
+      const ctx = getCtx();
+      return TownAI.isFreeTownFloor(Object.assign({}, ctx, { player, npcs, townProps, map, TILES }), x, y);
+    }
     if (!inBounds(x, y)) return false;
     if (map[y][x] !== TILES.FLOOR && map[y][x] !== TILES.DOOR) return false;
     if (x === player.x && y === player.y) return false;
@@ -1464,6 +1452,14 @@
   }
 
   function spawnGateGreeters(count = 4) {
+    if (window.TownAI && typeof TownAI.spawnGateGreeters === "function") {
+      const ctx = getCtx();
+      ctx.townExitAt = townExitAt;
+      ctx.townName = townName;
+      TownAI.spawnGateGreeters(ctx, count);
+      return;
+    }
+    // fallback local behavior if TownAI not present
     if (!townExitAt) return;
     const dirs = [
       { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
@@ -1477,7 +1473,6 @@
       "The plaza is at the center.",
     ];
     let placed = 0;
-    // two rings around the gate
     for (let ring = 1; ring <= 2 && placed < count; ring++) {
       for (const d of dirs) {
         const x = townExitAt.x + d.dx * ring;

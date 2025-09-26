@@ -3,6 +3,10 @@
  * Exports (window.TownAI):
  *  - populateTown(ctx): spawn shopkeepers, residents, pets, greeters
  *  - townNPCsAct(ctx): per-turn movement and routines
+ *  - ensureTownSpawnClear(ctx): nudge player to nearest free tile when entering town
+ *  - spawnGateGreeters(ctx, count): place greeters around town gate
+ *  - talkNearbyNPC(ctx): have the closest adjacent NPC speak; returns true if someone talked
+ *  - isFreeTownFloor(ctx, x, y): utility used by placement helpers
  */
 (function () {
   function randInt(ctx, a, b) { return Math.floor(ctx.rng() * (b - a + 1)) + a; }
@@ -487,8 +491,104 @@
     }
   }
 
+  // ---- Player spawn and gate greeters moved from game.js ----
+  function ensureTownSpawnClear(ctx) {
+    const H = ctx.map.length;
+    const W = ctx.map[0] ? ctx.map[0].length : 0;
+    const isWalk = (x, y) => x >= 0 && y >= 0 && x < W && y < H && (ctx.map[y][x] === ctx.TILES.FLOOR || ctx.map[y][x] === ctx.TILES.DOOR);
+    const p = ctx.player;
+    if (isWalk(p.x, p.y)) return;
+
+    const q = [];
+    const seenB = new Set();
+    q.push({ x: p.x, y: p.y, d: 0 });
+    seenB.add(`${p.x},${p.y}`);
+    const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+    while (q.length) {
+      const cur = q.shift();
+      for (const d of dirs) {
+        const nx = cur.x + d.dx, ny = cur.y + d.dy;
+        const key = `${nx},${ny}`;
+        if (seenB.has(key)) continue;
+        seenB.add(key);
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        if (isWalk(nx, ny)) {
+          p.x = nx; p.y = ny;
+          return;
+        }
+        q.push({ x: nx, y: ny, d: cur.d + 1 });
+      }
+    }
+    p.x = (W / 2) | 0;
+    p.y = (H / 2) | 0;
+  }
+
+  function clearAdjacentNPCsAroundPlayer(ctx) {
+    const neighbors = [
+      { x: ctx.player.x + 1, y: ctx.player.y },
+      { x: ctx.player.x - 1, y: ctx.player.y },
+      { x: ctx.player.x, y: ctx.player.y + 1 },
+      { x: ctx.player.x, y: ctx.player.y - 1 },
+    ];
+    for (const pos of neighbors) {
+      const idx = ctx.npcs.findIndex(n => n.x === pos.x && n.y === pos.y);
+      if (idx !== -1) ctx.npcs.splice(idx, 1);
+    }
+  }
+
+  function spawnGateGreeters(ctx, count = 4) {
+    if (!ctx.townExitAt) return;
+    const dirs = [
+      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+      { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 }
+    ];
+    const names = ["Ava", "Borin", "Cora", "Darin", "Eda", "Finn", "Goro", "Hana"];
+    const lines = [
+      `Welcome to ${ctx.townName || "our town"}.`,
+      "Shops are marked with S.",
+      "Stay as long as you like.",
+      "The plaza is at the center.",
+    ];
+    let placed = 0;
+    for (let ring = 1; ring <= 2 && placed < count; ring++) {
+      for (const d of dirs) {
+        const x = ctx.townExitAt.x + d.dx * ring;
+        const y = ctx.townExitAt.y + d.dy * ring;
+        if (isFreeTownFloor(ctx, x, y) && manhattan(ctx.player.x, ctx.player.y, x, y) > 1) {
+          const name = names[randInt(ctx, 0, names.length - 1)];
+          ctx.npcs.push({ x, y, name, lines });
+          placed++;
+          if (placed >= count) break;
+        }
+      }
+    }
+    clearAdjacentNPCsAroundPlayer(ctx);
+  }
+
+  function talkNearbyNPC(ctx) {
+    if (ctx.mode !== "town") return false;
+    const targets = [];
+    for (const n of ctx.npcs) {
+      const d = Math.abs(n.x - ctx.player.x) + Math.abs(n.y - ctx.player.y);
+      if (d <= 1) targets.push(n);
+    }
+    if (targets.length === 0) {
+      ctx.log && ctx.log("There is no one to talk to here.");
+      return false;
+    }
+    const npc = targets[randInt(ctx, 0, targets.length - 1)];
+    const line = npc.lines[randInt(ctx, 0, (npc.lines && npc.lines.length ? npc.lines.length : 1) - 1)] || "Hello.";
+    ctx.log && ctx.log(`${npc.name}: ${line}`, "info");
+    if (typeof ctx.requestDraw === "function") ctx.requestDraw();
+    return true;
+  }
+
   window.TownAI = {
     populateTown,
     townNPCsAct,
+    ensureTownSpawnClear,
+    spawnGateGreeters,
+    talkNearbyNPC,
+    isFreeTownFloor,
   };
 })();
