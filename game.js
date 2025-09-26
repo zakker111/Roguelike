@@ -18,8 +18,8 @@
   const COLS = 30;
   const ROWS = 20;
   
-  const MAP_COLS = 60;
-  const MAP_ROWS = 40;
+  const MAP_COLS = 120;
+  const MAP_ROWS = 80;
 
   const FOV_DEFAULT = 8;
   let fovRadius = FOV_DEFAULT;
@@ -29,6 +29,7 @@
   let world = null;          // { map, width, height, towns, dungeons }
   let npcs = [];             // simple NPCs for town mode: { x, y, name, lines:[] }
   let shops = [];            // shops in town mode: [{x,y,type,name}]
+  let townProps = [];        // interactive town props: [{x,y,type,name}]
   let cameFromWorld = false; // true if current dungeon was entered from world
   let worldReturnPos = null; // { x, y } to return to when exiting dungeon or town
   let dungeonExitAt = null;  // { x, y } tile in dungeon floor 1 acting as exit back to world
@@ -650,6 +651,8 @@
       world,
       npcs,
       shops,
+      townProps,
+      townExitAt,
       enemyColor: (t) => enemyColor(t),
     };
   }
@@ -719,74 +722,259 @@
   }
 
   function generateTown() {
-    // Simple town layout: outer streets with several rectangular buildings and a gate at player's spawn
+    // Structured town: walls with a gate, main road to a central plaza, secondary roads, buildings aligned to blocks, shops near plaza
     const W = MAP_COLS, H = MAP_ROWS;
     map = Array.from({ length: H }, () => Array(W).fill(TILES.FLOOR));
 
-    // Carve building rectangles
-    function rect(x, y, w, h) {
-      for (let yy = y; yy < y + h; yy++) {
-        for (let xx = x; xx < x + w; xx++) {
+    const clampXY = (x, y) => ({ x: Math.max(1, Math.min(W - 2, x)), y: Math.max(1, Math.min(H - 2, y)) });
+
+    // Town walls (outer perimeter)
+    for (let x = 0; x < W; x++) { map[0][x] = TILES.WALL; map[H - 1][x] = TILES.WALL; }
+    for (let y = 0; y < H; y++) { map[y][0] = TILES.WALL; map[y][W - 1] = TILES.WALL; }
+
+    // Choose gate closest to player's current world-projected position
+    const targets = [
+      { x: 1, y: player.y },                // west
+      { x: W - 2, y: player.y },            // east
+      { x: player.x, y: 1 },                // north
+      { x: player.x, y: H - 2 },            // south
+    ].map(p => clampXY(p.x, p.y));
+
+    let best = targets[0], bd = Infinity;
+    for (const t of targets) {
+      const d = Math.abs(t.x - player.x) + Math.abs(t.y - player.y);
+      if (d < bd) { bd = d; best = t; }
+    }
+    const gate = best;
+    // Carve gate opening in wall
+    if (gate.x === 1) map[gate.y][0] = TILES.DOOR;
+    else if (gate.x === W - 2) map[gate.y][W - 1] = TILES.DOOR;
+    else if (gate.y === 1) map[0][gate.x] = TILES.DOOR;
+    else if (gate.y === H - 2) map[H - 1][gate.x] = TILES.DOOR;
+
+    // Ensure gate tile inside wall is floor
+    map[gate.y][gate.x] = TILES.FLOOR;
+    player.x = gate.x; player.y = gate.y;
+    townExitAt = { x: gate.x, y: gate.y };
+
+    // Central plaza (rectangle)
+    const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
+    const plazaW = 14, plazaH = 12;
+    for (let yy = (plaza.y - (plazaH / 2)) | 0; yy <= (plaza.y + (plazaH / 2)) | 0; yy++) {
+      for (let xx = (plaza.x - (plazaW / 2)) | 0; xx <= (plaza.x + (plazaW / 2)) | 0; xx++) {
+        if (yy <= 0 || xx <= 0 || yy >= H - 1 || xx >= W - 1) continue;
+        map[yy][xx] = TILES.FLOOR;
+      }
+    }
+
+    // Main road from gate to plaza (L-shape)
+    const carveRoad = (x1, y1, x2, y2) => {
+      let x = x1, y = y1;
+      while (x !== x2) { map[y][x] = TILES.FLOOR; x += Math.sign(x2 - x); }
+      while (y !== y2) { map[y][x] = TILES.FLOOR; y += Math.sign(y2 - y); }
+      map[y][x] = TILES.FLOOR;
+    };
+    carveRoad(gate.x, gate.y, plaza.x, gate.y);
+    carveRoad(plaza.x, gate.y, plaza.x, plaza.y);
+
+    // Secondary roads (grid) aligned around plaza
+    for (let y = 6; y < H - 6; y += 8) for (let x = 1; x < W - 1; x++) map[y][x] = TILES.FLOOR;
+    for (let x = 6; x < W - 6; x += 10) for (let y = 1; y < H - 1; y++) map[y][x] = TILES.FLOOR;
+
+    // Blocks: place buildings aligned with blocks, leaving 1-tile sidewalk
+    const buildings = [];
+    const placeBuilding = (bx, by, bw, bh) => {
+      // hollow rectangle
+      for (let yy = by; yy < by + bh; yy++) {
+        for (let xx = bx; xx < bx + bw; xx++) {
           if (yy <= 0 || xx <= 0 || yy >= H - 1 || xx >= W - 1) continue;
-          map[yy][xx] = TILES.WALL;
+          const isBorder = (yy === by || yy === by + bh - 1 || xx === bx || xx === bx + bw - 1);
+          map[yy][xx] = isBorder ? TILES.WALL : TILES.FLOOR;
+        }
+      }
+      const b = { x: bx, y: by, w: bw, h: bh };
+      buildings.push(b);
+      return b;
+    };
+
+    // Iterate grid and try to place buildings in areas not roads
+    // Block cell nominal size ~10x8; we inset by 1 for sidewalk, then choose random w/h that fit.
+    for (let by = 2; by < H - 10; by += 8) {
+      for (let bx = 2; bx < W - 12; bx += 10) {
+        // skip if near plaza
+        if (Math.abs((bx + 5) - plaza.x) < 9 && Math.abs((by + 4) - plaza.y) < 7) continue;
+        // ensure area is floor and not road lines
+        let clear = true;
+        const blockW = 8, blockH = 6; // usable space inside each block cell
+        for (let yy = by; yy < by + (blockH + 1) && clear; yy++) {
+          for (let xx = bx; xx < bx + (blockW + 1); xx++) {
+            if (map[yy][xx] !== TILES.FLOOR) { clear = false; break; }
+          }
+        }
+        if (!clear) continue;
+
+        // Randomize building size within the block with at least 2x2 interior
+        const w = randInt(6, blockW);   // 6..8
+        const h = randInt(4, blockH);   // 4..6
+        const ox = randInt(0, Math.max(0, blockW - w));
+        const oy = randInt(0, Math.max(0, blockH - h));
+        placeBuilding(bx + 1 + ox, by + 1 + oy, w, h);
+      }
+    }
+
+    // Doors and shops near plaza/main road
+    function candidateDoors(b) {
+      // candidate door positions on building border with outside tile
+      return [
+        { x: b.x + ((b.w / 2) | 0), y: b.y, ox: 0, oy: -1 },                      // top
+        { x: b.x + b.w - 1, y: b.y + ((b.h / 2) | 0), ox: +1, oy: 0 },            // right
+        { x: b.x + ((b.w / 2) | 0), y: b.y + b.h - 1, ox: 0, oy: +1 },            // bottom
+        { x: b.x, y: b.y + ((b.h / 2) | 0), ox: -1, oy: 0 },                      // left
+      ];
+    }
+    function ensureDoor(b) {
+      // If any door already present, leave it; else choose a side with floor outside
+      const cands = candidateDoors(b);
+      // prefer candidates with outside floor
+      const good = cands.filter(d => inBounds(d.x + d.ox, d.y + d.oy) && map[d.y + d.oy][d.x + d.ox] === TILES.FLOOR);
+      const pick = (good.length ? good : cands)[randInt(0, (good.length ? good : cands).length - 1)];
+      if (inBounds(pick.x, pick.y)) map[pick.y][pick.x] = TILES.DOOR;
+      return pick;
+    }
+
+    shops = [];
+    const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn", "Fletcher", "Herbalist", "Fishmonger"];
+    // Pick buildings closest to plaza for shops
+    const scored = buildings.map(b => ({ b, d: Math.abs((b.x + (b.w / 2)) - plaza.x) + Math.abs((b.y + (b.h / 2)) - plaza.y) }));
+    scored.sort((a, b) => a.d - b.d);
+    const shopCount = Math.min(8, scored.length);
+    for (let i = 0; i < shopCount; i++) {
+      const door = ensureDoor(scored[i].b);
+      shops.push({ x: door.x, y: door.y, type: "shop", name: shopNames[i % shopNames.length] });
+    }
+    // Ensure every non-shop building also has at least one door
+    const shopDoorSet = new Set(shops.map(s => `${s.x},${s.y}`));
+    for (const b of buildings) {
+      // check if any of the border tiles is already a DOOR
+      const cd = candidateDoors(b);
+      let hasDoor = cd.some(d => inBounds(d.x, d.y) && map[d.y][d.x] === TILES.DOOR);
+      if (!hasDoor) {
+        const d = ensureDoor(b);
+        // not a shop; just a house
+        if (!shopDoorSet.has(`${d.x},${d.y}`)) {
+          // no need to add to shops array for normal houses
         }
       }
     }
-    // Streets grid
-    for (let y = 0; y < H; y += 8) {
-      for (let x = 0; x < W; x++) map[y][x] = TILES.FLOOR;
+
+    // Props in plaza and parks + building interiors
+    townProps = [];
+    const addProp = (x, y, type, name) => {
+      if (x <= 0 || y <= 0 || x >= W - 1 || y >= H - 1) return;
+      if (map[y][x] !== TILES.FLOOR) return;
+      if (townProps.some(p => p.x === x && p.y === y)) return;
+      townProps.push({ x, y, type, name });
+    };
+
+    // Fill building interiors with fireplaces, tables, beds, chests
+    function fillBuildingInterior(b) {
+      // fireplace: pick an inner tile adjacent to an outer wall
+      const borderAdj = [];
+      for (let yy = b.y + 1; yy < b.y + b.h - 1; yy++) {
+        for (let xx = b.x + 1; xx < b.x + b.w - 1; xx++) {
+          // inside only
+          if (map[yy][xx] !== TILES.FLOOR) continue;
+          // adjacent to wall?
+          if (map[yy - 1][xx] === TILES.WALL || map[yy + 1][xx] === TILES.WALL || map[yy][xx - 1] === TILES.WALL || map[yy][xx + 1] === TILES.WALL) {
+            borderAdj.push({ x: xx, y: yy });
+          }
+        }
+      }
+      if (borderAdj.length && rng() < 0.9) {
+        const f = borderAdj[randInt(0, borderAdj.length - 1)];
+        addProp(f.x, f.y, "fireplace", "Fireplace");
+      }
+      // chests
+      const chestCount = rng() < 0.4 ? 2 : 1;
+      let placedC = 0, triesC = 0;
+      while (placedC < chestCount && triesC++ < 50) {
+        const xx = randInt(b.x + 1, b.x + b.w - 2);
+        const yy = randInt(b.y + 1, b.y + b.h - 2);
+        if (map[yy][xx] !== TILES.FLOOR) continue;
+        if (townProps.some(p => p.x === xx && p.y === yy)) continue;
+        addProp(xx, yy, "chest", "Chest");
+        placedC++;
+      }
+      // table and bed
+      if (rng() < 0.7) {
+        const tx = randInt(b.x + 1, b.x + b.w - 2);
+        const ty = randInt(b.y + 1, b.y + b.h - 2);
+        addProp(tx, ty, "table", "Table");
+      }
+      if (rng() < 0.6) {
+        const bx = randInt(b.x + 1, b.x + b.w - 2);
+        const by = randInt(b.y + 1, b.y + b.h - 2);
+        addProp(bx, by, "bed", "Bed");
+      }
     }
-    for (let x = 0; x < W; x += 10) {
-      for (let y = 0; y < H; y++) map[y][x] = TILES.FLOOR;
+    for (const b of buildings) fillBuildingInterior(b);
+
+    // Plaza fixtures
+    addProp(plaza.x, plaza.y, "well", "Town Well");
+    addProp(plaza.x - 6, plaza.y - 4, "lamp", "Lamp Post");
+    addProp(plaza.x + 6, plaza.y - 4, "lamp", "Lamp Post");
+    addProp(plaza.x - 6, plaza.y + 4, "lamp", "Lamp Post");
+    addProp(plaza.x + 6, plaza.y + 4, "lamp", "Lamp Post");
+    for (let dx = -4; dx <= 4; dx += 4) {
+      addProp(plaza.x + dx, plaza.y - 3, "bench", "Bench");
+      addProp(plaza.x + dx, plaza.y + 3, "bench", "Bench");
     }
-    // Place a few buildings
-    const buildings = [
-      { x: 6, y: 4, w: 12, h: 8 },
-      { x: 26, y: 3, w: 12, h: 9 },
-      { x: 44, y: 6, w: 12, h: 7 },
-      { x: 8, y: 18, w: 14, h: 9 },
-      { x: 30, y: 16, w: 12, h: 10 },
-      { x: 48, y: 20, w: 10, h: 8 },
-    ];
-    buildings.forEach(b => rect(b.x, b.y, b.w, b.h));
-    // Doors on buildings
-    function placeDoor(b) {
-      const side = randInt(0, 3);
-      let dx = b.x, dy = b.y;
-      if (side === 0) { dx = b.x + ((b.w / 2) | 0); dy = b.y; }
-      if (side === 1) { dx = b.x + b.w - 1; dy = b.y + ((b.h / 2) | 0); }
-      if (side === 2) { dx = b.x + ((b.w / 2) | 0); dy = b.y + b.h - 1; }
-      if (side === 3) { dx = b.x; dy = b.y + ((b.h / 2) | 0); }
-      if (dx >= 0 && dy >= 0 && dx < W && dy < H) map[dy][dx] = TILES.DOOR;
-      return { x: dx, y: dy };
+    for (let i = -4; i <= 4; i += 4) {
+      addProp(plaza.x - 8, plaza.y + i, "stall", "Market Stall");
+      addProp(plaza.x + 8, plaza.y + i, "stall", "Market Stall");
     }
-    shops = [];
-    const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn"];
-    for (let i = 0; i < Math.min(shops.length + 4, buildings.length); i++) {
-      const d = placeDoor(buildings[i]);
-      shops.push({ x: d.x, y: d.y, type: "shop", name: shopNames[i % shopNames.length] });
+    if (rng() < 0.35) addProp(plaza.x + 1, plaza.y, "fountain", "Fountain");
+    // Small park corners with trees
+    for (let t = 0; t < 16; t++) {
+      const tx = plaza.x + randInt(-10, 10);
+      const ty = plaza.y + randInt(-8, 8);
+      addProp(tx, ty, "tree", "Tree");
     }
 
-    // Town NPCs (peaceful)
+    // Town NPCs around plaza and along main road, avoid player adjacency
     npcs = [];
-    const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
     const lines = [
       "Welcome to our town.",
       "Shops are marked with S.",
       "Rest your feet a while.",
       "The dungeon is dangerous.",
       "Buy supplies before you go.",
+      "Lovely day on the plaza.",
+      "Care for a drink at the well?",
     ];
-    for (let i = 0; i < 6; i++) {
-      const ox = randInt(-6, 6), oy = randInt(-4, 4);
-      const x = Math.max(1, Math.min(W - 2, plaza.x + ox));
-      const y = Math.max(1, Math.min(H - 2, plaza.y + oy));
-      if (map[y][x] !== TILES.FLOOR) continue;
+    let placed = 0, tries = 0;
+    while (placed < 12 && tries++ < 500) {
+      const onRoad = rng() < 0.4;
+      let x, y;
+      if (onRoad) {
+        // sample near main road y = gate.y or x = plaza.x
+        if (rng() < 0.5) { y = gate.y; x = randInt(2, W - 3); }
+        else { x = plaza.x; y = randInt(2, H - 3); }
+      } else {
+        const ox = randInt(-10, 10), oy = randInt(-8, 8);
+        x = Math.max(1, Math.min(W - 2, plaza.x + ox));
+        y = Math.max(1, Math.min(H - 2, plaza.y + oy));
+      }
+      if (map[y][x] !== TILES.FLOOR && map[y][x] !== TILES.DOOR) continue;
       if (x === player.x && y === player.y) continue;
-      npcs.push({ x, y, name: `Villager ${i + 1}`, lines });
+      if (manhattan(player.x, player.y, x, y) <= 1) continue;
+      if (npcs.some(n => n.x === x && n.y === y)) continue;
+      if (townProps.some(p => p.x === x && p.y === y)) continue;
+      npcs.push({ x, y, name: `Villager ${placed + 1}`, lines });
+      placed++;
     }
 
-    // Town is fully visible
+    // Visibility
     seen = Array.from({ length: H }, () => Array(W).fill(true));
     visible = Array.from({ length: H }, () => Array(W).fill(true));
     enemies = [];
@@ -829,6 +1017,64 @@
     player.y = (H / 2) | 0;
   }
 
+  function isFreeTownFloor(x, y) {
+    if (!inBounds(x, y)) return false;
+    if (map[y][x] !== TILES.FLOOR && map[y][x] !== TILES.DOOR) return false;
+    if (x === player.x && y === player.y) return false;
+    if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
+    if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y)) return false;
+    return true;
+  }
+
+  function manhattan(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
+
+  function clearAdjacentNPCsAroundPlayer() {
+    // Ensure the four cardinal neighbors around the player are not all occupied by NPCs
+    const neighbors = [
+      { x: player.x + 1, y: player.y },
+      { x: player.x - 1, y: player.y },
+      { x: player.x, y: player.y + 1 },
+      { x: player.x, y: player.y - 1 },
+    ];
+    // If any neighbor has an NPC, remove up to two to keep space
+    for (const pos of neighbors) {
+      const idx = npcs.findIndex(n => n.x === pos.x && n.y === pos.y);
+      if (idx !== -1) {
+        npcs.splice(idx, 1);
+      }
+    }
+  }
+
+  function spawnGateGreeters(count = 4) {
+    if (!townExitAt) return;
+    const dirs = [
+      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+      { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 }
+    ];
+    const names = ["Ava", "Borin", "Cora", "Darin", "Eda", "Finn", "Goro", "Hana"];
+    const lines = [
+      "Welcome to our town.",
+      "Shops are marked with S.",
+      "Stay as long as you like.",
+      "The plaza is at the center.",
+    ];
+    let placed = 0;
+    // two rings around the gate
+    for (let ring = 1; ring <= 2 && placed < count; ring++) {
+      for (const d of dirs) {
+        const x = townExitAt.x + d.dx * ring;
+        const y = townExitAt.y + d.dy * ring;
+        if (isFreeTownFloor(x, y) && manhattan(player.x, player.y, x, y) > 1) {
+          const name = names[randInt(0, names.length - 1)];
+          npcs.push({ x, y, name, lines });
+          placed++;
+          if (placed >= count) break;
+        }
+      }
+    }
+    clearAdjacentNPCsAroundPlayer();
+  }
+
   function enterTownIfOnTile() {
     if (mode !== "world" || !world) return false;
     const WT = window.World && World.TILES;
@@ -840,6 +1086,8 @@
       generateTown();
       ensureTownSpawnClear();
       townExitAt = { x: player.x, y: player.y };
+      // Place a few greeters near the gate so the entrance isn't empty
+      spawnGateGreeters(4);
       log("You enter the town. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.", "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
@@ -1135,11 +1383,67 @@
   }
 
   
+  function interactTownProps() {
+    if (mode !== "town") return false;
+    const candidates = [];
+    const coords = [
+      { x: player.x, y: player.y },
+      { x: player.x + 1, y: player.y },
+      { x: player.x - 1, y: player.y },
+      { x: player.x, y: player.y + 1 },
+      { x: player.x, y: player.y - 1 },
+    ];
+    for (const c of coords) {
+      const p = townProps.find(p => p.x === c.x && p.y === c.y);
+      if (p) candidates.push(p);
+    }
+    if (!candidates.length) return false;
+    const p = candidates[0];
+    switch (p.type) {
+      case "well":
+        log("You draw some cool water from the well. Refreshing.", "good");
+        break;
+      case "fountain":
+        log("You watch the fountain for a moment. You feel calmer.", "info");
+        break;
+      case "bench":
+        log("You sit on the bench and rest a moment.", "info");
+        break;
+      case "lamp":
+        log("The lamp flickers warmly.", "info");
+        break;
+      case "stall":
+        log("A vendor waves: 'Fresh wares soon!'", "notice");
+        break;
+      case "tree":
+        log("A leafy tree offers a bit of shade.", "info");
+        break;
+      case "fireplace":
+        log("You warm your hands by the fireplace.", "info");
+        break;
+      case "table":
+        log("A sturdy wooden table. Nothing of note on it.", "info");
+        break;
+      case "bed":
+        log("Looks comfy, but now is not the time to sleep.", "info");
+        break;
+      case "chest":
+        log("The chest is locked.", "warn");
+        break;
+      default:
+        log("There's nothing special here.");
+    }
+    requestDraw();
+    return true;
+  }
+
   function lootCorpse() {
     if (isDead) return;
     if (mode === "town") {
-      // Talk in town mode
-      talkNearbyNPC();
+      // Interact with props first, then attempt to talk to an NPC
+      if (interactTownProps()) return;
+      if (talkNearbyNPC()) return;
+      log("Nothing to do here.");
       return;
     }
     if (mode === "world") {
@@ -1538,6 +1842,51 @@
     // No fallback here: AI behavior is defined in ai.js
   }
 
+  function townNPCsAct() {
+    if (mode !== "town" || !Array.isArray(npcs) || npcs.length === 0) return;
+    const dirs = [
+      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
+    ];
+    // create occupancy set including props and player
+    const occ = new Set();
+    occ.add(`${player.x},${player.y}`);
+    for (const n of npcs) occ.add(`${n.x},${n.y}`);
+    if (Array.isArray(townProps)) for (const p of townProps) occ.add(`${p.x},${p.y}`);
+
+    // shuffle order
+    const idxs = npcs.map((_, i) => i);
+    for (let i = idxs.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const tmp = idxs[i]; idxs[i] = idxs[j]; idxs[j] = tmp;
+    }
+
+    for (const i of idxs) {
+      const n = npcs[i];
+      if (rng() >= 0.5) continue; // ~50% chance to attempt movement
+      // shuffle directions
+      const order = [0,1,2,3];
+      for (let k = order.length - 1; k > 0; k--) {
+        const j = Math.floor(rng() * (k + 1));
+        const tmp = order[k]; order[k] = order[j]; order[j] = tmp;
+      }
+      for (const oi of order) {
+        const d = dirs[oi];
+        const nx = n.x + d.dx, ny = n.y + d.dy;
+        // don't crowd the player
+        if (manhattan(player.x, player.y, nx, ny) <= 1) continue;
+        if (!inBounds(nx, ny)) continue;
+        if (map[ny][nx] !== TILES.FLOOR && map[ny][nx] !== TILES.DOOR) continue;
+        const key = `${nx},${ny}`;
+        if (occ.has(key)) continue;
+        // move
+        occ.delete(`${n.x},${n.y}`);
+        n.x = nx; n.y = ny;
+        occ.add(key);
+        break;
+      }
+    }
+  }
+
   function occupied(x, y) {
     if (player.x === x && player.y === y) return true;
     return enemies.some(e => e.x === x && e.y === y);
@@ -1568,6 +1917,8 @@
       }
       // clamp corpse list length
       if (corpses.length > 50) corpses = corpses.slice(-50);
+    } else if (mode === "town") {
+      townNPCsAct();
     }
 
     recomputeFOV();
