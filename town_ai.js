@@ -92,7 +92,7 @@
     q.push(start);
     seenB.add(key(start.x, start.y));
     let found = null;
-    const MAX_NODES = 1200;
+    const MAX_NODES = 5000;
 
     let nodes = 0;
     while (q.length && nodes < MAX_NODES) {
@@ -458,6 +458,15 @@
       }
     }
 
+    // Night-time routing: build a relaxed occupancy that ignores other NPCs to let residents thread through crowds
+    const occRelaxed = new Set();
+    occRelaxed.add(`${player.x},${player.y}`);
+    if (Array.isArray(townProps)) {
+      for (const p of townProps) {
+        if (blockingProps.has(p.type)) occRelaxed.add(`${p.x},${p.y}`);
+      }
+    }
+
     const t = ctx.time;
     const minutes = t ? (t.hours * 60 + t.minutes) : 12 * 60;
     const phase = (t && t.phase === "night") ? "evening"
@@ -578,11 +587,11 @@
             n._sleeping = true;
             continue;
           }
-          // Otherwise route via door and inside
-          if (routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget)) continue;
+          // Otherwise route via door and inside (use relaxed occupancy to cut through crowds)
+          if (routeIntoBuilding(ctx, occRelaxed, n, n._home.building, sleepTarget)) continue;
           // If already inside but not at target, small interior jiggle toward target
           if (insideNow) {
-            stepTowards(ctx, occ, n, sleepTarget.x, sleepTarget.y);
+            stepTowards(ctx, occRelaxed, n, sleepTarget.x, sleepTarget.y);
             continue;
           }
         } else if (phase === "day") {
