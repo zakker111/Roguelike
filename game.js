@@ -35,6 +35,12 @@
   let tavern = null;         // tavern info: { building:{x,y,w,h,door}, door:{x,y} }
   let townTick = 0;          // simple turn counter for town routines
 
+  // World/town/dungeon transition anchors
+  let townExitAt = null;     // gate position inside town used to exit back to overworld
+  let worldReturnPos = null; // overworld position to return to after leaving town/dungeon
+  let dungeonExitAt = null;  // dungeon tile to return to overworld
+  let cameFromWorld = false; // whether we entered dungeon from overworld
+
   // Global time-of-day cycle (shared across modes)
   // We model a 24h day (1440 minutes). One full day spans CYCLE_TURNS turns.
   const DAY_MINUTES = 24 * 60;    // 1440
