@@ -30,6 +30,9 @@
   let npcs = [];             // simple NPCs for town mode: { x, y, name, lines:[] }
   let shops = [];            // shops in town mode: [{x,y,type,name}]
   let townProps = [];        // interactive town props: [{x,y,type,name}]
+  let townBuildings = [];    // town buildings: [{x,y,w,h,door:{x,y}}]
+  let townPlaza = null;      // central plaza coordinates {x,y}
+  let townTick = 0;          // simple turn counter for town routines
   let cameFromWorld = false; // true if current dungeon was entered from world
   let worldReturnPos = null; // { x, y } to return to when exiting dungeon or town
   let dungeonExitAt = null;  // { x, y } tile in dungeon floor 1 acting as exit back to world
@@ -760,6 +763,7 @@
 
     // Central plaza (rectangle)
     const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
+    townPlaza = { x: plaza.x, y: plaza.y };
     const plazaW = 14, plazaH = 12;
     for (let yy = (plaza.y - (plazaH / 2)) | 0; yy <= (plaza.y + (plazaH / 2)) | 0; yy++) {
       for (let xx = (plaza.x - (plazaW / 2)) | 0; xx <= (plaza.x + (plazaW / 2)) | 0; xx++) {
@@ -842,6 +846,15 @@
       if (inBounds(pick.x, pick.y)) map[pick.y][pick.x] = TILES.DOOR;
       return pick;
     }
+    function getExistingDoor(b) {
+      const cds = candidateDoors(b);
+      for (const d of cds) {
+        if (inBounds(d.x, d.y) && map[d.y][d.x] === TILES.DOOR) return { x: d.x, y: d.y };
+      }
+      // ensure and return if none
+      const dd = ensureDoor(b);
+      return { x: dd.x, y: dd.y };
+    }
 
     shops = [];
     const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn", "Fletcher", "Herbalist", "Fishmonger"];
@@ -922,6 +935,12 @@
       }
     }
     for (const b of buildings) placeWindowsOnBuilding(b);
+
+    // Store buildings globally with their doors for NPC homes/routines
+    townBuildings = buildings.map(b => {
+      const door = getExistingDoor(b);
+      return { x: b.x, y: b.y, w: b.w, h: b.h, door };
+    });
 
     // Props in plaza and parks + building interiors
     townProps = [];
@@ -1901,46 +1920,104 @@
 
   function townNPCsAct() {
     if (mode !== "town" || !Array.isArray(npcs) || npcs.length === 0) return;
-    const dirs = [
-      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
-    ];
-    // create occupancy set including props and player
+
+    const isWalkTown = (x, y) => inBounds(x, y) && (map[y][x] === TILES.FLOOR || map[y][x] === TILES.DOOR);
     const occ = new Set();
     occ.add(`${player.x},${player.y}`);
     for (const n of npcs) occ.add(`${n.x},${n.y}`);
     if (Array.isArray(townProps)) for (const p of townProps) occ.add(`${p.x},${p.y}`);
 
-    // shuffle order
-    const idxs = npcs.map((_, i) => i);
-    for (let i = idxs.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      const tmp = idxs[i]; idxs[i] = idxs[j]; idxs[j] = tmp;
+    const phase = (() => {
+      const t = townTick % 360; // simple day cycle
+      if (t < 120) return "morning";   // at home
+      if (t < 270) return "day";       // out and about
+      return "evening";                // head home
+    })();
+
+    function randomInteriorInBuilding(b) {
+      const spots = [];
+      for (let y = b.y + 1; y < b.y + b.h - 1; y++) {
+        for (let x = b.x + 1; x < b.x + b.w - 1; x++) {
+          if (map[y][x] !== TILES.FLOOR) continue;
+          if (townProps.some(p => p.x === x && p.y === y)) continue;
+          spots.push({ x, y });
+        }
+      }
+      if (!spots.length) return { x: b.door.x, y: b.door.y };
+      return spots[randInt(0, spots.length - 1)];
     }
 
-    for (const i of idxs) {
-      const n = npcs[i];
-      if (rng() >= 0.5) continue; // ~50% chance to attempt movement
-      // shuffle directions
-      const order = [0,1,2,3];
-      for (let k = order.length - 1; k > 0; k--) {
-        const j = Math.floor(rng() * (k + 1));
-        const tmp = order[k]; order[k] = order[j]; order[j] = tmp;
+    function ensureHome(n) {
+      if (n._home) return;
+      if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
+      const b = townBuildings[randInt(0, townBuildings.length - 1)];
+      const pos = randomInteriorInBuilding(b);
+      n._home = { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y } };
+      // optional work spot: pick near plaza or a random shop door
+      if (shops && shops.length && rng() < 0.6) {
+        const s = shops[randInt(0, shops.length - 1)];
+        n._work = { x: s.x, y: s.y };
+      } else if (townPlaza) {
+        // pick a tile near plaza
+        n._work = { x: Math.max(1, Math.min(map[0].length - 2, townPlaza.x + randInt(-2, 2))),
+                    y: Math.max(1, Math.min(map.length - 2, townPlaza.y + randInt(-2, 2))) };
       }
-      for (const oi of order) {
-        const d = dirs[oi];
+    }
+
+    function stepTowards(n, tx, ty) {
+      if (typeof tx !== "number" || typeof ty !== "number") return false;
+      const dirs = [
+        { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
+      ];
+      // order by distance improvement
+      dirs.sort((a, b) => (Math.abs((n.x + a.dx) - tx) + Math.abs((n.y + a.dy) - ty)) -
+                          (Math.abs((n.x + b.dx) - tx) + Math.abs((n.y + b.dy) - ty)));
+      for (const d of dirs) {
         const nx = n.x + d.dx, ny = n.y + d.dy;
-        // don't crowd the player
-        if (manhattan(player.x, player.y, nx, ny) <= 1) continue;
-        if (!inBounds(nx, ny)) continue;
-        if (map[ny][nx] !== TILES.FLOOR && map[ny][nx] !== TILES.DOOR) continue;
+        if (!isWalkTown(nx, ny)) continue;
+        if (manhattan(player.x, player.y, nx, ny) <= 0) continue; // don't step onto player
         const key = `${nx},${ny}`;
         if (occ.has(key)) continue;
         // move
         occ.delete(`${n.x},${n.y}`);
         n.x = nx; n.y = ny;
         occ.add(key);
-        break;
+        return true;
       }
+      return false;
+    }
+
+    // shuffle iteration to reduce collisions
+    const order = npcs.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+    }
+
+    for (const idx of order) {
+      const n = npcs[idx];
+      ensureHome(n);
+
+      // Small idle chance
+      if (rng() < 0.25) continue;
+
+      let target = null;
+      if (phase === "morning") {
+        target = n._home ? { x: n._home.x, y: n._home.y } : null;
+      } else if (phase === "day") {
+        target = (n._work || townPlaza);
+      } else {
+        target = n._home ? { x: n._home.x, y: n._home.y } : null;
+      }
+
+      // If no target, random drift
+      if (!target) {
+        stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+        continue;
+      }
+
+      // Greedy step towards target
+      stepTowards(n, target.x, target.y);
     }
   }
 
@@ -1975,6 +2052,7 @@
       // clamp corpse list length
       if (corpses.length > 50) corpses = corpses.slice(-50);
     } else if (mode === "town") {
+      townTick = (townTick + 1) | 0;
       townNPCsAct();
     }
 

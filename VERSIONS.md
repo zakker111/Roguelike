@@ -9,6 +9,15 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v1.1 — Town Life: Homes and Routines
+- Added: Each villager is assigned a home inside a building; also gets a daytime destination (plaza or shop).
+- Changed: NPCs follow a simple daily routine driven by a turn counter:
+  - Morning: stay at or head to their home.
+  - Day: wander toward plaza/shops.
+  - Evening: return home.
+- Changed: Movement uses a simple greedy step toward the target while avoiding props, other NPCs, and the player.
+- Dev: Exposed townBuildings and townPlaza to support routines; townTick increments each town turn.
+
 v1.0.2 — Fewer Windows Per Building
 - Changed: Window placement limited per building and spaced out to avoid clusters.
   - Total windows per building are capped (1–3 based on size).
