@@ -427,7 +427,7 @@
 
       // Pets
       if (n.isPet) {
-        if (ctx.rng() &lt; _cfg.petSkipProb) continue; // configurable movement frequency
+        if (ctx.rng() < _cfg.petSkipProb) continue; // configurable movement frequency
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
@@ -458,7 +458,7 @@
         if (handled) continue;
 
         // idle jiggle (configurable)
-        if (ctx.rng() &lt; _cfg.shopkeeperIdleSkipProb) continue;
+        if (ctx.rng() < _cfg.shopkeeperIdleSkipProb) continue;
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
@@ -484,7 +484,7 @@
           const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
           if (target) {
             if (n.x === target.x && n.y === target.y) {
-              if (ctx.rng() &lt; _cfg.residentAtTargetSkipProb) continue; // configurable micro-move frequency
+              if (ctx.rng() < _cfg.residentAtTargetSkipProb) continue; // configurable micro-move frequency
               stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
               continue;
             }
@@ -507,7 +507,7 @@
       }
 
       // Generic NPCs (configurable activity)
-      if (ctx.rng() &lt; _cfg.genericSkipProb) continue;
+      if (ctx.rng() < _cfg.genericSkipProb) continue;
       let target = null;
       if (phase === "morning") target = n._home ? { x: n._home.x, y: n._home.y } : null;
       else if (phase === "day") target = (n._work || ctx.townPlaza);
