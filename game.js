@@ -907,10 +907,6 @@
     enemies = [];
     corpses = [];
     decals = [];
-  }, () => Array(W).fill(true));
-    enemies = [];
-    corpses = [];
-    decals = [];
   }
 
   function ensureTownSpawnClear() {
