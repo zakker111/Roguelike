@@ -242,7 +242,16 @@
         if (t === TILES.GRASS) return rng() < 0.05;
         return false;
       },
-      (x, y) => { map[y][x] = TILES.DUNGEON; dungeons.push({ x, y }); }
+      (x, y) => {
+        map[y][x] = TILES.DUNGEON;
+        // Assign a dungeon level (difficulty) and size
+        // Level: 1..5 skewed toward mid-range
+        const level = 1 + ((rng() * rng() * 5) | 0); // bias toward 1..3
+        // Size: small/medium/large
+        const roll = rng();
+        const size = roll < 0.4 ? "small" : roll < 0.8 ? "medium" : "large";
+        dungeons.push({ x, y, level, size });
+      }
     );
 
     // Ensure connectivity between all towns and dungeons by carving walkable paths

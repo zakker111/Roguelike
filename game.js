@@ -41,6 +41,7 @@
   let worldReturnPos = null; // overworld position to return to after leaving town/dungeon
   let dungeonExitAt = null;  // dungeon tile to return to overworld
   let cameFromWorld = false; // whether we entered dungeon from overworld
+  let currentDungeon = null; // info for current dungeon entrance: { x,y, level, size }
 
   // Global time-of-day cycle (shared across modes)
   // We model a 24h day (1440 minutes). One full day spans CYCLE_TURNS turns.
@@ -139,6 +140,8 @@
       npcs,
       shops,
       townProps,
+      dungeon: currentDungeon,
+      dungeonInfo: currentDungeon,
       time: getClock(),
       requestDraw,
       log,
@@ -564,7 +567,11 @@
         } catch (_) {}
       }
       updateUI();
-      log(`You descend to floor ${depth}.`);
+      if (mode === "dungeon") {
+        log("You explore the dungeon.");
+      } else {
+        log(`You descend to floor ${depth}.`);
+      }
       requestDraw();
       return;
     }
@@ -581,7 +588,11 @@
     recomputeFOV();
     updateCamera();
     updateUI();
-    log(`You descend to floor ${depth}.`);
+    if (mode === "dungeon") {
+      log("You explore the dungeon.");
+    } else {
+      log(`You descend to floor ${depth}.`);
+    }
     requestDraw();
   }
 
@@ -1510,12 +1521,33 @@
     if (t && World.TILES && t === World.TILES.DUNGEON) {
       cameFromWorld = true;
       worldReturnPos = { x: player.x, y: player.y };
+
+      // Look up dungeon info (level, size) from world POIs
+      currentDungeon = null;
+      try {
+        if (Array.isArray(world.dungeons)) {
+          currentDungeon = world.dungeons.find(d => d.x === player.x && d.y === player.y) || null;
+        }
+      } catch (_) { currentDungeon = null; }
+      // Default fallback
+      if (!currentDungeon) currentDungeon = { x: player.x, y: player.y, level: 1, size: "medium" };
+
+      // Set dungeon difficulty = level; we keep 'floor' equal to dungeon level for UI/logic
+      floor = Math.max(1, currentDungeon.level | 0);
+      window.floor = floor;
+
       mode = "dungeon";
-      floor = 1; window.floor = floor;
       generateLevel(floor);
-      // Mark current dungeon start as exit point back to world
+
+      // Mark current dungeon start as exit point back to world; also ensure a visible "hole" (use STAIRS tile)
       dungeonExitAt = { x: player.x, y: player.y };
-      log("You enter the dungeon.", "notice");
+      if (inBounds(player.x, player.y)) {
+        map[player.y][player.x] = TILES.STAIRS;
+        if (Array.isArray(seen) && seen[player.y]) seen[player.y][player.x] = true;
+        if (Array.isArray(visible) && visible[player.y]) visible[player.y][player.x] = true;
+      }
+
+      log(`You enter the dungeon (Difficulty ${floor}${currentDungeon.size ? ", " + currentDungeon.size : ""}).`, "notice");
       return true;
     }
     return false;
@@ -1603,14 +1635,18 @@
       return;
     }
 
+    if (mode === "dungeon") {
+      // No multi-level dungeons anymore
+      log("This dungeon has no deeper levels. Return to the entrance (the hole '>') and press G to leave.", "info");
+      return;
+    }
+
     const here = map[player.y][player.x];
-    // Restrict descending to STAIRS tile only for clarity
+    // Restrict descending to STAIRS tile only for clarity (world-only use removed)
     if (here === TILES.STAIRS) {
-      floor += 1;
-      window.floor = floor;
-      generateLevel(floor);
+      log("There is nowhere to go down from here.", "info");
     } else {
-      log("You need to stand on the staircase (brown tile marked with '>') to descend.");
+      log("You need to stand on the staircase (brown tile marked with '>').", "info");
     }
   }
 
@@ -1913,6 +1949,27 @@
     if (mode === "world") {
       log("Nothing to loot here.");
       return;
+    }
+    if (mode === "dungeon") {
+      // Using G on the entrance hole returns to the overworld
+      if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y && cameFromWorld && world) {
+        // Return to world immediately
+        mode = "world";
+        enemies = [];
+        corpses = [];
+        decals = [];
+        map = world.map;
+        if (worldReturnPos) {
+          player.x = worldReturnPos.x;
+          player.y = worldReturnPos.y;
+        }
+        recomputeFOV();
+        updateCamera();
+        updateUI();
+        log("You climb back to the overworld.", "notice");
+        requestDraw();
+        return;
+      }
     }
     if (window.Loot && typeof Loot.lootHere === "function") {
       Loot.lootHere(getCtx());
