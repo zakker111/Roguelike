@@ -871,7 +871,7 @@
     // Add windows to building walls (block movement but allow FOV to pass)
     function placeWindowsOnBuilding(b) {
       const sides = [
-        { // top edge
+        { // top edge (exclude corners)
           pts: Array.from({ length: Math.max(0, b.w - 2) }, (_, i) => ({ x: b.x + 1 + i, y: b.y }))
         },
         { // bottom
@@ -884,19 +884,41 @@
           pts: Array.from({ length: Math.max(0, b.h - 2) }, (_, i) => ({ x: b.x + b.w - 1, y: b.y + 1 + i }))
         }
       ];
+
+      // Collect all candidate wall tiles (not doors)
+      let candidates = [];
       for (const s of sides) {
-        // choose up to 2 window locations per side
-        let candidates = s.pts.filter(p => inBounds(p.x, p.y) && map[p.y][p.x] === TILES.WALL);
-        // avoid door tiles
-        candidates = candidates.filter(p => map[p.y][p.x] !== TILES.DOOR);
-        if (candidates.length === 0) continue;
-        const count = rng() < 0.5 ? 1 : 2;
-        for (let k = 0; k < count && candidates.length; k++) {
-          const idx = randInt(0, candidates.length - 1);
-          const p = candidates[idx];
-          map[p.y][p.x] = TILES.WINDOW;
-          candidates.splice(idx, 1);
+        for (const p of s.pts) {
+          if (!inBounds(p.x, p.y)) continue;
+          const t = map[p.y][p.x];
+          if (t !== TILES.WALL) continue;
+          candidates.push(p);
         }
+      }
+      if (candidates.length === 0) return;
+
+      // Limit total windows per building based on size, with a small cap.
+      const limit = Math.min(3, Math.max(1, Math.floor((b.w + b.h) / 10)));
+
+      // Helper: avoid adjacent windows
+      const placed = [];
+      const isAdjacent = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) <= 1;
+
+      // Randomly place up to 'limit' windows without adjacency
+      let attempts = 0;
+      while (placed.length < limit && candidates.length > 0 && attempts++ < candidates.length * 2) {
+        const idx = randInt(0, candidates.length - 1);
+        const p = candidates[idx];
+        // Skip if adjacent to existing window
+        if (placed.some(q => isAdjacent(p, q))) {
+          candidates.splice(idx, 1);
+          continue;
+        }
+        // Place window
+        map[p.y][p.x] = TILES.WINDOW;
+        placed.push(p);
+        // Remove neighbors to keep spacing
+        candidates = candidates.filter(c => !isAdjacent(c, p));
       }
     }
     for (const b of buildings) placeWindowsOnBuilding(b);

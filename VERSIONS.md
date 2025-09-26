@@ -9,6 +9,11 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v1.0.2 — Fewer Windows Per Building
+- Changed: Window placement limited per building and spaced out to avoid clusters.
+  - Total windows per building are capped (1–3 based on size).
+  - Adjacent window tiles are avoided to reduce visual clutter.
+
 v1.0.1 — Town FOV Rendering + See-through Windows
 - UI: Town renderer now respects FOV: unseen tiles are hidden; seen-but-not-currently-visible tiles are dimmed, matching dungeon behavior.
 - Changed: Props/NPCs/shop glyphs in towns render only when their tiles are currently visible.
