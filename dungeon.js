@@ -218,24 +218,27 @@
   }
 
   function randomFloor(ctx, rooms) {
-    const { MAP_COLS, MAP_ROWS, COLS, ROWS, TILES, player } = ctx;
-    const rCols = (typeof MAP_COLS === "number" && MAP_COLS > 0) ? MAP_COLS : COLS;
-    const rRows = (typeof MAP_ROWS === "number" && MAP_ROWS > 0) ? MAP_ROWS : ROWS;
+    const { TILES, player } = ctx;
+    // Use the actual generated map dimensions to avoid mismatches with MAP_ROWS/COLS
+    const rRows = Array.isArray(ctx.map) ? ctx.map.length : 0;
+    const rCols = (rRows > 0 && Array.isArray(ctx.map[0])) ? ctx.map[0].length : 0;
+    const inBounds = (x, y) => x >= 0 && y >= 0 && x < rCols && y < rRows;
+
     let x, y;
     let tries = 0;
     do {
-      x = ctx.randInt(1, rCols - 2);
-      y = ctx.randInt(1, rRows - 2);
+      x = ctx.randInt(1, Math.max(1, rCols - 2));
+      y = ctx.randInt(1, Math.max(1, rRows - 2));
       tries++;
       if (tries > 500) {
         // Scan for any suitable floor tile as a safe fallback
-        for (let yy = 1; yy < rRows - 1; yy++) {
-          for (let xx = 1; xx < rCols - 1; xx++) {
-            if (!ctx.inBounds(xx, yy)) continue;
+        for (let yy = 1; yy < Math.max(1, rRows - 1); yy++) {
+          for (let xx = 1; xx < Math.max(1, rCols - 1); xx++) {
+            if (!inBounds(xx, yy)) continue;
             if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
             if ((xx === player.x && yy === player.y)) continue;
             if (ctx.startRoomRect && inRect(xx, yy, ctx.startRoomRect)) continue;
-            if (ctx.enemies.some(e => e.x === xx && e.y === yy)) continue;
+            if (Array.isArray(ctx.enemies) && ctx.enemies.some(e => e.x === xx && e.y === yy)) continue;
             return { x: xx, y: yy };
           }
         }
@@ -243,28 +246,30 @@
         const neigh = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1},{x:1,y:1},{x:1,y:-1},{x:-1,y:1},{x:-1,y:-1}];
         for (const d of neigh) {
           const xx = player.x + d.x, yy = player.y + d.y;
-          if (!ctx.inBounds(xx, yy)) continue;
+          if (!inBounds(xx, yy)) continue;
           if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
           if (ctx.startRoomRect && inRect(xx, yy, ctx.startRoomRect)) continue;
-          if (ctx.enemies.some(e => e.x === xx && e.y === yy)) continue;
+          if (Array.isArray(ctx.enemies) && ctx.enemies.some(e => e.x === xx && e.y === yy)) continue;
           return { x: xx, y: yy };
         }
         // Final fallback: any floor tile that's not the player's tile
-        for (let yy = 1; yy < rRows - 1; yy++) {
-          for (let xx = 1; xx < rCols - 1; xx++) {
-            if (!ctx.inBounds(xx, yy)) continue;
+        for (let yy = 1; yy < Math.max(1, rRows - 1); yy++) {
+          for (let xx = 1; xx < Math.max(1, rCols - 1); xx++) {
+            if (!inBounds(xx, yy)) continue;
             if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
             if ((xx === player.x && yy === player.y)) continue;
             return { x: xx, y: yy };
           }
         }
         // Give up: place one step to the right if in bounds
-        return { x: Math.min(rCols - 2, Math.max(1, player.x + 1)), y: Math.min(rRows - 2, Math.max(1, player.y)) };
+        const fx = Math.min(Math.max(1, rCols - 2), Math.max(1, player.x + 1));
+        const fy = Math.min(Math.max(1, rRows - 2), Math.max(1, player.y));
+        return { x: fx, y: fy };
       }
-    } while (!(ctx.inBounds(x, y) && ctx.map[y][x] === TILES.FLOOR) ||
+    } while (!(inBounds(x, y) && ctx.map[y][x] === TILES.FLOOR) ||
              (x === player.x && y === player.y) ||
              (ctx.startRoomRect && inRect(x, y, ctx.startRoomRect)) ||
-             ctx.enemies.some(e => e.x === x && e.y === y));
+             (Array.isArray(ctx.enemies) && ctx.enemies.some(e => e.x === x && e.y === y)));
     return { x, y };
   }
 
