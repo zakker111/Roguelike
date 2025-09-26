@@ -1052,15 +1052,28 @@
     // Place a welcome sign near the town gate
     addSignNear(gate.x, gate.y, `Welcome to ${townName}`);
 
-    // Fill building interiors with fireplaces, tables, beds, chests
+    // Fill building interiors with richer furnishing
     function fillBuildingInterior(b) {
-      // fireplace: pick an inner tile adjacent to an outer wall
+      const insideFloor = (x, y) => (x > b.x && x < b.x + b.w - 1 && y > b.y && y < b.y + b.h - 1 && map[y][x] === TILES.FLOOR);
+      const occupiedTile = (x, y) => townProps.some(p => p.x === x && p.y === y);
+      const placeRandom = (type, name, attempts = 60) => {
+        let t = 0;
+        while (t++ < attempts) {
+          const xx = randInt(b.x + 1, b.x + b.w - 2);
+          const yy = randInt(b.y + 1, b.y + b.h - 2);
+          if (!insideFloor(xx, yy)) continue;
+          if (occupiedTile(xx, yy)) continue;
+          addProp(xx, yy, type, name);
+          return true;
+        }
+        return false;
+      };
+
+      // Fireplace near walls
       const borderAdj = [];
       for (let yy = b.y + 1; yy < b.y + b.h - 1; yy++) {
         for (let xx = b.x + 1; xx < b.x + b.w - 1; xx++) {
-          // inside only
-          if (map[yy][xx] !== TILES.FLOOR) continue;
-          // adjacent to wall?
+          if (!insideFloor(xx, yy)) continue;
           if (map[yy - 1][xx] === TILES.WALL || map[yy + 1][xx] === TILES.WALL || map[yy][xx - 1] === TILES.WALL || map[yy][xx + 1] === TILES.WALL) {
             borderAdj.push({ x: xx, y: yy });
           }
@@ -1070,28 +1083,42 @@
         const f = borderAdj[randInt(0, borderAdj.length - 1)];
         addProp(f.x, f.y, "fireplace", "Fireplace");
       }
-      // chests
-      const chestCount = rng() < 0.4 ? 2 : 1;
+
+      // Beds: larger homes get more beds
+      const area = b.w * b.h;
+      const bedTarget = Math.max(1, Math.min(3, Math.floor(area / 24))); // 1..3
+      let bedsPlaced = 0, triesBed = 0;
+      while (bedsPlaced < bedTarget && triesBed++ < 120) {
+        if (placeRandom("bed", "Bed")) bedsPlaced++;
+      }
+
+      // Tables and chairs (simple)
+      if (rng() < 0.8) placeRandom("table", "Table");
+      let chairCount = rng() < 0.5 ? 2 : 1;
+      while (chairCount-- > 0) placeRandom("chair", "Chair");
+
+      // Storage: chests, crates, barrels
+      let chestCount = rng() < 0.5 ? 2 : 1;
       let placedC = 0, triesC = 0;
-      while (placedC < chestCount && triesC++ < 50) {
-        const xx = randInt(b.x + 1, b.x + b.w - 2);
-        const yy = randInt(b.y + 1, b.y + b.h - 2);
-        if (map[yy][xx] !== TILES.FLOOR) continue;
-        if (townProps.some(p => p.x === xx && p.y === yy)) continue;
-        addProp(xx, yy, "chest", "Chest");
-        placedC++;
+      while (placedC < chestCount && triesC++ < 80) {
+        if (placeRandom("chest", "Chest")) placedC++;
       }
-      // table and bed
-      if (rng() < 0.7) {
-        const tx = randInt(b.x + 1, b.x + b.w - 2);
-        const ty = randInt(b.y + 1, b.y + b.h - 2);
-        addProp(tx, ty, "table", "Table");
+      let crates = rng() < 0.6 ? 2 : 1;
+      while (crates-- > 0) placeRandom("crate", "Crate");
+      let barrels = rng() < 0.6 ? 2 : 1;
+      while (barrels-- > 0) placeRandom("barrel", "Barrel");
+
+      // Shelves against inner walls
+      const shelfSpots = borderAdj.slice();
+      let shelves = Math.min(2, Math.floor(area / 30));
+      while (shelves-- > 0 && shelfSpots.length) {
+        const s = shelfSpots.splice(randInt(0, shelfSpots.length - 1), 1)[0];
+        if (!occupiedTile(s.x, s.y)) addProp(s.x, s.y, "shelf", "Shelf");
       }
-      if (rng() < 0.6) {
-        const bx = randInt(b.x + 1, b.x + b.w - 2);
-        const by = randInt(b.y + 1, b.y + b.h - 2);
-        addProp(bx, by, "bed", "Bed");
-      }
+
+      // Plants/rugs for variety
+      if (rng() < 0.5) placeRandom("plant", "Plant");
+      if (rng() < 0.5) placeRandom("rug", "Rug");
     }
     for (const b of buildings) fillBuildingInterior(b);
 
@@ -1259,9 +1286,13 @@
         const s = shops[randInt(0, shops.length - 1)];
         return { x: s.x, y: s.y };
       };
+      const bedsFor = (building) => (townProps || []).filter(p => p.type === "bed" && p.x > building.x && p.x < building.x + building.w - 1 && p.y > building.y && p.y < building.y + building.h - 1);
 
       for (const b of picked) {
-        const residentCount = 1 + (rng() < 0.5 ? 1 : 0); // 1–2
+        // Scale residents by building area (cap 3)
+        const area = b.w * b.h;
+        const residentCount = Math.max(1, Math.min(3, Math.floor(area / 30))) + (rng() < 0.4 ? 1 : 0);
+        const beds = bedsFor(b);
         for (let i = 0; i < residentCount; i++) {
           const pos = randomInteriorIn(b);
           if (!pos) continue;
@@ -1275,12 +1306,18 @@
             const sd = pickRandomShopDoor();
             if (sd) errand = sd;
           }
+          // Prefer sleeping on a bed if available
+          let sleepSpot = null;
+          if (beds.length) {
+            const bidx = randInt(0, beds.length - 1);
+            sleepSpot = { x: beds[bidx].x, y: beds[bidx].y };
+          }
           npcs.push({
             x: pos.x, y: pos.y,
-            name: `Resident`,
+            name: rng() < 0.2 ? `Child` : `Resident`,
             lines: linesHome,
             isResident: true,
-            _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y } },
+            _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: sleepSpot },
             _work: errand, // daytime errand target (bench or shop door)
           });
         }
@@ -1801,11 +1838,29 @@
       case "table":
         log("A sturdy wooden table. Nothing of note on it.", "info");
         break;
+      case "chair":
+        log("A simple wooden chair.", "info");
+        break;
       case "bed":
-        log("Looks comfy, but now is not the time to sleep.", "info");
+        log("Looks comfy. Residents sleep here at night.", "info");
         break;
       case "chest":
         log("The chest is locked.", "warn");
+        break;
+      case "crate":
+        log("A wooden crate. Might hold supplies.", "info");
+        break;
+      case "barrel":
+        log("A barrel. Smells of ale.", "info");
+        break;
+      case "shelf":
+        log("A shelf with assorted goods.", "info");
+        break;
+      case "plant":
+        log("A potted plant adds some life.", "info");
+        break;
+      case "rug":
+        log("A cozy rug warms the floor.", "info");
         break;
       case "sign":
         log(`Sign: ${p.name || "Sign"}`, "info");
