@@ -837,9 +837,32 @@
     if (!Array.isArray(shops)) return null;
     return shops.find(s => s.x === x && s.y === y) || null;
   }
-  function isShopOpenNow() {
-    const phase = getClock().phase;
-    return phase === "day"; // open only during day hours
+  // Shop schedule helpers
+  function minutesOfDay(h, m = 0) { return ((h | 0) * 60 + (m | 0)) % DAY_MINUTES; }
+  function isOpenAt(shop, minutes) {
+    if (!shop || typeof shop.openMin !== "number" || typeof shop.closeMin !== "number") return false;
+    const o = shop.openMin, c = shop.closeMin;
+    if (o === c) return false; // closed all day (edge)
+    if (c > o) return minutes >= o && minutes < c; // same-day window
+    // overnight window (e.g., 18:00 -> 06:00)
+    return minutes >= o || minutes < c;
+  }
+  function isShopOpenNow(shop = null) {
+    const t = getClock();
+    const minutes = t.hours * 60 + t.minutes;
+    if (!shop) {
+      // Fallback: original behavior when no shop provided
+      return t.phase === "day";
+    }
+    return isOpenAt(shop, minutes);
+  }
+  function shopScheduleStr(shop) {
+    if (!shop) return "";
+    const h2 = (min) => {
+      const hh = ((min / 60) | 0) % 24;
+      return String(hh).padStart(2, "0");
+    };
+    return `Opens ${h2(shop.openMin)}:00, closes ${h2(shop.closeMin)}:00`;
   }
   function minutesUntil(hourTarget /*0-23*/, minuteTarget = 0) {
     const t = getClock();
@@ -1018,13 +1041,32 @@
 
     shops = [];
     const shopNames = ["Blacksmith", "Apothecary", "Armorer", "Trader", "Inn", "Fletcher", "Herbalist", "Fishmonger"];
+
+    function pickShopHours(name) {
+      const n = (name || "").toLowerCase();
+      // Defaults
+      let openH = 8, closeH = 18;
+      if (n.includes("blacksmith") || n.includes("armorer") || n.includes("fletcher") || n.includes("trader") || n.includes("fishmonger")) {
+        openH = 8; closeH = 17;
+      } else if (n.includes("apothecary") || n.includes("herbalist")) {
+        openH = 9; closeH = 18;
+      } else if (n.includes("inn")) {
+        openH = 18; closeH = 6; // overnight
+      } else if (n.includes("tavern")) {
+        openH = 16; closeH = 1; // evening to after midnight
+      }
+      return { openMin: minutesOfDay(openH), closeMin: minutesOfDay(closeH) };
+    }
+
     // Pick buildings closest to plaza for shops
     const scored = buildings.map(b => ({ b, d: Math.abs((b.x + (b.w / 2)) - plaza.x) + Math.abs((b.y + (b.h / 2)) - plaza.y) }));
     scored.sort((a, b) => a.d - b.d);
     const shopCount = Math.min(8, scored.length);
     for (let i = 0; i < shopCount; i++) {
       const door = ensureDoor(scored[i].b);
-      shops.push({ x: door.x, y: door.y, type: "shop", name: shopNames[i % shopNames.length] });
+      const name = shopNames[i % shopNames.length];
+      const sched = pickShopHours(name);
+      shops.push({ x: door.x, y: door.y, type: "shop", name, openMin: sched.openMin, closeMin: sched.closeMin });
     }
     // Ensure every non-shop building also has at least one door
     const shopDoorSet = new Set(shops.map(s => `${s.x},${s.y}`));
@@ -1218,7 +1260,10 @@
       tavern = { building: best, door };
 
       // Add "Tavern" as a shop marker at the door so it's easy to find
-      shops.push({ x: door.x, y: door.y, type: "shop", name: "Tavern" });
+      (function addTavernShop() {
+        const sched = (typeof minutesOfDay === "function") ? { openMin: minutesOfDay(16), closeMin: minutesOfDay(1) } : { openMin: 16 * 60, closeMin: 1 * 60 };
+        shops.push({ x: door.x, y: door.y, type: "shop", name: "Tavern", openMin: sched.openMin, closeMin: sched.closeMin });
+      })();
       // Place a street sign near the tavern door
       addSignNear(door.x, door.y, "Tavern");
 
@@ -1766,7 +1811,7 @@
         onMove: (dx, dy) => tryMovePlayer(dx, dy),
         onWait: () => turn(),
         onLoot: () => doAction(),
-        onDescend: () => descendIfPossiblele(),
+        onDescend: () => descendIfPossible(),
         adjustFov: (delta) => adjustFov(delta),
       });
     }
@@ -1990,9 +2035,30 @@
       case "rug":
         log("A cozy rug warms the floor.", "info");
         break;
-      case "sign":
-        log(`Sign: ${p.name || "Sign"}`, "info");
+      case "sign": {
+        const title = p.name || "Sign";
+        // If this sign is next to a shop door, show its schedule
+        const near = [
+          { x: p.x, y: p.y },
+          { x: p.x + 1, y: p.y },
+          { x: p.x - 1, y: p.y },
+          { x: p.x, y: p.y + 1 },
+          { x: p.x, y: p.y - 1 },
+        ];
+        let shop = null;
+        for (const c of near) {
+          const s = shopAt(c.x, c.y);
+          if (s) { shop = s; break; }
+        }
+        if (shop) {
+          const openNow = isShopOpenNow(shop);
+          const sched = shopScheduleStr(shop);
+          log(`Sign: ${title}. ${sched} — ${openNow ? "Open now." : "Closed now."}`, openNow ? "good" : "warn");
+        } else {
+          log(`Sign: ${title}`, "info");
+        }
         break;
+      }
       default:
         log("There's nothing special here.");
     }
@@ -2006,13 +2072,19 @@
       // Interact with shop if standing on a shop door
       const s = shopAt(player.x, player.y);
       if (s) {
+        const openNow = isShopOpenNow(s);
+        const schedule = shopScheduleStr(s);
         const sname = (s.name || "").toLowerCase();
+
         if (sname === "inn") {
+          log(`Inn: ${schedule}. ${openNow ? "Open now." : "Closed now."}`, openNow ? "good" : "warn");
+          // Inns provide resting; allow rest regardless to keep QoL
           log("You enter the inn.", "notice");
           restAtInn();
           return;
         }
         if (sname === "tavern") {
+          log(`Tavern: ${schedule}. ${openNow ? "Open now." : "Closed now."}`, openNow ? "good" : "warn");
           const phase = getClock().phase;
           if (phase === "night" || phase === "dusk") {
             log("You step into the tavern. It's lively inside.", "notice");
@@ -2024,10 +2096,11 @@
           requestDraw();
           return;
         }
-        if (isShopOpenNow()) {
+
+        if (openNow) {
           log(`The ${s.name || "shop"} is open. (Trading coming soon)`, "notice");
         } else {
-          log(`The ${s.name || "shop"} is closed. Come back during the day.`, "warn");
+          log(`The ${s.name || "shop"} is closed. ${schedule}`, "warn");
         }
         requestDraw();
         return;
