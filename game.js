@@ -1063,10 +1063,27 @@
     scored.sort((a, b) => a.d - b.d);
     const shopCount = Math.min(8, scored.length);
     for (let i = 0; i < shopCount; i++) {
-      const door = ensureDoor(scored[i].b);
+      const b = scored[i].b;
+      const door = ensureDoor(b);
       const name = shopNames[i % shopNames.length];
       const sched = pickShopHours(name);
-      shops.push({ x: door.x, y: door.y, type: "shop", name, openMin: sched.openMin, closeMin: sched.closeMin });
+      // Compute a default "inside" work tile just past the door
+      const inward = [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }];
+      let inside = null;
+      for (const dxy of inward) {
+        const ix = door.x + dxy.dx, iy = door.y + dxy.dy;
+        if (ix > b.x && ix < b.x + b.w - 1 && iy > b.y && iy < b.y + b.h - 1 && map[iy][ix] === TILES.FLOOR) {
+          inside = { x: ix, y: iy };
+          break;
+        }
+      }
+      // Fallback to a tile near the geometric center of the building
+      if (!inside) {
+        const cx = Math.max(b.x + 1, Math.min(b.x + b.w - 2, Math.floor(b.x + b.w / 2)));
+        const cy = Math.max(b.y + 1, Math.min(b.y + b.h - 2, Math.floor(b.y + b.h / 2)));
+        inside = { x: cx, y: cy };
+      }
+      shops.push({ x: door.x, y: door.y, type: "shop", name, openMin: sched.openMin, closeMin: sched.closeMin, building: { x: b.x, y: b.y, w: b.w, h: b.h, door: { x: door.x, y: door.y } }, inside });
     }
     // Ensure every non-shop building also has at least one door
     const shopDoorSet = new Set(shops.map(s => `${s.x},${s.y}`));
@@ -1353,6 +1370,18 @@
         }
         return { x, y };
       }
+      function randomInteriorSpot(b) {
+        const spots = [];
+        for (let y = b.y + 1; y < b.y + b.h - 1; y++) {
+          for (let x = b.x + 1; x < b.x + b.w - 1; x++) {
+            if (map[y][x] !== TILES.FLOOR) continue;
+            if (townProps.some(p => p.x === x && p.y === y)) continue;
+            spots.push({ x, y });
+          }
+        }
+        if (!spots.length) return null;
+        return spots[randInt(0, spots.length - 1)];
+      }
       for (const s of shops) {
         // Add a readable sign near each shop door
         addSignNear(s.x, s.y, s.name || "Shop");
@@ -1360,13 +1389,29 @@
         // Avoid overlap with already-placed keepers
         if (npcs.some(n => n.x === spot.x && n.y === spot.y)) continue;
         const name = s.name ? `${s.name} Keeper` : "Shopkeeper";
+
+        // Decide housing: some shopkeepers live in their shop
+        const livesInShop = rng() < 0.4 && s.building;
+        let home = null;
+        if (livesInShop && s.building) {
+          const h = randomInteriorSpot(s.building) || s.inside || { x: s.x, y: s.y };
+          home = { building: s.building, x: h.x, y: h.y, door: { x: s.x, y: s.y } };
+        } else if (Array.isArray(townBuildings) && townBuildings.length) {
+          const b = townBuildings[randInt(0, townBuildings.length - 1)];
+          const pos = randomInteriorSpot(b) || { x: b.door.x, y: b.door.y };
+          home = { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y } };
+        }
+
         npcs.push({
           x: spot.x, y: spot.y,
           name,
           lines: keeperLines,
           isShopkeeper: true,
           _work: { x: s.x, y: s.y },
+          _workInside: s.inside || { x: s.x, y: s.y },
           _shopRef: s,
+          _home: home,
+          _livesAtShop: !!livesInShop,
         });
       }
     })();
@@ -1374,10 +1419,14 @@
     // Residents inside buildings: 1–2 per selected buildings, scaled by building count
     (function spawnBuildingResidents() {
       if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
-      const pickCount = Math.min(Math.max(3, Math.floor(townBuildings.length / 4)), 10); // scale with buildings
+      // Populate roughly half of buildings with 1-3 residents, not just a small subset
+      const targetFraction = 0.6;
+      const pickCount = Math.min(townBuildings.length, Math.max(4, Math.floor(townBuildings.length * targetFraction)));
       const shuffled = townBuildings.slice();
       for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = t; }
       const picked = shuffled.slice(0, pickCount);
+      const remaining = shuffled.slice(pickCount);
+
       const linesHome = [
         "Home sweet home.",
         "A quiet day indoors.",
@@ -1409,6 +1458,7 @@
       };
       const bedsFor = (building) => (townProps || []).filter(p => p.type === "bed" && p.x > building.x && p.x < building.x + building.w - 1 && p.y > building.y && p.y < building.y + building.h - 1);
 
+      // Primary residents
       for (const b of picked) {
         // Scale residents by building area (cap 3)
         const area = b.w * b.h;
@@ -1440,6 +1490,23 @@
             isResident: true,
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: sleepSpot },
             _work: errand, // daytime errand target (bench or shop door)
+          });
+        }
+      }
+
+      // Lightly populate a portion of remaining buildings with a single resident to avoid emptiness
+      for (const b of remaining) {
+        if (rng() < 0.45) {
+          const pos = randomInteriorIn(b);
+          if (!pos) continue;
+          if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
+          npcs.push({
+            x: pos.x, y: pos.y,
+            name: `Resident`,
+            lines: linesHome,
+            isResident: true,
+            _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: null },
+            _work: (rng() < 0.5 && shops && shops.length) ? { x: shops[0].x, y: shops[0].y } : (townPlaza ? { x: townPlaza.x, y: townPlaza.y } : null),
           });
         }
       }
@@ -2677,16 +2744,48 @@
         continue;
       }
 
-      // Shopkeepers: stand at their shop door while the shop is open; go home otherwise.
+      // Shopkeepers: follow real schedules; arrive before open, leave after close, work inside
       if (n.isShopkeeper) {
         const shop = n._shopRef || null;
-        const openNow = shop ? isShopOpenNow(shop) : (phase === "day");
-        const target = openNow ? (n._work || (n._home ? { x: n._home.x, y: n._home.y } : null))
-                               : (n._home ? { x: n._home.x, y: n._home.y } : (n._work || null));
-        // If already at target, mostly idle
+        const t = getClock();
+        const minutes = t.hours * 60 + t.minutes;
+        const o = shop ? shop.openMin : minutesOfDay(8);
+        const c = shop ? shop.closeMin : minutesOfDay(18);
+        // Compute "within range" for wrap-around close times
+        const inWindow = (start, end, m) => {
+          return (end > start) ? (m >= start && m < end) : (m >= start || m < end);
+        };
+        // Arrive up to 60 minutes before open, leave up to 30 minutes after close
+        const arriveStart = (o - 60 + DAY_MINUTES) % DAY_MINUTES;
+        const leaveEnd = (c + 30) % DAY_MINUTES;
+        const shouldBeAtWorkZone = inWindow(arriveStart, leaveEnd, minutes);
+        const openNow = shop ? isOpenAt(shop, minutes) : (phase === "day");
+
+        // Decide target: before open -> door; open -> inside; after close buffer -> door; off hours -> home
+        let target = null;
+        if (shouldBeAtWorkZone) {
+          if (openNow && n._workInside) {
+            // When open, prefer standing/roaming inside the shop
+            // Occasionally drift inside the building
+            if (rng() < 0.15 && shop && shop.building) {
+              const bx = randInt(shop.building.x + 1, shop.building.x + shop.building.w - 2);
+              const by = randInt(shop.building.y + 1, shop.building.y + shop.building.h - 2);
+              target = { x: bx, y: by };
+            } else {
+              target = { x: n._workInside.x, y: n._workInside.y };
+            }
+          } else if (n._work) {
+            target = { x: n._work.x, y: n._work.y }; // wait at the door pre-open and near-close
+          }
+        } else {
+          // Off hours: head home
+          if (n._home) target = { x: n._home.x, y: n._home.y };
+        }
+
+        // If already at target, mostly idle with tiny wiggle
         if (target && n.x === target.x && n.y === target.y) {
-          if (rng() < 0.92) continue; // high idle chance at post
-          // tiny wiggle around spot
+          const idleChance = openNow ? 0.90 : 0.92;
+          if (rng() < idleChance) continue;
           stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
           continue;
         }
