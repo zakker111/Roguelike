@@ -331,7 +331,29 @@
           if (!visible[n.y] || !visible[n.y][n.x]) continue;
           const screenX = (n.x - startX) * TILE - tileOffsetX;
           const screenY = (n.y - startY) * TILE - tileOffsetY;
-          drawGlyphScreen(ctx2d, screenX, screenY, "n", "#b4f9f8", TILE);
+          // Pets: cat 'c', dog 'd'; others 'n'
+          let glyph = "n";
+          if (n.isPet) {
+            if (n.kind === "cat") glyph = "c";
+            else if (n.kind === "dog") glyph = "d";
+          }
+          drawGlyphScreen(ctx2d, screenX, screenY, glyph, "#b4f9f8", TILE);
+
+          // Sleeping indicator: animated z/Z above sleeping NPCs
+          if (n._sleeping) {
+            const t = Date.now();
+            const phase = Math.floor(t / 600) % 2; // toggle every ~0.6s
+            const zChar = phase ? "Z" : "z";
+            // gentle bobbing
+            const bob = Math.sin(t / 500) * 3;
+            const zx = screenX + TILE / 2 + 8;          // slight right offset
+            const zy = screenY + TILE / 2 - TILE * 0.6 + bob; // above head
+            ctx2d.save();
+            ctx2d.globalAlpha = 0.9;
+            ctx2d.fillStyle = "#a3be8c";
+            ctx2d.fillText(zChar, zx, zy);
+            ctx2d.restore();
+          }
         }
       }
 

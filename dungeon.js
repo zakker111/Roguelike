@@ -13,8 +13,14 @@
 (function () {
   function generateLevel(ctx, depth) {
     const { ROWS, COLS, MAP_ROWS, MAP_COLS, TILES, player } = ctx;
-    const rRows = (typeof MAP_ROWS === "number" && MAP_ROWS > 0) ? MAP_ROWS : ROWS;
-    const rCols = (typeof MAP_COLS === "number" && MAP_COLS > 0) ? MAP_COLS : COLS;
+
+    // Size/difficulty config from ctx.dungeon
+    const sizeStr = (ctx.dungeon && ctx.dungeon.size) ? String(ctx.dungeon.size).toLowerCase() : "medium";
+    const sizeFactor = sizeStr === "small" ? 0.6 : sizeStr === "large" ? 1.0 : 0.85;
+    const baseRows = (typeof MAP_ROWS === "number" && MAP_ROWS > 0) ? MAP_ROWS : ROWS;
+    const baseCols = (typeof MAP_COLS === "number" && MAP_COLS > 0) ? MAP_COLS : COLS;
+    const rRows = Math.max(20, Math.floor(baseRows * sizeFactor));
+    const rCols = Math.max(30, Math.floor(baseCols * sizeFactor));
 
     // Init arrays/state
     ctx.map = Array.from({ length: rRows }, () => Array(rCols).fill(TILES.WALL));
@@ -24,21 +30,27 @@
     ctx.corpses = [];
     ctx.isDead = false;
 
-    
+    // Use RNG helpers from ctx
+    const ri = ctx.randInt;
+    const ch = ctx.chance;
+
+    // Rooms
     const rooms = [];
-    const roomAttempts = 80;
+    const area = rRows * rCols;
+    const roomAttempts = Math.max(40, Math.floor(area / 120)); // scale with map size
     for (let i = 0; i < roomAttempts; i++) {
-      const w = ctx.randInt(4, 9);
-      const h = ctx.randInt(3, 7);
-      const x = ctx.randInt(1, rCols - w - 2);
-      const y = ctx.randInt(1, rRows - h - 2);
+      // Room sizes scale gently with dungeon size
+      const w = ri(Math.max(4, Math.floor(6 * sizeFactor)), Math.max(7, Math.floor(10 * sizeFactor)));
+      const h = ri(Math.max(3, Math.floor(5 * sizeFactor)), Math.max(6, Math.floor(8 * sizeFactor)));
+      const x = ri(1, Math.max(1, rCols - w - 2));
+      const y = ri(1, Math.max(1, rRows - h - 2));
       const rect = { x, y, w, h };
       if (rooms.every(r => !intersect(rect, r))) {
         rooms.push(rect);
         carveRoom(ctx.map, TILES, rect);
       }
     }
-    
+
     if (rooms.length === 0) {
       const w = Math.min(9, Math.max(4, Math.floor(rCols / 5) || 6));
       const h = Math.min(7, Math.max(3, Math.floor(rRows / 5) || 4));
@@ -50,11 +62,11 @@
     }
     rooms.sort((a, b) => a.x - b.x);
 
-    
+    // Corridors between room centers + a few extras
     for (let i = 1; i < rooms.length; i++) {
       const a = center(rooms[i - 1]);
       const b = center(rooms[i]);
-      if (ctx.chance(0.5)) {
+      if (ch(0.5)) {
         hCorridor(ctx.map, TILES, a.x, b.x, a.y);
         vCorridor(ctx.map, TILES, a.y, b.y, b.x);
       } else {
@@ -63,15 +75,14 @@
       }
     }
 
-    
     const extra = Math.max(0, Math.floor(rooms.length * 0.3));
     for (let n = 0; n < extra; n++) {
-      const i = ctx.randInt(0, rooms.length - 1);
-      const j = ctx.randInt(0, rooms.length - 1);
+      const i = ri(0, rooms.length - 1);
+      const j = ri(0, rooms.length - 1);
       if (i === j) continue;
       const a = center(rooms[i]);
       const b = center(rooms[j]);
-      if (ctx.chance(0.5)) {
+      if (ch(0.5)) {
         hCorridor(ctx.map, TILES, a.x, b.x, a.y);
         vCorridor(ctx.map, TILES, a.y, b.y, b.x);
       } else {
@@ -80,11 +91,11 @@
       }
     }
 
-    
+    // Start placement
     const start = center(rooms[0] || { x: 2, y: 2, w: 1, h: 1 });
     ctx.startRoomRect = rooms[0] || { x: start.x, y: start.y, w: 1, h: 1 };
 
-    
+    // Place player at start
     if (depth === 1) {
       const PlayerMod = (ctx.Player || (typeof window !== "undefined" ? window.Player : null));
       if (PlayerMod && typeof PlayerMod.resetFromDefaults === "function") {
@@ -101,24 +112,21 @@
       ctx.player.x = start.x;
       ctx.player.y = start.y;
 
-      
       const DI = (ctx.DungeonItems || (typeof window !== "undefined" ? window.DungeonItems : null));
       if (DI && typeof DI.placeChestInStartRoom === "function") {
         DI.placeChestInStartRoom(ctx);
       }
     } else {
-      
       player.x = start.x;
       player.y = start.y;
     }
 
-    
+    // Optional: place an additional exit tile far from start (acts as a landmark; descending is disabled in game logic)
     let endRoomIndex = rooms.length - 1;
     if (rooms.length > 1 && ctx.startRoomRect) {
       const sc = center(ctx.startRoomRect);
       const endC = center(rooms[endRoomIndex]);
       if (inRect(endC.x, endC.y, ctx.startRoomRect)) {
-        
         let best = endRoomIndex;
         let bestD = -1;
         for (let k = 0; k < rooms.length; k++) {
@@ -134,7 +142,7 @@
     const STAIRS = typeof TILES.STAIRS === "number" ? TILES.STAIRS : TILES.DOOR;
     ctx.map[end.y][end.x] = STAIRS;
 
-    // Ensure at least one staircase exists as a safety net
+    // Safety net: ensure at least one stairs exists
     let stairsCount = 0;
     for (let yy = 1; yy < rRows - 1; yy++) {
       for (let xx = 1; xx < rCols - 1; xx++) {
@@ -142,7 +150,6 @@
       }
     }
     if (stairsCount === 0) {
-      // Place fallback stairs far from the player and outside the start room when possible
       let best = null, bestD = -1;
       for (let yy = 1; yy < rRows - 1; yy++) {
         for (let xx = 1; xx < rCols - 1; xx++) {
@@ -156,14 +163,16 @@
       ctx.map[best.y][best.x] = STAIRS;
     }
 
-    
-    const enemyCount = 12 + Math.floor(depth * 2);
+    // Enemies scale with dungeon difficulty and size
+    const sizeMult = sizeStr === "small" ? 0.7 : sizeStr === "large" ? 1.2 : 1.0;
+    const baseEnemies = 6 + Math.floor(depth * 3);
+    const enemyCount = Math.max(4, Math.floor(baseEnemies * sizeMult));
     const makeEnemy = ctx.enemyFactory || defaultEnemyFactory;
     for (let i = 0; i < enemyCount; i++) {
       const p = randomFloor(ctx, rooms);
       ctx.enemies.push(makeEnemy(p.x, p.y, depth, ctx.rng));
     }
-    // Announce total enemies on this floor via flavor module (optional)
+
     const FlavorMod = (ctx.Flavor || (typeof window !== "undefined" ? window.Flavor : null));
     if (FlavorMod && typeof FlavorMod.announceFloorEnemyCount === "function") {
       try { FlavorMod.announceFloorEnemyCount(ctx); } catch (_) {}
@@ -209,24 +218,27 @@
   }
 
   function randomFloor(ctx, rooms) {
-    const { MAP_COLS, MAP_ROWS, COLS, ROWS, TILES, player } = ctx;
-    const rCols = (typeof MAP_COLS === "number" && MAP_COLS > 0) ? MAP_COLS : COLS;
-    const rRows = (typeof MAP_ROWS === "number" && MAP_ROWS > 0) ? MAP_ROWS : ROWS;
+    const { TILES, player } = ctx;
+    // Use the actual generated map dimensions to avoid mismatches with MAP_ROWS/COLS
+    const rRows = Array.isArray(ctx.map) ? ctx.map.length : 0;
+    const rCols = (rRows > 0 && Array.isArray(ctx.map[0])) ? ctx.map[0].length : 0;
+    const inBounds = (x, y) => x >= 0 && y >= 0 && x < rCols && y < rRows;
+
     let x, y;
     let tries = 0;
     do {
-      x = ctx.randInt(1, rCols - 2);
-      y = ctx.randInt(1, rRows - 2);
+      x = ctx.randInt(1, Math.max(1, rCols - 2));
+      y = ctx.randInt(1, Math.max(1, rRows - 2));
       tries++;
       if (tries > 500) {
         // Scan for any suitable floor tile as a safe fallback
-        for (let yy = 1; yy < rRows - 1; yy++) {
-          for (let xx = 1; xx < rCols - 1; xx++) {
-            if (!ctx.inBounds(xx, yy)) continue;
+        for (let yy = 1; yy < Math.max(1, rRows - 1); yy++) {
+          for (let xx = 1; xx < Math.max(1, rCols - 1); xx++) {
+            if (!inBounds(xx, yy)) continue;
             if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
             if ((xx === player.x && yy === player.y)) continue;
             if (ctx.startRoomRect && inRect(xx, yy, ctx.startRoomRect)) continue;
-            if (ctx.enemies.some(e => e.x === xx && e.y === yy)) continue;
+            if (Array.isArray(ctx.enemies) && ctx.enemies.some(e => e.x === xx && e.y === yy)) continue;
             return { x: xx, y: yy };
           }
         }
@@ -234,28 +246,30 @@
         const neigh = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1},{x:1,y:1},{x:1,y:-1},{x:-1,y:1},{x:-1,y:-1}];
         for (const d of neigh) {
           const xx = player.x + d.x, yy = player.y + d.y;
-          if (!ctx.inBounds(xx, yy)) continue;
+          if (!inBounds(xx, yy)) continue;
           if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
           if (ctx.startRoomRect && inRect(xx, yy, ctx.startRoomRect)) continue;
-          if (ctx.enemies.some(e => e.x === xx && e.y === yy)) continue;
+          if (Array.isArray(ctx.enemies) && ctx.enemies.some(e => e.x === xx && e.y === yy)) continue;
           return { x: xx, y: yy };
         }
         // Final fallback: any floor tile that's not the player's tile
-        for (let yy = 1; yy < rRows - 1; yy++) {
-          for (let xx = 1; xx < rCols - 1; xx++) {
-            if (!ctx.inBounds(xx, yy)) continue;
+        for (let yy = 1; yy < Math.max(1, rRows - 1); yy++) {
+          for (let xx = 1; xx < Math.max(1, rCols - 1); xx++) {
+            if (!inBounds(xx, yy)) continue;
             if (ctx.map[yy][xx] !== TILES.FLOOR) continue;
             if ((xx === player.x && yy === player.y)) continue;
             return { x: xx, y: yy };
           }
         }
         // Give up: place one step to the right if in bounds
-        return { x: Math.min(rCols - 2, Math.max(1, player.x + 1)), y: Math.min(rRows - 2, Math.max(1, player.y)) };
+        const fx = Math.min(Math.max(1, rCols - 2), Math.max(1, player.x + 1));
+        const fy = Math.min(Math.max(1, rRows - 2), Math.max(1, player.y));
+        return { x: fx, y: fy };
       }
-    } while (!(ctx.inBounds(x, y) && ctx.map[y][x] === TILES.FLOOR) ||
+    } while (!(inBounds(x, y) && ctx.map[y][x] === TILES.FLOOR) ||
              (x === player.x && y === player.y) ||
              (ctx.startRoomRect && inRect(x, y, ctx.startRoomRect)) ||
-             ctx.enemies.some(e => e.x === x && e.y === y));
+             (Array.isArray(ctx.enemies) && ctx.enemies.some(e => e.x === x && e.y === y)));
     return { x, y };
   }
 
