@@ -236,6 +236,117 @@
       }
       this.updateSeedUI();
 
+      // Town NPC tunables controls
+      (function initTownTunables(UIref) {
+        const get = (k, d) => {
+          try { const v = localStorage.getItem(k); if (v != null) return JSON.parse(v); } catch (_) {}
+          return d;
+        };
+        const set = (k, v) => {
+          try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {}
+        };
+        const cfgDefaults = {
+          petSkipProb: 0.4,
+          shopkeeperIdleSkipProb: 0.6,
+          residentAtTargetSkipProb: 0.5,
+          genericSkipProb: 0.1,
+          doorNudgeOnBlock: true,
+          pathFailNudge: true
+        };
+        // Read current from TownAI if available, fallback to localStorage or defaults
+        let base = cfgDefaults;
+        try { if (window.TownAI && typeof TownAI.getConfig === "function") base = Object.assign(base, TownAI.getConfig()); } catch (_) {}
+        const cfg = {
+          petSkipProb: get("TOWN_PET_SKIP", base.petSkipProb),
+          shopkeeperIdleSkipProb: get("TOWN_SHOP_IDLE_SKIP", base.shopkeeperIdleSkipProb),
+          residentAtTargetSkipProb: get("TOWN_RES_AT_TARGET_SKIP", base.residentAtTargetSkipProb),
+          genericSkipProb: get("TOWN_GENERIC_SKIP", base.genericSkipProb),
+          doorNudgeOnBlock: get("TOWN_DOOR_NUDGE", base.doorNudgeOnBlock),
+          pathFailNudge: get("TOWN_PATH_NUDGE", base.pathFailNudge),
+        };
+
+        // Elements
+        const els = {
+          petS: document.getElementById("god-town-pet-skip"),
+          petV: document.getElementById("god-town-pet-skip-val"),
+          shopS: document.getElementById("god-town-shopkeeper-idle-skip"),
+          shopV: document.getElementById("god-town-shopkeeper-idle-skip-val"),
+          resS: document.getElementById("god-town-resident-skip"),
+          resV: document.getElementById("god-town-resident-skip-val"),
+          genS: document.getElementById("god-town-generic-skip"),
+          genV: document.getElementById("god-town-generic-skip-val"),
+          doorNudge: document.getElementById("god-town-door-nudge"),
+          pathNudge: document.getElementById("god-town-path-nudge"),
+        };
+
+        // Helpers
+        const clamp01 = v => Math.max(0, Math.min(1, Number(v) || 0));
+        const apply = () => {
+          try {
+            if (window.TownAI && typeof TownAI.configure === "function") {
+              TownAI.configure({
+                petSkipProb: cfg.petSkipProb,
+                shopkeeperIdleSkipProb: cfg.shopkeeperIdleSkipProb,
+                residentAtTargetSkipProb: cfg.residentAtTargetSkipProb,
+                genericSkipProb: cfg.genericSkipProb,
+                doorNudgeOnBlock: !!cfg.doorNudgeOnBlock,
+                pathFailNudge: !!cfg.pathFailNudge
+              });
+            }
+          } catch (_) {}
+        };
+        const syncInputs = () => {
+          if (els.petS) els.petS.value = String(cfg.petSkipProb);
+          if (els.petV) els.petV.value = String(cfg.petSkipProb);
+          if (els.shopS) els.shopS.value = String(cfg.shopkeeperIdleSkipProb);
+          if (els.shopV) els.shopV.value = String(cfg.shopkeeperIdleSkipProb);
+          if (els.resS) els.resS.value = String(cfg.residentAtTargetSkipProb);
+          if (els.resV) els.resV.value = String(cfg.residentAtTargetSkipProb);
+          if (els.genS) els.genS.value = String(cfg.genericSkipProb);
+          if (els.genV) els.genV.value = String(cfg.genericSkipProb);
+          if (els.doorNudge) els.doorNudge.checked = !!cfg.doorNudgeOnBlock;
+          if (els.pathNudge) els.pathNudge.checked = !!cfg.pathFailNudge;
+        };
+
+        // Init values
+        syncInputs();
+        apply();
+
+        // Bind events (range and numeric linked both ways)
+        function bindPair(slider, numeric, key, storageKey) {
+          if (!slider || !numeric) return;
+          const onChange = (val) => {
+            cfg[key] = clamp01(val);
+            set(storageKey, cfg[key]);
+            syncInputs();
+            apply();
+          };
+          slider.addEventListener("input", () => onChange(slider.value));
+          slider.addEventListener("change", () => onChange(slider.value));
+          numeric.addEventListener("input", () => onChange(numeric.value));
+          numeric.addEventListener("change", () => onChange(numeric.value));
+        }
+        bindPair(els.petS, els.petV, "petSkipProb", "TOWN_PET_SKIP");
+        bindPair(els.shopS, els.shopV, "shopkeeperIdleSkipProb", "TOWN_SHOP_IDLE_SKIP");
+        bindPair(els.resS, els.resV, "residentAtTargetSkipProb", "TOWN_RES_AT_TARGET_SKIP");
+        bindPair(els.genS, els.genV, "genericSkipProb", "TOWN_GENERIC_SKIP");
+
+        if (els.doorNudge) {
+          els.doorNudge.addEventListener("change", () => {
+            cfg.doorNudgeOnBlock = !!els.doorNudge.checked;
+            set("TOWN_DOOR_NUDGE", cfg.doorNudgeOnBlock);
+            apply();
+          });
+        }
+        if (els.pathNudge) {
+          els.pathNudge.addEventListener("change", () => {
+            cfg.pathFailNudge = !!els.pathNudge.checked;
+            set("TOWN_PATH_NUDGE", cfg.pathFailNudge);
+            apply();
+          });
+        }
+      })(this);
+      
       // Delegate equip slot clicks (unequip)
       this.els.equipSlotsEl?.addEventListener("click", (ev) => {
         const span = ev.target.closest("span.name[data-slot]");
