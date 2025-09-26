@@ -246,12 +246,13 @@
     // Residents (initial pass)
     (function spawnResidents() {
       if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
-      const targetFraction = 0.6;
+      // Increase initial coverage to make towns feel lively
+      const targetFraction = 0.85;
       const shuffled = townBuildings.slice();
       for (let i = shuffled.length - 1; i > 0; i--) {
         const j = Math.floor(rng() * (i + 1)); const t = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = t;
       }
-      const pickCount = Math.min(shuffled.length, Math.max(4, Math.floor(shuffled.length * targetFraction)));
+      const pickCount = Math.min(shuffled.length, Math.max(6, Math.floor(shuffled.length * targetFraction)));
       const picked = shuffled.slice(0, pickCount);
       const remaining = shuffled.slice(pickCount);
       const linesHome = ["Home sweet home.","A quiet day indoors.","Just tidying up."];
@@ -271,7 +272,8 @@
 
       for (const b of picked) {
         const area = b.w * b.h;
-        const residentCount = Math.max(1, Math.min(3, Math.floor(area / 30))) + (rng() < 0.4 ? 1 : 0);
+        // More residents per larger building, up to 4, with a 50% chance of +1
+        const residentCount = Math.max(1, Math.min(4, Math.floor(area / 24))) + (rng() < 0.5 ? 1 : 0);
         const bedList = bedsFor(ctx, b);
         for (let i = 0; i < residentCount; i++) {
           const pos = randomInteriorSpot(ctx, b);
@@ -292,18 +294,19 @@
           }
           npcs.push({
             x: pos.x, y: pos.y,
-            name: rng() < 0.2 ? `Child` : `Resident`,
+            name: rng() < 0.25 ? `Child` : `Resident`,
             lines: linesHome,
             isResident: true,
-            _homebound: rng() < 0.5, // a subset prefers staying inside
+            _homebound: rng() < 0.55, // slightly more homebound to keep interiors populated
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: sleepSpot },
             _work: errand,
           });
         }
       }
 
+      // Remaining buildings: higher chance of at least one occupant
       for (const b of remaining) {
-        if (rng() < 0.45) {
+        if (rng() < 0.7) {
           const pos = randomInteriorSpot(ctx, b);
           if (!pos) continue;
           if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
@@ -312,7 +315,7 @@
             name: `Resident`,
             lines: linesHome,
             isResident: true,
-            _homebound: rng() < 0.5,
+            _homebound: rng() < 0.55,
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: null },
             _work: (rng() < 0.5 && shops && shops.length) ? { x: shops[0].x, y: shops[0].y }
                   : (townPlaza ? { x: townPlaza.x, y: townPlaza.y } : null),
@@ -328,8 +331,8 @@
       function buildingKey(b) { return `${b.x},${b.y},${b.w},${b.h}`; }
       for (const b of townBuildings) {
         const key = buildingKey(b);
-        const hasResident = npcs.some(n => n.isResident && n._home && n._home.building && buildingKey(n._home.building) === key);
-        if (!hasResident) {
+        const occupants = npcs.filter(n => n.isResident && n._home && n._home.building && buildingKey(n._home.building) === key);
+        if (occupants.length === 0) {
           const pos = randomInteriorSpot(ctx, b) || { x: Math.max(b.x + 1, Math.min(b.x + b.w - 2, b.door.x)), y: Math.max(b.y + 1, Math.min(b.y + b.h - 2, b.door.y)) };
           if (!pos) continue;
           if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
@@ -348,6 +351,25 @@
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: null },
             _work: errand,
           });
+        } else {
+          // For large buildings, ensure multiple occupants
+          const area = b.w * b.h;
+          const target = Math.max(1, Math.min(4, Math.floor(area / 28)));
+          while (occupants.length < target) {
+            const pos2 = randomInteriorSpot(ctx, b);
+            if (!pos2) break;
+            if (npcs.some(n => n.x === pos2.x && n.y === pos2.y)) break;
+            npcs.push({
+              x: pos2.x, y: pos2.y,
+              name: `Resident`,
+              lines: linesHome,
+              isResident: true,
+              _homebound: rng() < 0.6,
+              _home: { building: b, x: pos2.x, y: pos2.y, door: { x: b.door.x, y: b.door.y }, bed: null },
+              _work: (townPlaza && rng() < 0.4) ? { x: townPlaza.x, y: townPlaza.y } : null,
+            });
+            occupants.push(true);
+          }
         }
       }
     })();

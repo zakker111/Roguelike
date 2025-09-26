@@ -1355,9 +1355,10 @@
       "Care for a drink at the well?",
     ];
     // Scale roaming villagers count by buildings (cap within range)
-    const roamTarget = Math.min(14, Math.max(6, Math.floor((townBuildings?.length || 12) / 2)));
+    // Increase roaming villager density based on number of buildings
+    const roamTarget = Math.min(28, Math.max(12, Math.floor((townBuildings?.length || 12))));
     let placed = 0, tries = 0;
-    while (placed < roamTarget && tries++ < 800) {
+    while (placed < roamTarget && tries++ < 1200) {
       const onRoad = rng() < 0.4;
       let x, y;
       if (onRoad) {
