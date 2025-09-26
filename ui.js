@@ -40,7 +40,7 @@
       this.els.gameOverPanel = document.getElementById("gameover-panel");
       this.els.gameOverSummary = document.getElementById("gameover-summary");
       this.els.restartBtn = document.getElementById("restart-btn");
-      this.els.waitBtn = document.getElementById("wait-bt_coden"new)</;
+      this.els.waitBtn = document.getElementById("wait-btn");
       this.els.invPanel = document.getElementById("inv-panel");
       this.els.invList = document.getElementById("inv-list");
       this.els.equipSlotsEl = document.getElementById("equip-slots");

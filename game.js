@@ -1799,7 +1799,7 @@
     }
     requestDraw();
     return true;
-  </}
+  
 
 
   function lootCorpse() {
