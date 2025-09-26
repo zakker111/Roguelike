@@ -1190,6 +1190,49 @@
       }
     })();
 
+    // Residents inside buildings: 1–2 per selected buildings
+    (function spawnBuildingResidents() {
+      if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
+      const pickCount = Math.min(6, Math.max(2, Math.floor(townBuildings.length / 6)));
+      const picked = townBuildings.slice().sort(() => rng() < 0.5 ? -1 : 1).slice(0, pickCount);
+      const linesHome = [
+        "Home sweet home.",
+        "A quiet day indoors.",
+        "Just tidying up.",
+      ];
+      function randomInteriorIn(b) {
+        const spots = [];
+        for (let y = b.y + 1; y < b.y + b.h - 1; y++) {
+          for (let x = b.x + 1; x < b.x + b.w - 1; x++) {
+            if (map[y][x] !== TILES.FLOOR) continue;
+            if (townProps.some(p => p.x === x && p.y === y)) continue;
+            spots.push({ x, y });
+          }
+        }
+        if (!spots.length) return { x: b.door.x, y: b.door.y };
+        return spots[randInt(0, spots.length - 1)];
+      }
+      for (const b of picked) {
+        const residentCount = 1 + (rng() < 0.5 ? 1 : 0); // 1–2
+        for (let i = 0; i < residentCount; i++) {
+          const pos = randomInteriorIn(b);
+          if (!pos) continue;
+          if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
+          npcs.push({
+            x: pos.x, y: pos.y,
+            name: `Resident`,
+            lines: linesHome,
+            isResident: true,
+            _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y } },
+            // Residents mostly stay home; occasional daytime stroll near plaza
+            _work: (rng() < 0.3 && townPlaza) ? { x: Math.max(1, Math.min(map[0].length - 2, townPlaza.x + randInt(-2, 2))),
+                                                 y: Math.max(1, Math.min(map.length - 2, townPlaza.y + randInt(-2, 2))) }
+                                              : null,
+          });
+        }
+      }
+    })();
+
     const lines = [
       "Welcome to our town.",
       "Shops are marked with S.",
@@ -1200,7 +1243,7 @@
       "Care for a drink at the well?",
     ];
     let placed = 0, tries = 0;
-    while (placed < 12 && tries++ < 500) {
+    while (placed < 8 && tries++ < 500) {
       const onRoad = rng() < 0.4;
       let x, y;
       if (onRoad) {
@@ -1220,6 +1263,29 @@
       npcs.push({ x, y, name: `Villager ${placed + 1}`, lines, _likesTavern: rng() < 0.45 });
       placed++;
     }
+
+    // Pets: small number of cats and dogs roaming around
+    (function spawnPets() {
+      const maxCats = 2, maxDogs = 2;
+      const namesCat = ["Cat", "Mittens", "Whiskers"];
+      const namesDog = ["Dog", "Rover", "Buddy"];
+      function placeFree() {
+        for (let t = 0; t < 200; t++) {
+          const x = randInt(2, W - 3);
+          const y = randInt(2, H - 3);
+          if (isFreeTownFloor(x, y)) return { x, y };
+        }
+        return null;
+      }
+      for (let i = 0; i < maxCats; i++) {
+        const spot = placeFree(); if (!spot) break;
+        npcs.push({ x: spot.x, y: spot.y, name: namesCat[i % namesCat.length], lines: ["Meow."], isPet: true, kind: "cat" });
+      }
+      for (let i = 0; i < maxDogs; i++) {
+        const spot = placeFree(); if (!spot) break;
+        npcs.push({ x: spot.x, y: spot.y, name: namesDog[i % namesDog.length], lines: ["Woof."], isPet: true, kind: "dog" });
+      }
+    })();
 
     // Visibility (start unseen; FOV will reveal)
     seen = Array.from({ length: H }, () => Array(W).fill(false));
@@ -1333,8 +1399,8 @@
       generateTown();
       ensureTownSpawnClear();
       townExitAt = { x: player.x, y: player.y };
-      // Place a few greeters near the gate so the entrance isn't empty
-      spawnGateGreeters(4);
+      // Make entry calmer: reduce greeters to avoid surrounding the player
+      spawnGateGreeters(0);
       log("You enter the town. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.", "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
@@ -2206,6 +2272,13 @@
     for (const idx of order) {
       const n = npcs[idx];
       ensureHome(n);
+
+      // Pets: light roaming with high idle chance; no scheduled targets
+      if (n.isPet) {
+        if (rng() < 0.6) continue;
+        stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+        continue;
+      }
 
       // Shopkeepers: stay stationed at their shop during the day; go home otherwise.
       if (n.isShopkeeper) {
