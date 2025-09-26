@@ -43,7 +43,7 @@
     if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
     // Street props (benches, stalls, lamps, trees, signs, well, fountain) are blocking;
     // interior furniture is non-blocking for movement.
-    const blockingTypes = new Set(["well","fountain","bench","lamp","stall","tree","sign"]);
+    const blockingTypes = new Set(["well","fountain","bench","lamp","stall","tree"]);
     if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y && blockingTypes.has(p.type))) return false;
     return true;
   }
@@ -368,7 +368,7 @@
     occ.add(`${player.x},${player.y}`);
     for (const n of npcs) occ.add(`${n.x},${n.y}`);
     // Only street props block movement; interior furniture should not block.
-    const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree","sign"]);
+    const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree"]);
     if (Array.isArray(townProps)) {
       for (const p of townProps) {
         if (blockingProps.has(p.type)) occ.add(`${p.x},${p.y}`);
