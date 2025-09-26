@@ -23,6 +23,7 @@
       onUnequip: null,
       onDrink: null,
       onRestart: null,
+      onWait: null,
       onGodHeal: null,
       onGodSpawn: null,
       onGodSetFov: null,
@@ -39,6 +40,7 @@
       this.els.gameOverPanel = document.getElementById("gameover-panel");
       this.els.gameOverSummary = document.getElementById("gameover-summary");
       this.els.restartBtn = document.getElementById("restart-btn");
+      this.els.waitBtn = document.getElementById("wait-bt_coden"new)</;
       this.els.invPanel = document.getElementById("inv-panel");
       this.els.invList = document.getElementById("inv-list");
       this.els.equipSlotsEl = document.getElementById("equip-slots");
@@ -147,6 +149,11 @@
       this.els.restartBtn?.addEventListener("click", () => {
         if (typeof this.handlers.onRestart === "function") this.handlers.onRestart();
       });
+      // Wait button (spend one turn)
+      this.els.waitBtn?.addEventListener("click", () => {
+        if (typeof this.handlers.onWait === "function") this.handlers.onWait();
+      });
+
       // GOD panel open + actions
       this.els.godOpenBtn?.addEventListener("click", () => this.showGod());
       this.els.godHealBtn?.addEventListener("click", () => {
@@ -384,12 +391,13 @@
       if (this.els.townExitBtn) this.els.townExitBtn.style.display = "none";
     },
 
-    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSpawnStairs, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed, onTownExit } = {}) {
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onWait, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSpawnStairs, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed, onTownExit } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
       if (typeof onDrink === "function") this.handlers.onDrink = onDrink;
       if (typeof onRestart === "function") this.handlers.onRestart = onRestart;
+      if (typeof onWait === "function") this.handlers.onWait = onWait;
       if (typeof onGodHeal === "function") this.handlers.onGodHeal = onGodHeal;
       if (typeof onGodSpawn === "function") this.handlers.onGodSpawn = onGodSpawn;
       if (typeof onGodSetFov === "function") this.handlers.onGodSetFov = onGodSetFov;

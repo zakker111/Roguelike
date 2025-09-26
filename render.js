@@ -313,6 +313,7 @@
           else if (p.type === "table") { glyph = "┼"; color = "#d7ba7d"; }
           else if (p.type === "bed") { glyph = "b"; color = "#a3be8c"; }
           else if (p.type === "chest") { glyph = "▯"; color = "#d7ba7d"; }
+          else if (p.type === "sign") { glyph = "∎"; color = "#ffd166"; }
           drawGlyphScreen(ctx2d, screenX, screenY, glyph, color, TILE);
         }
       }

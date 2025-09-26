@@ -1022,6 +1022,19 @@
       if (townProps.some(p => p.x === x && p.y === y)) return;
       townProps.push({ x, y, type, name });
     };
+    const addSignNear = (x, y, text) => {
+      // place a sign on a neighboring floor tile not occupied
+      const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+      for (const d of dirs) {
+        const sx = x + d.dx, sy = y + d.dy;
+        if (sx <= 0 || sy <= 0 || sx >= W - 1 || sy >= H - 1) continue;
+        if (map[sy][sx] !== TILES.FLOOR) continue;
+        if (townProps.some(p => p.x === sx && p.y === sy)) continue;
+        addProp(sx, sy, "sign", text);
+        return true;
+      }
+      return false;
+    };
 
     // Fill building interiors with fireplaces, tables, beds, chests
     function fillBuildingInterior(b) {
@@ -1088,6 +1101,8 @@
 
       // Add "Tavern" as a shop marker at the door so it's easy to find
       shops.push({ x: door.x, y: door.y, type: "shop", name: "Tavern" });
+      // Place a street sign near the tavern door
+      addSignNear(door.x, door.y, "Tavern");
 
       // Place a "desk" using a table just inside the door and several benches inside
       function isInside(bx, by) {
@@ -1176,6 +1191,8 @@
         return { x, y };
       }
       for (const s of shops) {
+        // Add a readable sign near each shop door
+        addSignNear(s.x, s.y, s.name || "Shop");
         const spot = findNearbyFree(s.x, s.y);
         // Avoid overlap with already-placed keepers
         if (npcs.some(n => n.x === spot.x && n.y === spot.y)) continue;
@@ -1774,12 +1791,16 @@
       case "chest":
         log("The chest is locked.", "warn");
         break;
+      case "sign":
+        log(`Sign: ${p.name || "Sign"}`, "info");
+        break;
       default:
         log("There's nothing special here.");
     }
     requestDraw();
     return true;
-  }
+  </}
+
 
   function lootCorpse() {
     if (isDead) return;
@@ -2432,27 +2453,28 @@
 
   
   if (window.UI && typeof UI.init === "function") {
-    UI.init();
-    if (typeof UI.setHandlers === "function") {
-      UI.setHandlers({
-        onEquip: (idx) => equipItemByIndex(idx),
-        onEquipHand: (idx, hand) => equipItemByIndexHand(idx, hand),
-        onUnequip: (slot) => unequipSlot(slot),
-        onDrink: (idx) => drinkPotionByIndex(idx),
-        onRestart: () => restartGame(),
-        onGodHeal: () => godHeal(),
-        onGodSpawn: () => godSpawnItems(),
-        onGodSetFov: (v) => setFovRadius(v),
-        onGodSpawnEnemy: () => godSpawnEnemyNearby(),
-        onGodSpawnStairs: () => godSpawnStairsHere(),
-        onGodSetAlwaysCrit: (v) => setAlwaysCrit(v),
-        onGodSetCritPart: (part) => setCritPart(part),
-        onGodApplySeed: (seed) => applySeed(seed),
-        onGodRerollSeed: () => rerollSeed(),
-        onTownExit: () => requestLeaveTown(),
-      });
+      UI.init();
+      if (typeof UI.setHandlers === "function") {
+        UI.setHandlers({
+          onEquip: (idx) => equipItemByIndex(idx),
+          onEquipHand: (idx, hand) => equipItemByIndexHand(idx, hand),
+          onUnequip: (slot) => unequipSlot(slot),
+          onDrink: (idx) => drinkPotionByIndex(idx),
+          onRestart: () => restartGame(),
+          onWait: () => turn(),
+          onGodHeal: () => godHeal(),
+          onGodSpawn: () => godSpawnItems(),
+          onGodSetFov: (v) => setFovRadius(v),
+          onGodSpawnEnemy: () => godSpawnEnemyNearby(),
+          onGodSpawnStairs: () => godSpawnStairsHere(),
+          onGodSetAlwaysCrit: (v) => setAlwaysCrit(v),
+          onGodSetCritPart: (part) => setCritPart(part),
+          onGodApplySeed: (seed) => applySeed(seed),
+          onGodRerollSeed: () => rerollSeed(),
+          onTownExit: () => requestLeaveTown(),
+        });
+      }
     }
-  }
 
   // Hand decay helpers
   function usingTwoHanded() {
