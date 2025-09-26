@@ -42,6 +42,8 @@
   let dungeonExitAt = null;  // dungeon tile to return to overworld
   let cameFromWorld = false; // whether we entered dungeon from overworld
   let currentDungeon = null; // info for current dungeon entrance: { x,y, level, size }
+  // Persist dungeon states by overworld entrance coordinate "x,y"
+  const dungeonStates = Object.create(null);
 
   // Global time-of-day cycle (shared across modes)
   // We model a 24h day (1440 minutes). One full day spans CYCLE_TURNS turns.
@@ -572,6 +574,8 @@
       } else {
         log(`You descend to floor ${depth}.`);
       }
+      // Save initial dungeon state snapshot
+      saveCurrentDungeonState();
       requestDraw();
       return;
     }
@@ -593,6 +597,8 @@
     } else {
       log(`You descend to floor ${depth}.`);
     }
+    // Save fallback dungeon state as well
+    saveCurrentDungeonState();
     requestDraw();
   }
 
@@ -600,6 +606,64 @@
     const mh = map.length || MAP_ROWS;
     const mw = map[0] ? map[0].length : MAP_COLS;
     return x >= 0 && y >= 0 && x < mw && y < mh;
+  }
+
+  // --------- Dungeon persistence helpers ---------
+  function dungeonKeyFromWorldPos(x, y) {
+    return `${x},${y}`;
+  }
+
+  function saveCurrentDungeonState() {
+    if (mode !== "dungeon" || !currentDungeon || !dungeonExitAt) return;
+    const key = dungeonKeyFromWorldPos(currentDungeon.x, currentDungeon.y);
+    dungeonStates[key] = {
+      map,
+      seen,
+      visible,
+      enemies,
+      corpses,
+      decals,
+      dungeonExitAt: { x: dungeonExitAt.x, y: dungeonExitAt.y },
+      info: currentDungeon,
+      level: floor
+    };
+  }
+
+  function loadDungeonStateFor(x, y) {
+    const key = dungeonKeyFromWorldPos(x, y);
+    const st = dungeonStates[key];
+    if (!st) return false;
+
+    mode = "dungeon";
+    currentDungeon = st.info || { x, y, level: st.level || 1, size: "medium" };
+    floor = st.level || 1;
+    window.floor = floor;
+
+    map = st.map;
+    seen = st.seen;
+    visible = st.visible;
+    enemies = st.enemies;
+    corpses = st.corpses;
+    decals = st.decals || [];
+    dungeonExitAt = st.dungeonExitAt || { x, y };
+
+    // Place player at the entrance hole
+    player.x = dungeonExitAt.x;
+    player.y = dungeonExitAt.y;
+
+    // Ensure the entrance tile is marked as stairs
+    if (inBounds(dungeonExitAt.x, dungeonExitAt.y)) {
+      map[dungeonExitAt.y][dungeonExitAt.x] = TILES.STAIRS;
+      if (visible[dungeonExitAt.y]) visible[dungeonExitAt.y][dungeonExitAt.x] = true;
+      if (seen[dungeonExitAt.y]) seen[dungeonExitAt.y][dungeonExitAt.x] = true;
+    }
+
+    recomputeFOV();
+    updateCamera();
+    updateUI();
+    log(`You re-enter the dungeon (Difficulty ${floor}${currentDungeon.size ? ", " + currentDungeon.size : ""}).`, "notice");
+    requestDraw();
+    return true;
   }
 
   function isWalkable(x, y) {
@@ -1532,6 +1596,11 @@
       // Default fallback
       if (!currentDungeon) currentDungeon = { x: player.x, y: player.y, level: 1, size: "medium" };
 
+      // If dungeon already has a saved state, load it and return
+      if (loadDungeonStateFor(currentDungeon.x, currentDungeon.y)) {
+        return true;
+      }
+
       // Set dungeon difficulty = level; we keep 'floor' equal to dungeon level for UI/logic
       floor = Math.max(1, currentDungeon.level | 0);
       window.floor = floor;
@@ -1546,6 +1615,9 @@
         if (Array.isArray(seen) && seen[player.y]) seen[player.y][player.x] = true;
         if (Array.isArray(visible) && visible[player.y]) visible[player.y][player.x] = true;
       }
+
+      // Save fresh dungeon state
+      saveCurrentDungeonState();
 
       log(`You enter the dungeon (Difficulty ${floor}${currentDungeon.size ? ", " + currentDungeon.size : ""}).`, "notice");
       return true;
@@ -1953,6 +2025,8 @@
     if (mode === "dungeon") {
       // Using G on the entrance hole returns to the overworld
       if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y && cameFromWorld && world) {
+        // Save current dungeon state before leaving
+        saveCurrentDungeonState();
         // Return to world immediately
         mode = "world";
         enemies = [];
@@ -2584,6 +2658,9 @@
       }
       // clamp corpse list length
       if (corpses.length > 50) corpses = corpses.slice(-50);
+
+      // Persist dungeon state after each dungeon turn
+      saveCurrentDungeonState();
     } else if (mode === "town") {
       townTick = (townTick + 1) | 0;
       townNPCsAct();
