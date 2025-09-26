@@ -867,7 +867,7 @@
       }
     }
 
-    // Props in plaza and parks
+    // Props in plaza and parks + building interiors
     townProps = [];
     const addProp = (x, y, type, name) => {
       if (x <= 0 || y <= 0 || x >= W - 1 || y >= H - 1) return;
@@ -875,6 +875,50 @@
       if (townProps.some(p => p.x === x && p.y === y)) return;
       townProps.push({ x, y, type, name });
     };
+
+    // Fill building interiors with fireplaces, tables, beds, chests
+    function fillBuildingInterior(b) {
+      // fireplace: pick an inner tile adjacent to an outer wall
+      const borderAdj = [];
+      for (let yy = b.y + 1; yy < b.y + b.h - 1; yy++) {
+        for (let xx = b.x + 1; xx < b.x + b.w - 1; xx++) {
+          // inside only
+          if (map[yy][xx] !== TILES.FLOOR) continue;
+          // adjacent to wall?
+          if (map[yy - 1][xx] === TILES.WALL || map[yy + 1][xx] === TILES.WALL || map[yy][xx - 1] === TILES.WALL || map[yy][xx + 1] === TILES.WALL) {
+            borderAdj.push({ x: xx, y: yy });
+          }
+        }
+      }
+      if (borderAdj.length && rng() < 0.9) {
+        const f = borderAdj[randInt(0, borderAdj.length - 1)];
+        addProp(f.x, f.y, "fireplace", "Fireplace");
+      }
+      // chests
+      const chestCount = rng() < 0.4 ? 2 : 1;
+      let placedC = 0, triesC = 0;
+      while (placedC < chestCount && triesC++ < 50) {
+        const xx = randInt(b.x + 1, b.x + b.w - 2);
+        const yy = randInt(b.y + 1, b.y + b.h - 2);
+        if (map[yy][xx] !== TILES.FLOOR) continue;
+        if (townProps.some(p => p.x === xx && p.y === yy)) continue;
+        addProp(xx, yy, "chest", "Chest");
+        placedC++;
+      }
+      // table and bed
+      if (rng() < 0.7) {
+        const tx = randInt(b.x + 1, b.x + b.w - 2);
+        const ty = randInt(b.y + 1, b.y + b.h - 2);
+        addProp(tx, ty, "table", "Table");
+      }
+      if (rng() < 0.6) {
+        const bx = randInt(b.x + 1, b.x + b.w - 2);
+        const by = randInt(b.y + 1, b.y + b.h - 2);
+        addProp(bx, by, "bed", "Bed");
+      }
+    }
+    for (const b of buildings) fillBuildingInterior(b);
+
     // Plaza fixtures
     addProp(plaza.x, plaza.y, "well", "Town Well");
     addProp(plaza.x - 6, plaza.y - 4, "lamp", "Lamp Post");
@@ -1373,6 +1417,18 @@
         break;
       case "tree":
         log("A leafy tree offers a bit of shade.", "info");
+        break;
+      case "fireplace":
+        log("You warm your hands by the fireplace.", "info");
+        break;
+      case "table":
+        log("A sturdy wooden table. Nothing of note on it.", "info");
+        break;
+      case "bed":
+        log("Looks comfy, but now is not the time to sleep.", "info");
+        break;
+      case "chest":
+        log("The chest is locked.", "warn");
         break;
       default:
         log("There's nothing special here.");

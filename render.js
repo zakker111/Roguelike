@@ -238,7 +238,7 @@
         }
       }
 
-      // draw props (wells, benches, lamps, stalls, fountain)
+      // draw props (wells, benches, lamps, stalls, fountain, trees, interiors)
       if (Array.isArray(ctx.townProps)) {
         for (const p of ctx.townProps) {
           if (p.x < startX || p.x > endX || p.y < startY || p.y > endY) continue;
@@ -252,6 +252,10 @@
           else if (p.type === "lamp") { glyph = "†"; color = "#ffd166"; }
           else if (p.type === "stall") { glyph = "s"; color = "#b4f9f8"; }
           else if (p.type === "tree") { glyph = "♣"; color = "#84cc16"; }
+          else if (p.type === "fireplace") { glyph = "∩"; color = "#ff9966"; }
+          else if (p.type === "table") { glyph = "┼"; color = "#d7ba7d"; }
+          else if (p.type === "bed") { glyph = "b"; color = "#a3be8c"; }
+          else if (p.type === "chest") { glyph = "▯"; color = "#d7ba7d"; }
           drawGlyphScreen(ctx2d, screenX, screenY, glyph, color, TILE);
         }
       }

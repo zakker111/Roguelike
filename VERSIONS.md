@@ -9,6 +9,13 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v0.8.2 — Furnished Buildings (Interiors)
+- Added: Building interiors are now furnished with:
+  - Fireplaces (∩) generally placed along inside walls
+  - Chests (▯), tables (┼), and beds (b) scattered inside
+- UI: Renderer shows new interior prop glyphs and colors.
+- Changed: Interactions (G) include messages for fireplaces, chests (locked), tables, and beds.
+
 v0.8.1 — Improve Player Visibility on Overworld
 - UI: Added a subtle white backdrop and outline under the player glyph '@' in overworld mode so the player stands out on all biomes.
 
