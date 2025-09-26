@@ -77,7 +77,10 @@
     const goal = { x: tx, y: ty };
 
     const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
-    // Direct adjacent
+    const key = (x, y) => `${x},${y}`;
+    const h = (x, y) => Math.abs(x - goal.x) + Math.abs(y - goal.y);
+
+    // If direct adjacent to goal and free, take it immediately
     for (const d of dirs4) {
       const nx = n.x + d.dx, ny = n.y + d.dy;
       if (nx === goal.x && ny === goal.y && isWalkTown(ctx, nx, ny) && !occ.has(`${nx},${ny}`) && !(player.x === nx && player.y === ny)) {
@@ -85,35 +88,63 @@
       }
     }
 
-    const q = [];
-    const seenB = new Set();
-    const prev = new Map();
-    const key = (x, y) => `${x},${y}`;
-    q.push(start);
-    seenB.add(key(start.x, start.y));
-    let found = null;
+    // A* search
     const MAX_NODES = 5000;
+    const open = [{ x: start.x, y: start.y, g: 0, f: h(start.x, start.y) }];
+    const cameFrom = new Map();
+    const gScore = new Map();
+    gScore.set(key(start.x, start.y), 0);
+    const inOpen = new Set([key(start.x, start.y)]);
+    const closed = new Set();
 
+    let found = null;
     let nodes = 0;
-    while (q.length && nodes < MAX_NODES) {
+
+    while (open.length && nodes < MAX_NODES) {
       nodes++;
-      const cur = q.shift();
-      if (cur.x === goal.x && cur.y === goal.y) { found = cur; break; }
+      // Pick node with lowest f (simple linear scan)
+      let bestIdx = 0;
+      for (let i = 1; i < open.length; i++) {
+        if (open[i].f < open[bestIdx].f) bestIdx = i;
+      }
+      const current = open.splice(bestIdx, 1)[0];
+      inOpen.delete(key(current.x, current.y));
+      const ck = key(current.x, current.y);
+      if (closed.has(ck)) continue;
+      closed.add(ck);
+
+      if (current.x === goal.x && current.y === goal.y) { found = current; break; }
+
       for (const d of dirs4) {
-        const nx = cur.x + d.dx, ny = cur.y + d.dy;
-        const k = key(nx, ny);
+        const nx = current.x + d.dx, ny = current.y + d.dy;
+        const nk = key(nx, ny);
         if (!inB(nx, ny)) continue;
-        if (seenB.has(k)) continue;
         if (!isWalkTown(ctx, nx, ny)) continue;
         if (player.x === nx && player.y === ny) continue;
-        if (occ.has(k) && !(nx === goal.x && ny === goal.y)) continue;
-        seenB.add(k);
-        prev.set(k, cur);
-        q.push({ x: nx, y: ny });
+        // Allow stepping onto occupied goal, otherwise respect occ
+        if (occ.has(nk) && !(nx === goal.x && ny === goal.y)) continue;
+
+        const tentativeG = (gScore.get(ck) ?? Infinity) + 1;
+        if (tentativeG >= (gScore.get(nk) ?? Infinity)) continue;
+
+        cameFrom.set(nk, { x: current.x, y: current.y });
+        gScore.set(nk, tentativeG);
+        const f = tentativeG + h(nx, ny);
+
+        // Prefer doors by slightly reducing heuristic near building borders
+        let bias = 0;
+        try {
+          // If moving into a DOOR tile, reduce f to prioritize it
+          if (map[ny][nx] === ctx.TILES.DOOR) bias = -0.2;
+        } catch (_) {}
+        const node = { x: nx, y: ny, g: tentativeG, f: f + bias };
+
+        if (!inOpen.has(nk)) { open.push(node); inOpen.add(nk); }
       }
     }
 
     if (!found) {
+      // Greedy fallback
       const dirs = dirs4.slice().sort((a, b) =>
         (Math.abs((n.x + a.dx) - tx) + Math.abs((n.y + a.dy) - ty)) -
         (Math.abs((n.x + b.dx) - tx) + Math.abs((n.y + b.dy) - ty))
@@ -128,16 +159,17 @@
       return false;
     }
 
-    // Reconstruct first step
-    let cur = found;
-    let back = prev.get(key(cur.x, cur.y));
-    while (back && !(back.x === start.x && back.y === start.y)) {
-      cur = back;
-      back = prev.get(key(cur.x, cur.y));
+    // Reconstruct first step from cameFrom
+    let stepX = found.x, stepY = found.y;
+    let prevKey = cameFrom.get(key(stepX, stepY));
+    while (prevKey && !(prevKey.x === start.x && prevKey.y === start.y)) {
+      stepX = prevKey.x; stepY = prevKey.y;
+      prevKey = cameFrom.get(key(stepX, stepY));
     }
-    if (cur && isWalkTown(ctx, cur.x, cur.y) && !(ctx.player.x === cur.x && ctx.player.y === cur.y) && !occ.has(key(cur.x, cur.y))) {
+
+    if (isWalkTown(ctx, stepX, stepY) && !(ctx.player.x === stepX && ctx.player.y === stepY) && !occ.has(key(stepX, stepY))) {
       occ.delete(`${n.x},${n.y}`);
-      n.x = cur.x; n.y = cur.y;
+      n.x = stepX; n.y = stepY;
       occ.add(`${n.x},${n.y}`);
       return true;
     }
