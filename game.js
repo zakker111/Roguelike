@@ -1799,8 +1799,7 @@
     }
     requestDraw();
     return true;
-  
-
+  }
 
   function lootCorpse() {
     if (isDead) return;
