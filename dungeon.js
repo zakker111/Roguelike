@@ -177,7 +177,9 @@
     if (FlavorMod && typeof FlavorMod.announceFloorEnemyCount === "function") {
       try { FlavorMod.announceFloorEnemyCount(ctx); } catch (_) {}
     }
-  }) {
+  }
+
+  function carveRoom(map, TILES, { x, y, w, h }) {
     for (let j = y; j < y + h; j++) {
       for (let i = x; i < x + w; i++) {
         map[j][i] = TILES.FLOOR;
