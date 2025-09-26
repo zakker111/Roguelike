@@ -34,6 +34,7 @@
   let townPlaza = null;      // central plaza coordinates {x,y}
   let tavern = null;         // tavern info: { building:{x,y,w,h,door}, door:{x,y} }
   let townTick = 0;          // simple turn counter for town routines
+  let townName = null;       // current town's generated name
 
   // World/town/dungeon transition anchors
   let townExitAt = null;     // gate position inside town used to exit back to overworld
@@ -833,6 +834,18 @@
     player.x = gate.x; player.y = gate.y;
     townExitAt = { x: gate.x, y: gate.y };
 
+    // Generate a town name (simple syllable-based)
+    const makeTownName = () => {
+      const prefixes = ["Oak", "Ash", "Pine", "River", "Stone", "Iron", "Silver", "Gold", "Wolf", "Fox", "Moon", "Star", "Red", "White", "Black", "Green"];
+      const suffixes = ["dale", "ford", "field", "burg", "ton", "stead", "haven", "fall", "gate", "port", "wick", "shire", "crest", "view", "reach"];
+      const mid = ["", "wood", "water", "brook", "hill", "rock", "ridge"];
+      const p = prefixes[randInt(0, prefixes.length - 1)];
+      const m = mid[randInt(0, mid.length - 1)];
+      const s = suffixes[randInt(0, suffixes.length - 1)];
+      return [p, m, s].filter(Boolean).join("") ;
+    };
+    townName = makeTownName();
+
     // Central plaza (rectangle)
     const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
     townPlaza = { x: plaza.x, y: plaza.y };
@@ -1022,16 +1035,45 @@
       if (townProps.some(p => p.x === x && p.y === y)) return;
       townProps.push({ x, y, type, name });
     };
+    const addSignNear = (x, y, text) => {
+      // place a sign on a neighboring floor tile not occupied
+      const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+      for (const d of dirs) {
+        const sx = x + d.dx, sy = y + d.dy;
+        if (sx <= 0 || sy <= 0 || sx >= W - 1 || sy >= H - 1) continue;
+        if (map[sy][sx] !== TILES.FLOOR) continue;
+        if (townProps.some(p => p.x === sx && p.y === sy)) continue;
+        addProp(sx, sy, "sign", text);
+        return true;
+      }
+      return false;
+    };
 
-    // Fill building interiors with fireplaces, tables, beds, chests
+    // Place a welcome sign near the town gate
+    addSignNear(gate.x, gate.y, `Welcome to ${townName}`);
+
+    // Fill building interiors with richer furnishing
     function fillBuildingInterior(b) {
-      // fireplace: pick an inner tile adjacent to an outer wall
+      const insideFloor = (x, y) => (x > b.x && x < b.x + b.w - 1 && y > b.y && y < b.y + b.h - 1 && map[y][x] === TILES.FLOOR);
+      const occupiedTile = (x, y) => townProps.some(p => p.x === x && p.y === y);
+      const placeRandom = (type, name, attempts = 60) => {
+        let t = 0;
+        while (t++ < attempts) {
+          const xx = randInt(b.x + 1, b.x + b.w - 2);
+          const yy = randInt(b.y + 1, b.y + b.h - 2);
+          if (!insideFloor(xx, yy)) continue;
+          if (occupiedTile(xx, yy)) continue;
+          addProp(xx, yy, type, name);
+          return true;
+        }
+        return false;
+      };
+
+      // Fireplace near walls
       const borderAdj = [];
       for (let yy = b.y + 1; yy < b.y + b.h - 1; yy++) {
         for (let xx = b.x + 1; xx < b.x + b.w - 1; xx++) {
-          // inside only
-          if (map[yy][xx] !== TILES.FLOOR) continue;
-          // adjacent to wall?
+          if (!insideFloor(xx, yy)) continue;
           if (map[yy - 1][xx] === TILES.WALL || map[yy + 1][xx] === TILES.WALL || map[yy][xx - 1] === TILES.WALL || map[yy][xx + 1] === TILES.WALL) {
             borderAdj.push({ x: xx, y: yy });
           }
@@ -1041,28 +1083,42 @@
         const f = borderAdj[randInt(0, borderAdj.length - 1)];
         addProp(f.x, f.y, "fireplace", "Fireplace");
       }
-      // chests
-      const chestCount = rng() < 0.4 ? 2 : 1;
+
+      // Beds: larger homes get more beds
+      const area = b.w * b.h;
+      const bedTarget = Math.max(1, Math.min(3, Math.floor(area / 24))); // 1..3
+      let bedsPlaced = 0, triesBed = 0;
+      while (bedsPlaced < bedTarget && triesBed++ < 120) {
+        if (placeRandom("bed", "Bed")) bedsPlaced++;
+      }
+
+      // Tables and chairs (simple)
+      if (rng() < 0.8) placeRandom("table", "Table");
+      let chairCount = rng() < 0.5 ? 2 : 1;
+      while (chairCount-- > 0) placeRandom("chair", "Chair");
+
+      // Storage: chests, crates, barrels
+      let chestCount = rng() < 0.5 ? 2 : 1;
       let placedC = 0, triesC = 0;
-      while (placedC < chestCount && triesC++ < 50) {
-        const xx = randInt(b.x + 1, b.x + b.w - 2);
-        const yy = randInt(b.y + 1, b.y + b.h - 2);
-        if (map[yy][xx] !== TILES.FLOOR) continue;
-        if (townProps.some(p => p.x === xx && p.y === yy)) continue;
-        addProp(xx, yy, "chest", "Chest");
-        placedC++;
+      while (placedC < chestCount && triesC++ < 80) {
+        if (placeRandom("chest", "Chest")) placedC++;
       }
-      // table and bed
-      if (rng() < 0.7) {
-        const tx = randInt(b.x + 1, b.x + b.w - 2);
-        const ty = randInt(b.y + 1, b.y + b.h - 2);
-        addProp(tx, ty, "table", "Table");
+      let crates = rng() < 0.6 ? 2 : 1;
+      while (crates-- > 0) placeRandom("crate", "Crate");
+      let barrels = rng() < 0.6 ? 2 : 1;
+      while (barrels-- > 0) placeRandom("barrel", "Barrel");
+
+      // Shelves against inner walls
+      const shelfSpots = borderAdj.slice();
+      let shelves = Math.min(2, Math.floor(area / 30));
+      while (shelves-- > 0 && shelfSpots.length) {
+        const s = shelfSpots.splice(randInt(0, shelfSpots.length - 1), 1)[0];
+        if (!occupiedTile(s.x, s.y)) addProp(s.x, s.y, "shelf", "Shelf");
       }
-      if (rng() < 0.6) {
-        const bx = randInt(b.x + 1, b.x + b.w - 2);
-        const by = randInt(b.y + 1, b.y + b.h - 2);
-        addProp(bx, by, "bed", "Bed");
-      }
+
+      // Plants/rugs for variety
+      if (rng() < 0.5) placeRandom("plant", "Plant");
+      if (rng() < 0.5) placeRandom("rug", "Rug");
     }
     for (const b of buildings) fillBuildingInterior(b);
 
@@ -1088,6 +1144,8 @@
 
       // Add "Tavern" as a shop marker at the door so it's easy to find
       shops.push({ x: door.x, y: door.y, type: "shop", name: "Tavern" });
+      // Place a street sign near the tavern door
+      addSignNear(door.x, door.y, "Tavern");
 
       // Place a "desk" using a table just inside the door and several benches inside
       function isInside(bx, by) {
@@ -1176,6 +1234,8 @@
         return { x, y };
       }
       for (const s of shops) {
+        // Add a readable sign near each shop door
+        addSignNear(s.x, s.y, s.name || "Shop");
         const spot = findNearbyFree(s.x, s.y);
         // Avoid overlap with already-placed keepers
         if (npcs.some(n => n.x === spot.x && n.y === spot.y)) continue;
@@ -1190,8 +1250,82 @@
       }
     })();
 
+    // Residents inside buildings: 1–2 per selected buildings, scaled by building count
+    (function spawnBuildingResidents() {
+      if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
+      const pickCount = Math.min(Math.max(3, Math.floor(townBuildings.length / 4)), 10); // scale with buildings
+      const shuffled = townBuildings.slice();
+      for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = t; }
+      const picked = shuffled.slice(0, pickCount);
+      const linesHome = [
+        "Home sweet home.",
+        "A quiet day indoors.",
+        "Just tidying up.",
+      ];
+      function randomInteriorIn(b) {
+        const spots = [];
+        for (let y = b.y + 1; y < b.y + b.h - 1; y++) {
+          for (let x = b.x + 1; x < b.x + b.w - 1; x++) {
+            if (map[y][x] !== TILES.FLOOR) continue;
+            if (townProps.some(p => p.x === x && p.y === y)) continue;
+            spots.push({ x, y });
+          }
+        }
+        if (!spots.length) return { x: b.door.x, y: b.door.y };
+        return spots[randInt(0, spots.length - 1)];
+      }
+      // Helper lists for errands
+      const benches = (townProps || []).filter(p => p.type === "bench");
+      const pickBenchNearPlaza = () => {
+        if (!benches.length) return null;
+        const candidates = benches.slice().sort((a, b) => manhattan(a.x, a.y, townPlaza.x, townPlaza.y) - manhattan(b.x, b.y, townPlaza.x, townPlaza.y));
+        return candidates[0] || null;
+      };
+      const pickRandomShopDoor = () => {
+        if (!shops || !shops.length) return null;
+        const s = shops[randInt(0, shops.length - 1)];
+        return { x: s.x, y: s.y };
+      };
+      const bedsFor = (building) => (townProps || []).filter(p => p.type === "bed" && p.x > building.x && p.x < building.x + building.w - 1 && p.y > building.y && p.y < building.y + building.h - 1);
+
+      for (const b of picked) {
+        // Scale residents by building area (cap 3)
+        const area = b.w * b.h;
+        const residentCount = Math.max(1, Math.min(3, Math.floor(area / 30))) + (rng() < 0.4 ? 1 : 0);
+        const beds = bedsFor(b);
+        for (let i = 0; i < residentCount; i++) {
+          const pos = randomInteriorIn(b);
+          if (!pos) continue;
+          if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
+          // Precompute a possible daytime errand target
+          let errand = null;
+          if (rng() < 0.5) {
+            const pb = pickBenchNearPlaza();
+            if (pb) errand = { x: pb.x, y: pb.y };
+          } else {
+            const sd = pickRandomShopDoor();
+            if (sd) errand = sd;
+          }
+          // Prefer sleeping on a bed if available
+          let sleepSpot = null;
+          if (beds.length) {
+            const bidx = randInt(0, beds.length - 1);
+            sleepSpot = { x: beds[bidx].x, y: beds[bidx].y };
+          }
+          npcs.push({
+            x: pos.x, y: pos.y,
+            name: rng() < 0.2 ? `Child` : `Resident`,
+            lines: linesHome,
+            isResident: true,
+            _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: sleepSpot },
+            _work: errand, // daytime errand target (bench or shop door)
+          });
+        }
+      }
+    })();
+
     const lines = [
-      "Welcome to our town.",
+      `Welcome to ${townName || "our town"}.`,
       "Shops are marked with S.",
       "Rest your feet a while.",
       "The dungeon is dangerous.",
@@ -1199,8 +1333,10 @@
       "Lovely day on the plaza.",
       "Care for a drink at the well?",
     ];
+    // Scale roaming villagers count by buildings (cap within range)
+    const roamTarget = Math.min(14, Math.max(6, Math.floor((townBuildings?.length || 12) / 2)));
     let placed = 0, tries = 0;
-    while (placed < 12 && tries++ < 500) {
+    while (placed < roamTarget && tries++ < 800) {
       const onRoad = rng() < 0.4;
       let x, y;
       if (onRoad) {
@@ -1220,6 +1356,29 @@
       npcs.push({ x, y, name: `Villager ${placed + 1}`, lines, _likesTavern: rng() < 0.45 });
       placed++;
     }
+
+    // Pets: small number of cats and dogs roaming around
+    (function spawnPets() {
+      const maxCats = 2, maxDogs = 2;
+      const namesCat = ["Cat", "Mittens", "Whiskers"];
+      const namesDog = ["Dog", "Rover", "Buddy"];
+      function placeFree() {
+        for (let t = 0; t < 200; t++) {
+          const x = randInt(2, W - 3);
+          const y = randInt(2, H - 3);
+          if (isFreeTownFloor(x, y)) return { x, y };
+        }
+        return null;
+      }
+      for (let i = 0; i < maxCats; i++) {
+        const spot = placeFree(); if (!spot) break;
+        npcs.push({ x: spot.x, y: spot.y, name: namesCat[i % namesCat.length], lines: ["Meow."], isPet: true, kind: "cat" });
+      }
+      for (let i = 0; i < maxDogs; i++) {
+        const spot = placeFree(); if (!spot) break;
+        npcs.push({ x: spot.x, y: spot.y, name: namesDog[i % namesDog.length], lines: ["Woof."], isPet: true, kind: "dog" });
+      }
+    })();
 
     // Visibility (start unseen; FOV will reveal)
     seen = Array.from({ length: H }, () => Array(W).fill(false));
@@ -1300,7 +1459,7 @@
     ];
     const names = ["Ava", "Borin", "Cora", "Darin", "Eda", "Finn", "Goro", "Hana"];
     const lines = [
-      "Welcome to our town.",
+      `Welcome to ${townName || "our town"}.`,
       "Shops are marked with S.",
       "Stay as long as you like.",
       "The plaza is at the center.",
@@ -1333,9 +1492,9 @@
       generateTown();
       ensureTownSpawnClear();
       townExitAt = { x: player.x, y: player.y };
-      // Place a few greeters near the gate so the entrance isn't empty
-      spawnGateGreeters(4);
-      log("You enter the town. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.", "notice");
+      // Make entry calmer: reduce greeters to avoid surrounding the player
+      spawnGateGreeters(0);
+      log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
       recomputeFOV();
@@ -1679,11 +1838,32 @@
       case "table":
         log("A sturdy wooden table. Nothing of note on it.", "info");
         break;
+      case "chair":
+        log("A simple wooden chair.", "info");
+        break;
       case "bed":
-        log("Looks comfy, but now is not the time to sleep.", "info");
+        log("Looks comfy. Residents sleep here at night.", "info");
         break;
       case "chest":
         log("The chest is locked.", "warn");
+        break;
+      case "crate":
+        log("A wooden crate. Might hold supplies.", "info");
+        break;
+      case "barrel":
+        log("A barrel. Smells of ale.", "info");
+        break;
+      case "shelf":
+        log("A shelf with assorted goods.", "info");
+        break;
+      case "plant":
+        log("A potted plant adds some life.", "info");
+        break;
+      case "rug":
+        log("A cozy rug warms the floor.", "info");
+        break;
+      case "sign":
+        log(`Sign: ${p.name || "Sign"}`, "info");
         break;
       default:
         log("There's nothing special here.");
@@ -2207,6 +2387,13 @@
       const n = npcs[idx];
       ensureHome(n);
 
+      // Pets: light roaming with high idle chance; no scheduled targets
+      if (n.isPet) {
+        if (rng() < 0.6) continue;
+        stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+        continue;
+      }
+
       // Shopkeepers: stay stationed at their shop during the day; go home otherwise.
       if (n.isShopkeeper) {
         let target = null;
@@ -2228,6 +2415,57 @@
         }
         // No target fallback: idle
         if (rng() < 0.9) continue;
+      }
+
+      // Residents: more purposeful routine (home mornings/evenings with sleep, errands by day)
+      if (n.isResident) {
+        // Wake up in the morning
+        if (phase === "morning" && n._sleeping) {
+          n._sleeping = false;
+        }
+
+        if (phase === "evening") {
+          const home = n._home ? { x: n._home.x, y: n._home.y } : null;
+          // Go home; once home, go to sleep (no movement)
+          if (home) {
+            if (n.x === home.x && n.y === home.y) {
+              n._sleeping = true;
+              // Sleeping residents do not move
+              continue;
+            }
+            // Move towards home with strong intent
+            stepTowards(n, home.x, home.y);
+            continue;
+          }
+        } else if (phase === "day") {
+          // Errand: go to bench near plaza or a shop door; linger when arrived
+          const target = n._work || (townPlaza ? { x: townPlaza.x, y: townPlaza.y } : null);
+          if (target) {
+            if (n.x === target.x && n.y === target.y) {
+              // Linger with high idle, small wiggle
+              if (rng() < 0.8) continue;
+              stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+              continue;
+            }
+            stepTowards(n, target.x, target.y);
+            continue;
+          }
+        } else if (phase === "morning") {
+          // Morning: remain at home with high idle chance; gentle wiggle
+          const home = n._home ? { x: n._home.x, y: n._home.y } : null;
+          if (home) {
+            if (n.x === home.x && n.y === home.y) {
+              if (rng() < 0.85) continue;
+              stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+              continue;
+            }
+            stepTowards(n, home.x, home.y);
+            continue;
+          }
+        }
+        // fallback drift
+        stepTowards(n, n.x + randInt(-1, 1), n.y + randInt(-1, 1));
+        continue;
       }
 
       // Small idle chance
@@ -2310,27 +2548,28 @@
 
   
   if (window.UI && typeof UI.init === "function") {
-    UI.init();
-    if (typeof UI.setHandlers === "function") {
-      UI.setHandlers({
-        onEquip: (idx) => equipItemByIndex(idx),
-        onEquipHand: (idx, hand) => equipItemByIndexHand(idx, hand),
-        onUnequip: (slot) => unequipSlot(slot),
-        onDrink: (idx) => drinkPotionByIndex(idx),
-        onRestart: () => restartGame(),
-        onGodHeal: () => godHeal(),
-        onGodSpawn: () => godSpawnItems(),
-        onGodSetFov: (v) => setFovRadius(v),
-        onGodSpawnEnemy: () => godSpawnEnemyNearby(),
-        onGodSpawnStairs: () => godSpawnStairsHere(),
-        onGodSetAlwaysCrit: (v) => setAlwaysCrit(v),
-        onGodSetCritPart: (part) => setCritPart(part),
-        onGodApplySeed: (seed) => applySeed(seed),
-        onGodRerollSeed: () => rerollSeed(),
-        onTownExit: () => requestLeaveTown(),
-      });
+      UI.init();
+      if (typeof UI.setHandlers === "function") {
+        UI.setHandlers({
+          onEquip: (idx) => equipItemByIndex(idx),
+          onEquipHand: (idx, hand) => equipItemByIndexHand(idx, hand),
+          onUnequip: (slot) => unequipSlot(slot),
+          onDrink: (idx) => drinkPotionByIndex(idx),
+          onRestart: () => restartGame(),
+          onWait: () => turn(),
+          onGodHeal: () => godHeal(),
+          onGodSpawn: () => godSpawnItems(),
+          onGodSetFov: (v) => setFovRadius(v),
+          onGodSpawnEnemy: () => godSpawnEnemyNearby(),
+          onGodSpawnStairs: () => godSpawnStairsHere(),
+          onGodSetAlwaysCrit: (v) => setAlwaysCrit(v),
+          onGodSetCritPart: (part) => setCritPart(part),
+          onGodApplySeed: (seed) => applySeed(seed),
+          onGodRerollSeed: () => rerollSeed(),
+          onTownExit: () => requestLeaveTown(),
+        });
+      }
     }
-  }
 
   // Hand decay helpers
   function usingTwoHanded() {
