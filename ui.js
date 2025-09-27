@@ -217,6 +217,16 @@
         });
         this.updateGridButton();
       }
+      // Town overlay toggle
+      this.els.godToggleTownOverlayBtn = document.getElementById("god-toggle-town-overlay-btn");
+      if (this.els.godToggleTownOverlayBtn) {
+        this.els.godToggleTownOverlayBtn.addEventListener("click", () => {
+          const next = !this.getTownOverlayState();
+          this.setTownOverlayState(next);
+          this.updateTownOverlayButton();
+        });
+        this.updateTownOverlayButton();
+      }
       // RNG seed controls
       if (this.els.godApplySeedBtn) {
         this.els.godApplySeedBtn.addEventListener("click", () => {
@@ -651,6 +661,32 @@
       if (!this.els.godToggleGridBtn) return;
       const on = this.getGridState();
       this.els.godToggleGridBtn.textContent = `Grid: ${on ? "On" : "Off"}`;
+    },
+
+    // --- Town debug overlay controls ---
+    getTownOverlayState() {
+      try {
+        if (typeof window.DEBUG_TOWN_OVERLAY === "boolean") return window.DEBUG_TOWN_OVERLAY;
+        const v = localStorage.getItem("DEBUG_TOWN_OVERLAY");
+        if (v === "1") return true;
+        if (v === "0") return false;
+      } catch (_) {}
+      return false;
+    },
+
+    setTownOverlayState(enabled) {
+      try {
+        window.DEBUG_TOWN_OVERLAY = !!enabled;
+        localStorage.setItem("DEBUG_TOWN_OVERLAY", enabled ? "1" : "0");
+      } catch (_) {}
+      this.updateTownOverlayButton();
+    },
+
+    updateTownOverlayButton() {
+      if (!this.els.godToggleTownOverlayBtn) return;
+      const on = this.getTownOverlayState();
+      this.els.godToggleTownOverlayBtn.textContent = `Overlay: ${on ? "On" : "Off"}`;
+      this.els.godToggleTownOverlayBtn.title = on ? "Hide occupied-house and NPC target overlay" : "Show occupied houses and NPC targets in town";
     },
 
     // --- Always Crit controls ---

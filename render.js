@@ -357,6 +357,110 @@
         }
       }
 
+      // Debug overlay: occupied houses and NPC target indicators
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_OVERLAY) {
+        // Occupied houses: any building referenced by an npc _home
+        try {
+          if (Array.isArray(ctx.townBuildings) && Array.isArray(npcs)) {
+            // precompute occupancy set of building ids (by reference)
+            const occ = new Set();
+            for (const n of npcs) {
+              if (n._home && n._home.building) occ.add(n._home.building);
+            }
+            ctx2d.save();
+            ctx2d.globalAlpha = 0.22;
+            ctx2d.fillStyle = "rgba(255, 215, 0, 0.22)";
+            ctx2d.strokeStyle = "rgba(255, 215, 0, 0.9)";
+            ctx2d.lineWidth = 2;
+            for (const b of ctx.townBuildings) {
+              if (!occ.has(b)) continue;
+              const bx0 = (b.x - startX) * TILE - tileOffsetX;
+              const by0 = (b.y - startY) * TILE - tileOffsetY;
+              const bw = b.w * TILE;
+              const bh = b.h * TILE;
+              // Only draw if intersects view
+              if (bx0 + bw < 0 || by0 + bh < 0 || bx0 > cam.width || by0 > cam.height) continue;
+              ctx2d.fillRect(bx0, by0, bw, bh);
+              ctx2d.strokeRect(bx0 + 1, by0 + 1, bw - 2, bh - 2);
+            }
+            ctx2d.restore();
+          }
+        } catch (_) {}
+
+        // NPC target indicators: red lines to current target
+        try {
+          function inWindow(start, end, m, dayMinutes) {
+            return (end > start) ? (m >= start && m < end) : (m >= start || m < end);
+          }
+          function isOpenAt(shop, minutes, dayMinutes) {
+            if (!shop || typeof shop.openMin !== "number" || typeof shop.closeMin !== "number") return false;
+            const o = shop.openMin, c = shop.closeMin;
+            if (o === c) return false;
+            return inWindow(o, c, minutes, dayMinutes);
+          }
+          const minutes = ctx.time ? (ctx.time.hours * 60 + ctx.time.minutes) : 12 * 60;
+          ctx2d.save();
+          ctx2d.strokeStyle = "rgba(255,0,0,0.85)";
+          ctx2d.lineWidth = 2;
+          for (const n of npcs) {
+            let target = null;
+            if (n.isShopkeeper) {
+              const shop = n._shopRef || null;
+              const o = shop ? shop.openMin : 8 * 60;
+              const c = shop ? shop.closeMin : 18 * 60;
+              const arriveStart = (o - 60 + 1440) % 1440;
+              const leaveEnd = (c + 30) % 1440;
+              const shouldBeAtWorkZone = inWindow(arriveStart, leaveEnd, minutes, 1440);
+              const openNow = isOpenAt(shop, minutes, 1440);
+              if (shouldBeAtWorkZone) {
+                if (openNow && n._workInside && shop && shop.building) {
+                  target = n._workInside;
+                } else if (n._work) {
+                  target = n._work;
+                }
+              } else if (n._home) {
+                target = n._home.bed ? n._home.bed : { x: n._home.x, y: n._home.y };
+              }
+            } else if (n.isResident) {
+              const phase = (ctx.time && ctx.time.phase) || "day";
+              if (phase === "evening") {
+                target = n._home ? (n._home.bed ? n._home.bed : { x: n._home.x, y: n._home.y }) : null;
+              } else if (phase === "day") {
+                target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
+              } else if (phase === "morning") {
+                target = n._home ? { x: n._home.x, y: n._home.y } : null;
+              } else {
+                target = n._home ? { x: n._home.x, y: n._home.y } : null;
+              }
+            } else {
+              const phase = (ctx.time && ctx.time.phase) || "day";
+              if (phase === "morning") target = n._home ? { x: n._home.x, y: n._home.y } : null;
+              else if (phase === "day") target = (n._work || ctx.townPlaza);
+              else target = (n._home ? { x: n._home.x, y: n._home.y } : null);
+            }
+            if (!target) continue;
+            // draw line if both npc and target are within current map bounds
+            const sx = (n.x - startX) * TILE - tileOffsetX + TILE / 2;
+            const sy = (n.y - startY) * TILE - tileOffsetY + TILE / 2;
+            const tx = (target.x - startX) * TILE - tileOffsetX + TILE / 2;
+            const ty = (target.y - startY) * TILE - tileOffsetY + TILE / 2;
+            // Clip to viewport roughly
+            if ((sx < -TILE || sx > cam.width + TILE || sy < -TILE || sy > cam.height + TILE) &&
+                (tx < -TILE || tx > cam.width + TILE || ty < -TILE || ty > cam.height + TILE)) continue;
+            ctx2d.beginPath();
+            ctx2d.moveTo(sx, sy);
+            ctx2d.lineTo(tx, ty);
+            ctx2d.stroke();
+            // target marker
+            ctx2d.fillStyle = "rgba(255,0,0,0.85)";
+            ctx2d.beginPath();
+            ctx2d.arc(tx, ty, Math.max(2, Math.floor(TILE * 0.15)), 0, Math.PI * 2);
+            ctx2d.fill();
+          }
+          ctx2d.restore();
+        } catch (_) {}
+      }
+
       // Lamp light glow at night/dusk/dawn
       try {
         const time = ctx.time;
