@@ -875,6 +875,95 @@
     return true;
   }
 
+  // ---- Diagnostics: verify homes, beds, reachability; log summary
+  function canReach(ctx, start, goal, occSet) {
+    const { map, TILES, player } = ctx;
+    const rows = map.length, cols = map[0] ? map[0].length : 0;
+    const inB = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows;
+    const isWalk = (x, y) => inB(x, y) && (map[y][x] === TILES.FLOOR || map[y][x] === TILES.DOOR);
+    const h = (x, y) => Math.abs(x - goal.x) + Math.abs(y - goal.y);
+    const key = (x, y) => `${x},${y}`;
+    if (!isWalk(goal.x, goal.y)) return false;
+
+    const MAX_NODES = 4000;
+    const open = [{ x: start.x, y: start.y, g: 0, f: h(start.x, start.y) }];
+    const gScore = new Map([[key(start.x, start.y), 0]]);
+    const inOpen = new Set([key(start.x, start.y)]);
+    const closed = new Set();
+
+    while (open.length) {
+      // pick node with lowest f
+      let bi = 0;
+      for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
+      const cur = open.splice(bi, 1)[0];
+      const ck = key(cur.x, cur.y);
+      if (closed.has(ck)) continue;
+      closed.add(ck);
+      if (cur.x === goal.x && cur.y === goal.y) return true;
+
+      const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+      for (const d of dirs4) {
+        const nx = cur.x + d.dx, ny = cur.y + d.dy;
+        const nk = key(nx, ny);
+        if (!inB(nx, ny)) continue;
+        if (!isWalk(nx, ny)) continue;
+        if (player.x === nx && player.y === ny) continue;
+        if (occSet && occSet.has(nk) && !(nx === goal.x && ny === goal.y)) continue;
+
+        const tg = gScore.get(ck) + 1;
+        const pg = gScore.get(nk);
+        if (pg !== undefined && tg >= pg) continue;
+        gScore.set(nk, tg);
+        const bias = (map[ny][nx] === TILES.DOOR) ? -0.15 : 0;
+        const f = tg + h(nx, ny) + bias;
+        if (!inOpen.has(nk)) { open.push({ x: nx, y: ny, g: tg, f }); inOpen.add(nk); }
+      }
+      if (closed.size > MAX_NODES) break;
+    }
+    return false;
+  }
+
+  function selfCheck(ctx) {
+    try {
+      const buildings = ctx.townBuildings || [];
+      const residents = (ctx.npcs || []).filter(n => n.isResident);
+      const beds = (ctx.townProps || []).filter(p => p.type === "bed");
+      const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree"]);
+      const occRelaxed = new Set();
+      occRelaxed.add(`${ctx.player.x},${ctx.player.y}`);
+      for (const p of (ctx.townProps || [])) { if (blockingProps.has(p.type)) occRelaxed.add(`${p.x},${p.y}`); }
+
+      let noHome = 0, noBedAssigned = 0, unreachableBed = 0, insideSleeping = 0;
+      for (const n of residents) {
+        const hasHome = !!(n._home && n._home.building);
+        if (!hasHome) { noHome++; continue; }
+        const bedTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : null;
+        if (!bedTarget) { noBedAssigned++; continue; }
+        const reachable = canReach(ctx, { x: n.x, y: n.y }, bedTarget, occRelaxed);
+        if (!reachable) unreachableBed++;
+        if (n._sleeping) insideSleeping++;
+      }
+
+      const occPerBuilding = new Map();
+      for (const n of residents) {
+        if (!n._home || !n._home.building) continue;
+        const b = n._home.building;
+        const key = `${b.x},${b.y},${b.w},${b.h}`;
+        occPerBuilding.set(key, (occPerBuilding.get(key) || 0) + 1);
+      }
+      const occupiedBuildings = occPerBuilding.size;
+      const pctOcc = buildings.length ? Math.round((occupiedBuildings / buildings.length) * 100) : 0;
+
+      const msg = `[TownAI] Buildings: ${buildings.length}, Residents: ${residents.length}, Beds: ${beds.length}. ` +
+                  `OccupiedBuildings: ${occupiedBuildings} (${pctOcc}%). ` +
+                  `Issues: noHome=${noHome}, noBed=${noBedAssigned}, unreachableBed=${unreachableBed}. ` +
+                  `Sleeping now: ${insideSleeping}.`;
+      ctx.log && ctx.log(msg, (unreachableBed || noHome) ? "warn" : "notice");
+    } catch (e) {
+      try { ctx.log && ctx.log(`[TownAI] selfCheck failed: ${String(e)}`, "warn"); } catch (_) {}
+    }
+  }
+
   window.TownAI = {
     populateTown,
     townNPCsAct,
@@ -882,5 +971,6 @@
     spawnGateGreeters,
     talkNearbyNPC,
     isFreeTownFloor,
+    selfCheck,
   };
 })();

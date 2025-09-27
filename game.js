@@ -1338,7 +1338,12 @@
     npcs = [];
     // Populate shopkeepers, residents, and pets via TownAI
     if (window.TownAI && typeof TownAI.populateTown === "function") {
-      TownAI.populateTown(getCtx());
+      const ctxLocal = getCtx();
+      TownAI.populateTown(ctxLocal);
+      // Diagnostics: run a self-check and report to log
+      if (typeof TownAI.selfCheck === "function") {
+        TownAI.selfCheck(ctxLocal);
+      }
     }
 
     // Shopkeepers spawned by TownAI.populateTown
