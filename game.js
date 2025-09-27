@@ -1397,10 +1397,10 @@
     corpses = [];
     decals = [];
     // Diagnostics: run TownAI self-check after full town generation (DEV only)
-    try {
-      if (window.DEV && window.TownAI && typeof TownAI.selfCheck === "function") {
-        TownAI.selfCheck(getCtx());
-      }
+    if (window.DEV && window.TownAI && typeof TownAI.selfCheck === "function") {
+      TownAI.selfCheck(getCtx());
+    }
+  }
 
 
   function ensureTownSpawnClear() {
