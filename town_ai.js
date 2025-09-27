@@ -61,41 +61,25 @@
     return alt || target;
   }
 
-  function stepTowards(ctx, occ, n, tx, ty) {
-    if (typeof tx !== "number" || typeof ty !== "number") return false;
+  // Pre-planning BFS used for path debug and stable routing
+  function computePath(ctx, occ, sx, sy, tx, ty) {
     const { map, player } = ctx;
     const rows = map.length, cols = map[0] ? map[0].length : 0;
     const inB = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows;
-    const start = { x: n.x, y: n.y };
-    const goal = { x: tx, y: ty };
-
     const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
-    // Direct adjacent
-    for (const d of dirs4) {
-      const nx = n.x + d.dx, ny = n.y + d.dy;
-      if (nx === goal.x && ny === goal.y && isWalkTown(ctx, nx, ny) && !occ.has(`${nx},${ny}`) && !(player.x === nx && player.y === ny)) {
-        // optional debug path
-        if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
-          n._debugPath = [{ x: n.x, y: n.y }, { x: nx, y: ny }];
-        } else {
-          n._debugPath = null;
-        }
-        occ.delete(`${n.x},${n.y}`); n.x = nx; n.y = ny; occ.add(`${nx},${ny}`); return true;
-      }
-    }
-
+    const start = { x: sx, y: sy };
+    const goal = { x: tx, y: ty };
     const q = [];
     const seenB = new Set();
     const prev = new Map();
     const key = (x, y) => `${x},${y}`;
+
     q.push(start);
     seenB.add(key(start.x, start.y));
     let found = null;
-    const MAX_NODES = 1200;
+    const MAX_NODES = 1400;
 
-    let nodes = 0;
-    while (q.length && nodes < MAX_NODES) {
-      nodes++;
+    while (q.length && seenB.size < MAX_NODES) {
       const cur = q.shift();
       if (cur.x === goal.x && cur.y === goal.y) { found = cur; break; }
       for (const d of dirs4) {
@@ -112,52 +96,90 @@
       }
     }
 
-    if (!found) {
-      const dirs = dirs4.slice().sort((a, b) =>
-        (Math.abs((n.x + a.dx) - tx) + Math.abs((n.y + a.dy) - ty)) -
-        (Math.abs((n.x + b.dx) - tx) + Math.abs((n.y + b.dy) - ty))
-      );
-      for (const d of dirs) {
-        const nx = n.x + d.dx, ny = n.y + d.dy;
-        if (!isWalkTown(ctx, nx, ny)) continue;
-        if (ctx.player.x === nx && ctx.player.y === ny) continue;
-        if (occ.has(`${nx},${ny}`)) continue;
-        if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
-          n._debugPath = [{ x: n.x, y: n.y }, { x: nx, y: ny }];
-        } else {
-          n._debugPath = null;
-        }
-        occ.delete(`${n.x},${n.y}`); n.x = nx; n.y = ny; occ.add(`${nx},${ny}`); return true;
-      }
-      // no move; clear path
-      n._debugPath = null;
-      return false;
-    }
+    if (!found) return null;
 
-    // Reconstruct full path start->...->goal
     const full = [];
     let cur = found;
     while (cur) {
       full.push({ x: cur.x, y: cur.y });
       cur = prev.get(key(cur.x, cur.y));
     }
-    full.reverse(); // start to goal
+    full.reverse();
+    return full;
+  }
 
-    // First step after start
-    const firstStep = full[1];
-    if (firstStep && isWalkTown(ctx, firstStep.x, firstStep.y) && !(ctx.player.x === firstStep.x && ctx.player.y === firstStep.y) && !occ.has(key(firstStep.x, firstStep.y))) {
+  function stepTowards(ctx, occ, n, tx, ty) {
+    if (typeof tx !== "number" || typeof ty !== "number") return false;
+
+    // Consume existing plan if valid and targeted to the same goal
+    if (n._plan && n._planGoal && n._planGoal.x === tx && n._planGoal.y === ty) {
+      // Ensure current position matches first node
+      if (n._plan.length && (n._plan[0].x !== n.x || n._plan[0].y !== n.y)) {
+        // Resync by searching for current position within plan
+        const idx = n._plan.findIndex(p => p.x === n.x && p.y === n.y);
+        if (idx >= 0) n._plan = n._plan.slice(idx);
+        else n._plan = null;
+      }
+      if (n._plan && n._plan.length >= 2) {
+        const next = n._plan[1];
+        const keyNext = `${next.x},${next.y}`;
+        if (isWalkTown(ctx, next.x, next.y) && !occ.has(keyNext) && !(ctx.player.x === next.x && ctx.player.y === next.y)) {
+          if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
+            n._debugPath = n._plan.slice(0);
+          } else {
+            n._debugPath = null;
+          }
+          occ.delete(`${n.x},${n.y}`); n.x = next.x; n.y = next.y; occ.add(`${n.x},${n.y}`);
+          return true;
+        } else {
+          // Blocked: force replan below
+          n._plan = null;
+        }
+      } else if (n._plan && n._plan.length === 1) {
+        // Already at goal
+        if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) n._debugPath = n._plan.slice(0);
+        return false;
+      }
+    }
+
+    // No valid plan; compute new plan
+    const full = computePath(ctx, occ, n.x, n.y, tx, ty);
+    if (full && full.length >= 2) {
+      n._plan = full;
+      n._planGoal = { x: tx, y: ty };
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) n._debugPath = full.slice(0);
+      const next = full[1];
+      const keyNext = `${next.x},${next.y}`;
+      if (isWalkTown(ctx, next.x, next.y) && !occ.has(keyNext) && !(ctx.player.x === next.x && ctx.player.y === next.y)) {
+        occ.delete(`${n.x},${n.y}`); n.x = next.x; n.y = next.y; occ.add(`${n.x},${n.y}`);
+        return true;
+      }
+      // If first step blocked right away, drop plan and try nudge
+      n._plan = null; n._planGoal = null;
+    }
+
+    // Fallback: greedy nudge step
+    const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+    const dirs = dirs4.slice().sort((a, b) =>
+      (Math.abs((n.x + a.dx) - tx) + Math.abs((n.y + a.dy) - ty)) -
+      (Math.abs((n.x + b.dx) - tx) + Math.abs((n.y + b.dy) - ty))
+    );
+    for (const d of dirs) {
+      const nx = n.x + d.dx, ny = n.y + d.dy;
+      if (!isWalkTown(ctx, nx, ny)) continue;
+      if (ctx.player.x === nx && ctx.player.y === ny) continue;
+      if (occ.has(`${nx},${ny}`)) continue;
       if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
-        n._debugPath = full;
+        n._debugPath = [{ x: n.x, y: n.y }, { x: nx, y: ny }];
       } else {
         n._debugPath = null;
       }
-      occ.delete(`${n.x},${n.y}`);
-      n.x = firstStep.x; n.y = firstStep.y;
-      occ.add(`${n.x},${n.y}`);
+      n._plan = null; n._planGoal = null;
+      occ.delete(`${n.x},${n.y}`); n.x = nx; n.y = ny; occ.add(`${nx},${ny}`);
       return true;
     }
-    // couldn't step; clear path
     n._debugPath = null;
+    n._plan = null; n._planGoal = null;
     return false;
   }
 
@@ -410,11 +432,12 @@
         const door = building.door || nearestFreeAdjacent(ctx, building.x + ((building.w / 2) | 0), building.y, null);
         if (door) {
           if (n.x === door.x && n.y === door.y) {
-            // Step just inside
+            // Step just inside to a free interior tile (planned)
             const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building) || adjTarget || { x: door.x, y: door.y };
             stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
             return true;
           }
+          // Plan/step toward the door, persist plan across turns
           stepTowards(ctx, occ, n, door.x, door.y);
           return true;
         }
