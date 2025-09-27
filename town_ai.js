@@ -51,6 +51,16 @@
     return null;
   }
 
+  // If the intended target tile is occupied by an interior prop (e.g., bed),
+  // pick the nearest free interior tile adjacent to it within the same building.
+  function adjustInteriorTarget(ctx, building, target) {
+    if (!target || !building) return target;
+    // If target is already free, keep it
+    if (isFreeTile(ctx, target.x, target.y) && insideBuilding(building, target.x, target.y)) return target;
+    const alt = nearestFreeAdjacent(ctx, target.x, target.y, building);
+    return alt || target;
+  }
+
   function stepTowards(ctx, occ, n, tx, ty) {
     if (typeof tx !== "number" || typeof ty !== "number") return false;
     const { map, player } = ctx;
@@ -367,6 +377,9 @@
     }
 
     function routeIntoBuilding(ctx, occ, n, building, targetInside) {
+      // Adjust unreachable interior targets (like beds) to a free adjacent tile
+      const adjTarget = targetInside ? adjustInteriorTarget(ctx, building, targetInside) : null;
+
       // If outside the building, aim for the door first
       const insideNow = insideBuilding(building, n.x, n.y);
       if (!insideNow) {
@@ -374,7 +387,7 @@
         if (door) {
           if (n.x === door.x && n.y === door.y) {
             // Step just inside
-            const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building) || targetInside || { x: door.x, y: door.y };
+            const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building) || adjTarget || { x: door.x, y: door.y };
             stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
             return true;
           }
@@ -383,9 +396,9 @@
         }
       } else {
         // Already inside: go to targetInside or nearest free interior tile
-        const inSpot = (targetInside && isFreeTile(ctx, targetInside.x, targetInside.y))
-          ? targetInside
-          : nearestFreeAdjacent(ctx, targetInside ? targetInside.x : n.x, targetInside ? targetInside.y : n.y, building);
+        const inSpot = (adjTarget && isFreeTile(ctx, adjTarget.x, adjTarget.y))
+          ? adjTarget
+          : nearestFreeAdjacent(ctx, adjTarget ? adjTarget.x : n.x, adjTarget ? adjTarget.y : n.y, building);
         if (inSpot) {
           stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
           return true;
@@ -442,13 +455,16 @@
         }
         if (phase === "evening") {
           if (n._home && n._home.building) {
-            const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-            // If at sleep target, go to sleep
-            if (n.x === sleepTarget.x && n.y === sleepTarget.y) {
+            const bedSpot = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : null;
+            const sleepTarget = bedSpot ? bedSpot : { x: n._home.x, y: n._home.y };
+            // If at, or adjacent to, the bed spot (or home spot if no bed), go to sleep
+            const atExact = (n.x === sleepTarget.x && n.y === sleepTarget.y);
+            const nearBed = bedSpot ? (manhattan(n.x, n.y, bedSpot.x, bedSpot.y) === 1) : false;
+            if (atExact || nearBed) {
               n._sleeping = true;
               continue;
             }
-            // Otherwise route via door and inside
+            // Otherwise route via door and inside (target adjusted to nearest free interior tile)
             if (routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget)) continue;
           }
         } else if (phase === "day") {
