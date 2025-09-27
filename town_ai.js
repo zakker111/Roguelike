@@ -885,7 +885,7 @@
     const key = (x, y) => `${x},${y}`;
     if (!isWalk(goal.x, goal.y)) return false;
 
-    const MAX_NODES = 4000;
+    const MAX_NODES = 1200; // keep diagnostics light
     const open = [{ x: start.x, y: start.y, g: 0, f: h(start.x, start.y) }];
     const gScore = new Map([[key(start.x, start.y), 0]]);
     const inOpen = new Set([key(start.x, start.y)]);
@@ -926,15 +926,23 @@
   function selfCheck(ctx) {
     try {
       const buildings = ctx.townBuildings || [];
-      const residents = (ctx.npcs || []).filter(n => n.isResident);
+      const allResidents = (ctx.npcs || []).filter(n => n.isResident);
       const beds = (ctx.townProps || []).filter(p => p.type === "bed");
       const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree"]);
       const occRelaxed = new Set();
       occRelaxed.add(`${ctx.player.x},${ctx.player.y}`);
       for (const p of (ctx.townProps || [])) { if (blockingProps.has(p.type)) occRelaxed.add(`${p.x},${p.y}`); }
 
+      // Keep diagnostics light: sample a subset of residents for reachability
+      const MAX_CHECKS = 20;
+      const residents = allResidents.slice();
+      for (let i = residents.length - 1; i > 0; i--) {
+        const j = Math.floor(ctx.rng() * (i + 1)); const t = residents[i]; residents[i] = residents[j]; residents[j] = t;
+      }
+      const sample = residents.slice(0, Math.min(MAX_CHECKS, residents.length));
+
       let noHome = 0, noBedAssigned = 0, unreachableBed = 0, insideSleeping = 0;
-      for (const n of residents) {
+      for (const n of sample) {
         const hasHome = !!(n._home && n._home.building);
         if (!hasHome) { noHome++; continue; }
         const bedTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : null;
@@ -945,7 +953,7 @@
       }
 
       const occPerBuilding = new Map();
-      for (const n of residents) {
+      for (const n of allResidents) {
         if (!n._home || !n._home.building) continue;
         const b = n._home.building;
         const key = `${b.x},${b.y},${b.w},${b.h}`;
@@ -954,9 +962,9 @@
       const occupiedBuildings = occPerBuilding.size;
       const pctOcc = buildings.length ? Math.round((occupiedBuildings / buildings.length) * 100) : 0;
 
-      const msg = `[TownAI] Buildings: ${buildings.length}, Residents: ${residents.length}, Beds: ${beds.length}. ` +
+      const msg = `[TownAI] Buildings: ${buildings.length}, Residents: ${allResidents.length}, Beds: ${beds.length}. ` +
                   `OccupiedBuildings: ${occupiedBuildings} (${pctOcc}%). ` +
-                  `Issues: noHome=${noHome}, noBed=${noBedAssigned}, unreachableBed=${unreachableBed}. ` +
+                  `Issues (sampled ${sample.length}): noHome=${noHome}, noBed=${noBedAssigned}, unreachableBed=${unreachableBed}. ` +
                   `Sleeping now: ${insideSleeping}.`;
       ctx.log && ctx.log(msg, (unreachableBed || noHome) ? "warn" : "notice");
     } catch (e) {
