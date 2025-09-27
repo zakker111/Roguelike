@@ -850,6 +850,35 @@
     processing.maxPerTurn = prev.maxPerTurn;
   }
 
+  // Ensure player's spawn tile is clear (move to nearest walkable tile)
+  function ensureTownSpawnClear(ctx) {
+    const { map, TILES, player } = ctx;
+    const rows = map.length;
+    const cols = map[0] ? map[0].length : 0;
+    const inB = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows;
+    const isWalk = (x, y) => inB(x, y) && (map[y][x] === TILES.FLOOR || map[y][x] === TILES.DOOR);
+    if (isWalk(player.x, player.y)) return;
+
+    const q = [{ x: player.x, y: player.y }];
+    const seen = new Set([`${player.x},${player.y}`]);
+    const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+    while (q.length) {
+      const cur = q.shift();
+      for (const d of dirs) {
+        const nx = cur.x + d.dx, ny = cur.y + d.dy;
+        const key = `${nx},${ny}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (!inB(nx, ny)) continue;
+        if (isWalk(nx, ny)) { player.x = nx; player.y = ny; return; }
+        q.push({ x: nx, y: ny });
+      }
+    }
+    // Fallback: move to a safe center-ish tile
+    player.x = Math.max(1, Math.min(cols - 2, (cols / 2) | 0));
+    player.y = Math.max(1, Math.min(rows - 2, (rows / 2) | 0));
+  }
+
   window.TownAI = {
     populateTown,
     townNPCsAct,
