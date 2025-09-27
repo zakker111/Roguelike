@@ -32,12 +32,18 @@
     return x > b.x && x < b.x + b.w - 1 && y > b.y && y < b.y + b.h - 1;
   }
 
+  function propBlocks(type) {
+    // Signs should be walkable; rugs are decorative and don't block.
+    // All other furniture/props block movement.
+    return !(type === "sign" || type === "rug");
+  }
+
   function isFreeTile(ctx, x, y) {
     if (!isWalkTown(ctx, x, y)) return false;
     const { player, npcs, townProps } = ctx;
     if (player.x === x && player.y === y) return false;
     if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
-    if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y)) return false;
+    if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y && propBlocks(p.type))) return false;
     return true;
   }
 
@@ -432,7 +438,12 @@
     const occ = new Set();
     occ.add(`${player.x},${player.y}`);
     for (const n of npcs) occ.add(`${n.x},${n.y}`);
-    if (Array.isArray(townProps)) for (const p of townProps) occ.add(`${p.x},${p.y}`);
+    if (Array.isArray(townProps)) {
+      for (const p of townProps) {
+        // Only blocking furniture contributes to occupancy; signs/rugs are walkable
+        if (propBlocks(p.type)) occ.add(`${p.x},${p.y}`);
+      }
+    }
 
     const t = ctx.time;
     const minutes = t ? (t.hours * 60 + t.minutes) : 12 * 60;
