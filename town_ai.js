@@ -92,7 +92,7 @@
     }
 
     // A* search
-    const MAX_NODES = 3000;
+    const MAX_NODES = 4000;
     const open = [{ x: start.x, y: start.y, g: 0, f: h(start.x, start.y) }];
     const cameFrom = new Map();
     const gScore = new Map();
@@ -536,7 +536,7 @@
   function townNPCsAct(ctx) {
     const { npcs, player, townProps } = ctx;
     if (!Array.isArray(npcs) || npcs.length === 0) return;
-    if (!perTurnEnabled) return;
+    if (!processing.enabled) return;
 
     const occ = new Set();
     occ.add(`${player.x},${player.y}`);
@@ -789,18 +789,32 @@
       stepTowards(ctx, (phase === "evening" || phase === "night") ? occRelaxed : occ, n, target.x, target.y);
     }
 
-    // Movement diagnostics (DEV only): count how many selected NPCs moved this tick
+    // Movement diagnostics and fallback: ensure at least some visible motion
+    let moved = 0;
+    for (const idx of selected) {
+      const prev = beforePos.get(idx);
+      const cur = npcs[idx];
+      if (!prev || !cur) continue;
+      if (prev.x !== cur.x || prev.y !== cur.y) moved++;
+    }
+    // DEV log
     if (typeof window !== "undefined" && window.DEV && ctx && typeof ctx.log === "function") {
-      let moved = 0;
-      for (const idx of selected) {
-        const prev = beforePos.get(idx);
-        const cur = npcs[idx];
-        if (!prev || !cur) continue;
-        if (prev.x !== cur.x || prev.y !== cur.y) moved++;
+      try { ctx.log(`[TownAI] tick ${tick} phase=${phase}: moved ${moved}/${selected.length} npcs.`, "info"); } catch (_) {}
+    }
+    // Fallback: if nothing moved for this batch, nudge a small random subset to avoid apparent stalling
+    if (moved === 0 && selected.length > 0) {
+      const fallbackCount = Math.min(20, selected.length);
+      for (let i = 0; i < fallbackCount; i++) {
+        const idx = selected[i];
+        const n = npcs[idx];
+        // Prefer tiny jiggle within building if homebound and inside, else random small step
+        const jig = (dx,dy) => stepTowards(ctx, occ, n, n.x + dx, n.y + dy);
+        if (n.isResident && n._home && insideBuilding(n._home.building, n.x, n.y)) {
+          jig(randInt(ctx, -1, 1), randInt(ctx, -1, 1));
+        } else {
+          jig(randInt(ctx, -1, 1), randInt(ctx, -1, 1));
+        }
       }
-      try {
-        ctx.log(`[TownAI] tick ${tick} phase=${phase}: moved ${moved}/${selected.length} npcs.`, "info");
-      } catch (_) {}
     }
   }
 
