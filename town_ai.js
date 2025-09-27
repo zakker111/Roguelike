@@ -534,293 +534,297 @@
   }
 
   function townNPCsAct(ctx) {
-    const { npcs, player, townProps } = ctx;
-    if (!Array.isArray(npcs) || npcs.length === 0) return;
-    if (!processing.enabled) return;
+    try {
+      const { npcs, player, townProps } = ctx;
+      if (!Array.isArray(npcs) || npcs.length === 0) return;
+      if (!processing.enabled) return;
 
-    const occ = new Set();
-    occ.add(`${player.x},${player.y}`);
-    for (const n of npcs) occ.add(`${n.x},${n.y}`);
-    // Only street props block movement; interior furniture should not block.
-    const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree"]);
-    if (Array.isArray(townProps)) {
-      for (const p of townProps) {
-        if (blockingProps.has(p.type)) occ.add(`${p.x},${p.y}`);
-      }
-    }
-
-    // Night-time routing: build a relaxed occupancy that ignores other NPCs to let residents thread through crowds
-    const occRelaxed = new Set();
-    occRelaxed.add(`${player.x},${player.y}`);
-    if (Array.isArray(townProps)) {
-      for (const p of townProps) {
-        if (blockingProps.has(p.type)) occRelaxed.add(`${p.x},${p.y}`);
-      }
-    }
-
-    const t = ctx.time;
-    const minutes = t ? (t.hours * 60 + t.minutes) : 12 * 60;
-    const phase = (t && t.phase === "night") ? "evening"
-                : (t && t.phase === "dawn") ? "morning"
-                : (t && t.phase === "dusk") ? "evening"
-                : "day";
-
-    // Shuffle iteration and batch to avoid heavy CPU on large towns
-    // Choose a subset of NPCs to process this turn, based on processing.mode
-    const tick = ctx.townTick || 0;
-    const order = npcs.map((_, i) => i);
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(ctx.rng() * (i + 1));
-      const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
-    }
-    let selected = [];
-    if (processing.mode === "all") {
-      selected = order;
-    } else if (processing.mode === "modulo") {
-      const m = Math.max(1, processing.modulo | 0);
-      selected = order.filter(i => (i % m) === (tick % m));
-    } else if (processing.mode === "random") {
-      const count = Math.min(order.length, isFinite(processing.maxPerTurn) ? processing.maxPerTurn : Math.ceil(order.length * 0.35));
-      selected = order.slice(0, count);
-    } else {
-      selected = order;
-    }
-    const maxProcess = Math.min(selected.length, isFinite(processing.maxPerTurn) ? processing.maxPerTurn : selected.length);
-    let processed = 0;
-
-    // Snapshot positions for movement diagnostics
-    const beforePos = new Map();
-    for (const idx of selected) {
-      const n = npcs[idx];
-      beforePos.set(idx, { x: n.x, y: n.y });
-    }
-
-    function routeIntoBuilding(ctx, occ, n, building, targetInside) {
-      // If outside the building, aim for the door first
-      const insideNow = insideBuilding(building, n.x, n.y);
-      if (!insideNow) {
-        const door = building.door || nearestFreeAdjacent(ctx, building.x + ((building.w / 2) | 0), building.y, null);
-        if (door) {
-          // If on the door, step one tile inside using interior-aware free check
-          if (n.x === door.x && n.y === door.y) {
-            // Prefer targetInside if valid; else pick nearest interior free tile adjacent to door
-            let inSpot = null;
-            if (targetInside && isFreeTileInterior(ctx, targetInside.x, targetInside.y, building)) {
-              inSpot = targetInside;
-            } else {
-              const adj = [{dx:0,dy:1},{dx:0,dy:-1},{dx:1,dy:0},{dx:-1,dy:0}];
-              for (const d of adj) {
-                const ix = door.x + d.dx, iy = door.y + d.dy;
-                if (isFreeTileInterior(ctx, ix, iy, building)) { inSpot = { x: ix, y: iy }; break; }
-              }
-              if (!inSpot) {
-                // fallback: nearestFreeAdjacent constrained to building interior
-                inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building);
-              }
-            }
-            if (inSpot) {
-              stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
-              return true;
-            }
-          }
-          // Otherwise, move toward the door
-          stepTowards(ctx, occ, n, door.x, door.y);
-          return true;
+      const occ = new Set();
+      occ.add(`${player.x},${player.y}`);
+      for (const n of npcs) occ.add(`${n.x},${n.y}`);
+      // Only street props block movement; interior furniture should not block.
+      const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree"]);
+      if (Array.isArray(townProps)) {
+        for (const p of townProps) {
+          if (blockingProps.has(p.type)) occ.add(`${p.x},${p.y}`);
         }
+      }
+
+      // Night-time routing: build a relaxed occupancy that ignores other NPCs to let residents thread through crowds
+      const occRelaxed = new Set();
+      occRelaxed.add(`${player.x},${player.y}`);
+      if (Array.isArray(townProps)) {
+        for (const p of townProps) {
+          if (blockingProps.has(p.type)) occRelaxed.add(`${p.x},${p.y}`);
+        }
+      }
+
+      const t = ctx.time;
+      const minutes = t ? (t.hours * 60 + t.minutes) : 12 * 60;
+      const phase = (t && t.phase === "night") ? "evening"
+                  : (t && t.phase === "dawn") ? "morning"
+                  : (t && t.phase === "dusk") ? "evening"
+                  : "day";
+
+      // Shuffle iteration and batch to avoid heavy CPU on large towns
+      // Choose a subset of NPCs to process this turn, based on processing.mode
+      const tick = ctx.townTick || 0;
+      const order = npcs.map((_, i) => i);
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(ctx.rng() * (i + 1));
+        const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+      }
+      let selected = [];
+      if (processing.mode === "all") {
+        selected = order;
+      } else if (processing.mode === "modulo") {
+        const m = Math.max(1, processing.modulo | 0);
+        selected = order.filter(i => (i % m) === (tick % m));
+      } else if (processing.mode === "random") {
+        const count = Math.min(order.length, isFinite(processing.maxPerTurn) ? processing.maxPerTurn : Math.ceil(order.length * 0.35));
+        selected = order.slice(0, count);
       } else {
-        // Already inside: go to targetInside or nearest free interior tile
-        let inSpot = null;
-        if (targetInside && isFreeTileInterior(ctx, targetInside.x, targetInside.y, building)) {
-          inSpot = targetInside;
-        } else {
-          inSpot = nearestFreeAdjacent(ctx, targetInside ? targetInside.x : n.x, targetInside ? targetInside.y : n.y, building);
-        }
-        if (inSpot) {
-          stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
-          return true;
-        }
+        selected = order;
       }
-      return false;
-    }
+      const maxProcess = Math.min(selected.length, isFinite(processing.maxPerTurn) ? processing.maxPerTurn : selected.length);
+      let processed = 0;
 
-    // Helper: aggressively move resident home in evening/night with multiple steps per turn
-    function forceHomeProgress(ctx, occSet, n, maxSteps = 5) {
-      if (!(n._home && n._home.building)) return false;
-      const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-      for (let s = 0; s < maxSteps; s++) {
-        if (n.x === sleepTarget.x && n.y === sleepTarget.y) { n._sleeping = true; return true; }
-        // Step via door if outside; otherwise toward target
-        if (!insideBuilding(n._home.building, n.x, n.y)) {
-          if (!routeIntoBuilding(ctx, occSet, n, n._home.building, sleepTarget)) {
-            // If routeIntoBuilding fails, try a straight step toward door or target
-            const door = n._home.door || { x: n._home.building.x + ((n._home.building.w / 2) | 0), y: n._home.building.y };
-            stepTowards(ctx, occSet, n, door.x, door.y);
-          }
-        } else {
-          // Inside: use relaxed occupancy; if very close, try a final step aggressively
-          const close = Math.abs(n.x - sleepTarget.x) + Math.abs(n.y - sleepTarget.y) <= 2;
-          if (!stepTowards(ctx, occSet, n, sleepTarget.x, sleepTarget.y) && close) {
-            // Try again ignoring other NPC occupancy by crafting a minimal occ that only blocks player and street props
-            const occInsideRelaxed = new Set();
-            occInsideRelaxed.add(`${ctx.player.x},${ctx.player.y}`);
-            const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree"]);
-            for (const p of (ctx.townProps || [])) {
-              if (blockingProps.has(p.type)) occInsideRelaxed.add(`${p.x},${p.y}`);
-            }
-            stepTowards(ctx, occInsideRelaxed, n, sleepTarget.x, sleepTarget.y);
-          }
-        }
-      }
-      return true;
-    }
-
-    for (const idx of selected) {
-      if (processed++ >= maxProcess) break;
-      const n = npcs[idx];
-      ensureHome(ctx, n);
-
-      // Pets: simple jiggle
-      if (n.isPet) {
-        if (ctx.rng() < 0.6) continue;
-        stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
-        continue;
-      }
-
-      // Shopkeepers follow shop schedule
-      if (n.isShopkeeper) {
-        const shop = n._shopRef || null;
-        const o = shop ? shop.openMin : 8 * 60;
-        const c = shop ? shop.closeMin : 18 * 60;
-        const arriveStart = (o - 60 + 1440) % 1440;
-        const leaveEnd = (c + 30) % 1440;
-        const shouldBeAtWorkZone = inWindow(arriveStart, leaveEnd, minutes, 1440);
-        const openNow = isOpenAt(shop, minutes, 1440);
-
-        let handled = false;
-        if (shouldBeAtWorkZone) {
-          if (openNow && n._workInside && shop && shop.building) {
-            handled = routeIntoBuilding(ctx, occ, n, shop.building, n._workInside);
-          } else if (n._work) {
-            handled = stepTowards(ctx, occ, n, n._work.x, n._work.y);
-          }
-        } else if (n._home && n._home.building) {
-          // Off hours: go home, via door then inside
-          handled = forceHomeProgress(ctx, occRelaxed, n, 3);
-        }
-        if (handled) continue;
-        if (ctx.rng() < 0.9) continue;
-      }
-
-      // Residents: homebound + sleep system
-      if (n.isResident) {
-        const hasHome = !!(n._home && n._home.building);
-        const insideNow = hasHome ? insideBuilding(n._home.building, n.x, n.y) : false;
-
-        // If sleeping, only wake in morning
-        if (n._sleeping) {
-          if (phase === "morning") n._sleeping = false;
-          else continue;
-        }
-
-        if (hasHome && (phase === "evening" || phase === "night")) {
-          forceHomeProgress(ctx, occRelaxed, n, 5);
-          continue;
-        } else if (phase === "day") {
-          // Some residents choose to stay home today: route inside and idle
-          if (n._homeToday && hasHome) {
-            const homeTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-            if (!insideNow) {
-              if (routeIntoBuilding(ctx, occRelaxed, n, n._home.building, homeTarget)) continue;
-            } else {
-              if (ctx.rng() < 0.6) stepTowards(ctx, occRelaxed, n, homeTarget.x, homeTarget.y);
-              continue;
-            }
-          }
-
-          const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
-          const stayInside = n._homebound && hasHome && insideNow && ctx.rng() < 0.9;
-          if (stayInside) {
-            if (ctx.rng() < 0.4) stepTowards(ctx, occRelaxed, n, n._home.x, n._home.y);
-            continue;
-          }
-          if (target) {
-            if (n.x === target.x && n.y === target.y) {
-              if (ctx.rng() < 0.85) continue;
-              stepTowards(ctx, occRelaxed, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
-              continue;
-            }
-            if (!stepTowards(ctx, occ, n, target.x, target.y)) {
-              stepTowards(ctx, occRelaxed, n, target.x, target.y);
-            }
-            continue;
-          }
-        } else if (phase === "morning") {
-          if (hasHome) {
-            const homeTarget = { x: n._home.x, y: n._home.y };
-            if (n._homebound && insideNow) {
-              if (ctx.rng() < 0.4) stepTowards(ctx, occRelaxed, n, homeTarget.x, homeTarget.y);
-              continue;
-            }
-            if (routeIntoBuilding(ctx, occRelaxed, n, n._home.building, homeTarget)) continue;
-          }
-        }
-
-        // default small wander (prefer interior if homebound and inside)
-        if (n._homebound && hasHome && insideNow) {
-          const goal = { x: n._home.x, y: n._home.y };
-          if (ctx.rng() < 0.5) stepTowards(ctx, occRelaxed, n, goal.x, goal.y);
-          continue;
-        }
-        stepTowards(ctx, occRelaxed, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
-        continue;
-      }
-
-      // Generic NPCs
-      if (ctx.rng() < 0.05) continue; // much less idling
-      let target = null;
-      if (phase === "morning") target = n._home ? { x: n._home.x, y: n._home.y } : null;
-      else if (phase === "day") target = (n._work || ctx.townPlaza);
-      else {
-        // evening/night: bias to home over tavern
-        target = (n._home ? { x: n._home.x, y: n._home.y } : (ctx.tavern && n._likesTavern) ? { x: ctx.tavern.door.x, y: ctx.tavern.door.y } : null);
-      }
-      if (!target) {
-        // Fallback random jiggle, prefer relaxed occ to avoid crowd stalls
-        stepTowards(ctx, occRelaxed, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
-        continue;
-      }
-      // Try target with appropriate occupancy, then relaxed as fallback
-      if (!stepTowards(ctx, (phase === "evening" || phase === "night") ? occRelaxed : occ, n, target.x, target.y)) {
-        stepTowards(ctx, occRelaxed, n, target.x, target.y);
-      }
-    }
-
-    // Movement diagnostics and fallback: ensure at least some visible motion
-    let moved = 0;
-    for (const idx of selected) {
-      const prev = beforePos.get(idx);
-      const cur = npcs[idx];
-      if (!prev || !cur) continue;
-      if (prev.x !== cur.x || prev.y !== cur.y) moved++;
-    }
-    // DEV log
-    if (typeof window !== "undefined" && window.DEV && ctx && typeof ctx.log === "function") {
-      try { ctx.log(`[TownAI] tick ${tick} phase=${phase}: moved ${moved}/${selected.length} npcs.`, "info"); } catch (_) {}
-    }
-    // Fallback: if nothing moved for this batch, nudge a larger subset to avoid apparent stalling
-    if (moved === 0 && selected.length > 0) {
-      const fallbackCount = Math.min(Math.ceil(selected.length * 0.6), selected.length);
-      for (let i = 0; i < fallbackCount; i++) {
-        const idx = selected[i];
+      // Snapshot positions for movement diagnostics
+      const beforePos = new Map();
+      for (const idx of selected) {
         const n = npcs[idx];
-        // Prefer tiny jiggle with relaxed occupancy to avoid stalls
-        const jig = (dx,dy) => stepTowards(ctx, occRelaxed, n, n.x + dx, n.y + dy);
-        if (n.isResident && n._home && insideBuilding(n._home.building, n.x, n.y)) {
-          jig(randInt(ctx, -1, 1), randInt(ctx, -1, 1));
+        beforePos.set(idx, { x: n.x, y: n.y });
+      }
+
+      function routeIntoBuilding(ctx, occ, n, building, targetInside) {
+        // If outside the building, aim for the door first
+        const insideNow = insideBuilding(building, n.x, n.y);
+        if (!insideNow) {
+          const door = building.door || nearestFreeAdjacent(ctx, building.x + ((building.w / 2) | 0), building.y, null);
+          if (door) {
+            // If on the door, step one tile inside using interior-aware free check
+            if (n.x === door.x && n.y === door.y) {
+              // Prefer targetInside if valid; else pick nearest interior free tile adjacent to door
+              let inSpot = null;
+              if (targetInside && isFreeTileInterior(ctx, targetInside.x, targetInside.y, building)) {
+                inSpot = targetInside;
+              } else {
+                const adj = [{dx:0,dy:1},{dx:0,dy:-1},{dx:1,dy:0},{dx:-1,dy:0}];
+                for (const d of adj) {
+                  const ix = door.x + d.dx, iy = door.y + d.dy;
+                  if (isFreeTileInterior(ctx, ix, iy, building)) { inSpot = { x: ix, y: iy }; break; }
+                }
+                if (!inSpot) {
+                  // fallback: nearestFreeAdjacent constrained to building interior
+                  inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building);
+                }
+              }
+              if (inSpot) {
+                stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
+                return true;
+              }
+            }
+            // Otherwise, move toward the door
+            stepTowards(ctx, occ, n, door.x, door.y);
+            return true;
+          }
         } else {
-          jig(randInt(ctx, -1, 1), randInt(ctx, -1, 1));
+          // Already inside: go to targetInside or nearest free interior tile
+          let inSpot = null;
+          if (targetInside && isFreeTileInterior(ctx, targetInside.x, targetInside.y, building)) {
+            inSpot = targetInside;
+          } else {
+            inSpot = nearestFreeAdjacent(ctx, targetInside ? targetInside.x : n.x, targetInside ? targetInside.y : n.y, building);
+          }
+          if (inSpot) {
+            stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
+            return true;
+          }
+        }
+        return false;
+      }
+
+      // Helper: aggressively move resident home in evening/night with multiple steps per turn
+      function forceHomeProgress(ctx, occSet, n, maxSteps = 5) {
+        if (!(n._home && n._home.building)) return false;
+        const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+        for (let s = 0; s < maxSteps; s++) {
+          if (n.x === sleepTarget.x && n.y === sleepTarget.y) { n._sleeping = true; return true; }
+          // Step via door if outside; otherwise toward target
+          if (!insideBuilding(n._home.building, n.x, n.y)) {
+            if (!routeIntoBuilding(ctx, occSet, n, n._home.building, sleepTarget)) {
+              // If routeIntoBuilding fails, try a straight step toward door or target
+              const door = n._home.door || { x: n._home.building.x + ((n._home.building.w / 2) | 0), y: n._home.building.y };
+              stepTowards(ctx, occSet, n, door.x, door.y);
+            }
+          } else {
+            // Inside: use relaxed occupancy; if very close, try a final step aggressively
+            const close = Math.abs(n.x - sleepTarget.x) + Math.abs(n.y - sleepTarget.y) <= 2;
+            if (!stepTowards(ctx, occSet, n, sleepTarget.x, sleepTarget.y) && close) {
+              // Try again ignoring other NPC occupancy by crafting a minimal occ that only blocks player and street props
+              const occInsideRelaxed = new Set();
+              occInsideRelaxed.add(`${ctx.player.x},${ctx.player.y}`);
+              const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree"]);
+              for (const p of (ctx.townProps || [])) {
+                if (blockingProps.has(p.type)) occInsideRelaxed.add(`${p.x},${p.y}`);
+              }
+              stepTowards(ctx, occInsideRelaxed, n, sleepTarget.x, sleepTarget.y);
+            }
+          }
+        }
+        return true;
+      }
+
+      for (const idx of selected) {
+        if (processed++ >= maxProcess) break;
+        const n = npcs[idx];
+        ensureHome(ctx, n);
+
+        // Pets: simple jiggle
+        if (n.isPet) {
+          if (ctx.rng() < 0.6) continue;
+          stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+          continue;
+        }
+
+        // Shopkeepers follow shop schedule
+        if (n.isShopkeeper) {
+          const shop = n._shopRef || null;
+          const o = shop ? shop.openMin : 8 * 60;
+          const c = shop ? shop.closeMin : 18 * 60;
+          const arriveStart = (o - 60 + 1440) % 1440;
+          const leaveEnd = (c + 30) % 1440;
+          const shouldBeAtWorkZone = inWindow(arriveStart, leaveEnd, minutes, 1440);
+          const openNow = isOpenAt(shop, minutes, 1440);
+
+          let handled = false;
+          if (shouldBeAtWorkZone) {
+            if (openNow && n._workInside && shop && shop.building) {
+              handled = routeIntoBuilding(ctx, occ, n, shop.building, n._workInside);
+            } else if (n._work) {
+              handled = stepTowards(ctx, occ, n, n._work.x, n._work.y);
+            }
+          } else if (n._home && n._home.building) {
+            // Off hours: go home, via door then inside
+            handled = forceHomeProgress(ctx, occRelaxed, n, 3);
+          }
+          if (handled) continue;
+          if (ctx.rng() < 0.9) continue;
+        }
+
+        // Residents: homebound + sleep system
+        if (n.isResident) {
+          const hasHome = !!(n._home && n._home.building);
+          const insideNow = hasHome ? insideBuilding(n._home.building, n.x, n.y) : false;
+
+          // If sleeping, only wake in morning
+          if (n._sleeping) {
+            if (phase === "morning") n._sleeping = false;
+            else continue;
+          }
+
+          if (hasHome && (phase === "evening" || phase === "night")) {
+            forceHomeProgress(ctx, occRelaxed, n, 5);
+            continue;
+          } else if (phase === "day") {
+            // Some residents choose to stay home today: route inside and idle
+            if (n._homeToday && hasHome) {
+              const homeTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+              if (!insideNow) {
+                if (routeIntoBuilding(ctx, occRelaxed, n, n._home.building, homeTarget)) continue;
+              } else {
+                if (ctx.rng() < 0.6) stepTowards(ctx, occRelaxed, n, homeTarget.x, homeTarget.y);
+                continue;
+              }
+            }
+
+            const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
+            const stayInside = n._homebound && hasHome && insideNow && ctx.rng() < 0.9;
+            if (stayInside) {
+              if (ctx.rng() < 0.4) stepTowards(ctx, occRelaxed, n, n._home.x, n._home.y);
+              continue;
+            }
+            if (target) {
+              if (n.x === target.x && n.y === target.y) {
+                if (ctx.rng() < 0.85) continue;
+                stepTowards(ctx, occRelaxed, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+                continue;
+              }
+              if (!stepTowards(ctx, occ, n, target.x, target.y)) {
+                stepTowards(ctx, occRelaxed, n, target.x, target.y);
+              }
+              continue;
+            }
+          } else if (phase === "morning") {
+            if (hasHome) {
+              const homeTarget = { x: n._home.x, y: n._home.y };
+              if (n._homebound && insideNow) {
+                if (ctx.rng() < 0.4) stepTowards(ctx, occRelaxed, n, homeTarget.x, homeTarget.y);
+                continue;
+              }
+              if (routeIntoBuilding(ctx, occRelaxed, n, n._home.building, homeTarget)) continue;
+            }
+          }
+
+          // default small wander (prefer interior if homebound and inside)
+          if (n._homebound && hasHome && insideNow) {
+            const goal = { x: n._home.x, y: n._home.y };
+            if (ctx.rng() < 0.5) stepTowards(ctx, occRelaxed, n, goal.x, goal.y);
+            continue;
+          }
+          stepTowards(ctx, occRelaxed, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+          continue;
+        }
+
+        // Generic NPCs
+        if (ctx.rng() < 0.05) continue; // much less idling
+        let target = null;
+        if (phase === "morning") target = n._home ? { x: n._home.x, y: n._home.y } : null;
+        else if (phase === "day") target = (n._work || ctx.townPlaza);
+        else {
+          // evening/night: bias to home over tavern
+          target = (n._home ? { x: n._home.x, y: n._home.y } : (ctx.tavern && n._likesTavern) ? { x: ctx.tavern.door.x, y: ctx.tavern.door.y } : null);
+        }
+        if (!target) {
+          // Fallback random jiggle, prefer relaxed occ to avoid crowd stalls
+          stepTowards(ctx, occRelaxed, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+          continue;
+        }
+        // Try target with appropriate occupancy, then relaxed as fallback
+        if (!stepTowards(ctx, (phase === "evening" || phase === "night") ? occRelaxed : occ, n, target.x, target.y)) {
+          stepTowards(ctx, occRelaxed, n, target.x, target.y);
         }
       }
+
+      // Movement diagnostics and fallback: ensure at least some visible motion
+      let moved = 0;
+      for (const idx of selected) {
+        const prev = beforePos.get(idx);
+        const cur = npcs[idx];
+        if (!prev || !cur) continue;
+        if (prev.x !== cur.x || prev.y !== cur.y) moved++;
+      }
+      // DEV log
+      if (typeof window !== "undefined" && window.DEV && ctx && typeof ctx.log === "function") {
+        try { ctx.log(`[TownAI] tick ${tick} phase=${phase}: moved ${moved}/${selected.length} npcs.`, "info"); } catch (_) {}
+      }
+      // Fallback: if nothing moved for this batch, nudge a larger subset to avoid apparent stalling
+      if (moved === 0 && selected.length > 0) {
+        const fallbackCount = Math.min(Math.ceil(selected.length * 0.6), selected.length);
+        for (let i = 0; i < fallbackCount; i++) {
+          const idx = selected[i];
+          const n = npcs[idx];
+          // Prefer tiny jiggle with relaxed occupancy to avoid stalls
+          const jig = (dx,dy) => stepTowards(ctx, occRelaxed, n, n.x + dx, n.y + dy);
+          if (n.isResident && n._home && insideBuilding(n._home.building, n.x, n.y)) {
+            jig(randInt(ctx, -1, 1), randInt(ctx, -1, 1));
+          } else {
+            jig(randInt(ctx, -1, 1), randInt(ctx, -1, 1));
+          }
+        }
+      }
+    } catch (e) {
+      try { ctx && ctx.log && ctx.log(`[TownAI] act error: ${String(e)}`, "warn"); } catch (_) {}
     }
   }
 
