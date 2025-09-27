@@ -946,6 +946,31 @@
     return true;
   }
 
+  // Lightweight diagnostics: summarize town occupancy and basic integrity
+  function selfCheck(ctx) {
+    try {
+      const buildings = Array.isArray(ctx.townBuildings) ? ctx.townBuildings : [];
+      const residents = Array.isArray(ctx.npcs) ? ctx.npcs.filter(n => n.isResident) : [];
+      const beds = Array.isArray(ctx.townProps) ? ctx.townProps.filter(p => p.type === "bed") : [];
+
+      const occPerBuilding = new Map();
+      for (const n of residents) {
+        const b = n._home && n._home.building;
+        if (!b) continue;
+        const key = `${b.x},${b.y},${b.w},${b.h}`;
+        occPerBuilding.set(key, (occPerBuilding.get(key) || 0) + 1);
+      }
+      const occupiedBuildings = occPerBuilding.size;
+      const pctOcc = buildings.length ? Math.round((occupiedBuildings / buildings.length) * 100) : 0;
+
+      const msg = `[TownAI] Buildings: ${buildings.length}, Residents: ${residents.length}, Beds: ${beds.length}. ` +
+                  `OccupiedBuildings: ${occupiedBuildings} (${pctOcc}%).`;
+      if (ctx && typeof ctx.log === "function") ctx.log(msg, "info");
+    } catch (e) {
+      try { ctx.log && ctx.log(`[TownAI] selfCheck failed: ${String(e)}`, "warn"); } catch (_) {}
+    }
+  }
+
   window.TownAI = {
     populateTown,
     townNPCsAct,
