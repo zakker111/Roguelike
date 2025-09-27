@@ -74,6 +74,12 @@
     for (const d of dirs4) {
       const nx = n.x + d.dx, ny = n.y + d.dy;
       if (nx === goal.x && ny === goal.y && isWalkTown(ctx, nx, ny) && !occ.has(`${nx},${ny}`) && !(player.x === nx && player.y === ny)) {
+        // optional debug path
+        if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
+          n._debugPath = [{ x: n.x, y: n.y }, { x: nx, y: ny }];
+        } else {
+          n._debugPath = null;
+        }
         occ.delete(`${n.x},${n.y}`); n.x = nx; n.y = ny; occ.add(`${nx},${ny}`); return true;
       }
     }
@@ -116,24 +122,42 @@
         if (!isWalkTown(ctx, nx, ny)) continue;
         if (ctx.player.x === nx && ctx.player.y === ny) continue;
         if (occ.has(`${nx},${ny}`)) continue;
+        if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
+          n._debugPath = [{ x: n.x, y: n.y }, { x: nx, y: ny }];
+        } else {
+          n._debugPath = null;
+        }
         occ.delete(`${n.x},${n.y}`); n.x = nx; n.y = ny; occ.add(`${nx},${ny}`); return true;
       }
+      // no move; clear path
+      n._debugPath = null;
       return false;
     }
 
-    // Reconstruct first step
+    // Reconstruct full path start->...->goal
+    const full = [];
     let cur = found;
-    let back = prev.get(key(cur.x, cur.y));
-    while (back && !(back.x === start.x && back.y === start.y)) {
-      cur = back;
-      back = prev.get(key(cur.x, cur.y));
+    while (cur) {
+      full.push({ x: cur.x, y: cur.y });
+      cur = prev.get(key(cur.x, cur.y));
     }
-    if (cur && isWalkTown(ctx, cur.x, cur.y) && !(ctx.player.x === cur.x && ctx.player.y === cur.y) && !occ.has(key(cur.x, cur.y))) {
+    full.reverse(); // start to goal
+
+    // First step after start
+    const firstStep = full[1];
+    if (firstStep && isWalkTown(ctx, firstStep.x, firstStep.y) && !(ctx.player.x === firstStep.x && ctx.player.y === firstStep.y) && !occ.has(key(firstStep.x, firstStep.y))) {
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
+        n._debugPath = full;
+      } else {
+        n._debugPath = null;
+      }
       occ.delete(`${n.x},${n.y}`);
-      n.x = cur.x; n.y = cur.y;
+      n.x = firstStep.x; n.y = firstStep.y;
       occ.add(`${n.x},${n.y}`);
       return true;
     }
+    // couldn't step; clear path
+    n._debugPath = null;
     return false;
   }
 

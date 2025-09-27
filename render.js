@@ -461,6 +461,36 @@
         } catch (_) {}
       }
 
+      // Optional: draw planned paths for NPCs when debug paths enabled
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_OVERLAY && window.DEBUG_TOWN_PATHS && Array.isArray(npcs)) {
+        try {
+          ctx2d.save();
+          ctx2d.strokeStyle = "rgba(0, 200, 255, 0.85)";
+          ctx2d.lineWidth = 2;
+          for (const n of npcs) {
+            if (!n._debugPath || n._debugPath.length < 2) continue;
+            ctx2d.beginPath();
+            for (let i = 0; i < n._debugPath.length; i++) {
+              const p = n._debugPath[i];
+              const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+              if (i === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
+            }
+            ctx2d.stroke();
+            // draw small nodes
+            ctx2d.fillStyle = "rgba(0, 200, 255, 0.85)";
+            for (const p of n._debugPath) {
+              const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+              ctx2d.beginPath();
+              ctx2d.arc(px, py, Math.max(2, Math.floor(TILE * 0.12)), 0, Math.PI * 2);
+              ctx2d.fill();
+            }
+          }
+          ctx2d.restore();
+        } catch (_) {}
+      }
+
       // Lamp light glow at night/dusk/dawn
       try {
         const time = ctx.time;
