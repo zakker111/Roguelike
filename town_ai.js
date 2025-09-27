@@ -403,7 +403,8 @@
             name: rng() < 0.25 ? `Child` : `Resident`,
             lines: linesHome,
             isResident: true,
-            _homebound: rng() < 0.55, // slightly more homebound to keep interiors populated
+            _homebound: rng() < 0.6, // increase fraction that prefer staying inside
+            _homeToday: rng() < 0.25, // some choose to stay home today
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: sleepSpot },
             _work: errand,
           });
@@ -422,7 +423,8 @@
             name: `Resident`,
             lines: linesHome,
             isResident: true,
-            _homebound: rng() < 0.55,
+            _homebound: rng() < 0.6,
+            _homeToday: rng() < 0.25,
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: sleepSpot },
             _work: (rng() < 0.5 && shops && shops.length) ? { x: shops[0].x, y: shops[0].y }
                   : (townPlaza ? { x: townPlaza.x, y: townPlaza.y } : null),
@@ -700,19 +702,33 @@
           forceHomeProgress(ctx, occRelaxed, n, 3);
           continue;
         } else if (phase === "day") {
+          // Some residents choose to stay home today: route into building and idle
+          if (n._homeToday && hasHome) {
+            const homeTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+            if (!insideNow) {
+              if (routeIntoBuilding(ctx, occ, n, n._home.building, homeTarget)) continue;
+            } else {
+              // interior idle/jiggle near bed/home
+              if (ctx.rng() < 0.6) {
+                stepTowards(ctx, occ, n, homeTarget.x, homeTarget.y);
+              }
+              continue;
+            }
+          }
+
           const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
           // Homebound residents prefer staying inside during daytime as well
-          const stayInside = n._homebound && hasHome && insideNow && ctx.rng() < 0.85;
+          const stayInside = n._homebound && hasHome && insideNow && ctx.rng() < 0.9;
           if (stayInside) {
             // occasional small interior jiggle
-            if (ctx.rng() < 0.3) {
+            if (ctx.rng() < 0.4) {
               stepTowards(ctx, occ, n, n._home.x, n._home.y);
             }
             continue;
           }
           if (target) {
             if (n.x === target.x && n.y === target.y) {
-              if (ctx.rng() < 0.8) continue;
+              if (ctx.rng() < 0.85) continue;
               stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
               continue;
             }
