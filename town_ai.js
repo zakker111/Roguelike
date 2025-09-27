@@ -588,6 +588,13 @@
     const maxProcess = Math.min(selected.length, isFinite(processing.maxPerTurn) ? processing.maxPerTurn : selected.length);
     let processed = 0;
 
+    // Snapshot positions for movement diagnostics
+    const beforePos = new Map();
+    for (const idx of selected) {
+      const n = npcs[idx];
+      beforePos.set(idx, { x: n.x, y: n.y });
+    }
+
     function routeIntoBuilding(ctx, occ, n, building, targetInside) {
       // If outside the building, aim for the door first
       const insideNow = insideBuilding(building, n.x, n.y);
@@ -780,6 +787,20 @@
         continue;
       }
       stepTowards(ctx, (phase === "evening" || phase === "night") ? occRelaxed : occ, n, target.x, target.y);
+    }
+
+    // Movement diagnostics (DEV only): count how many selected NPCs moved this tick
+    if (typeof window !== "undefined" && window.DEV && ctx && typeof ctx.log === "function") {
+      let moved = 0;
+      for (const idx of selected) {
+        const prev = beforePos.get(idx);
+        const cur = npcs[idx];
+        if (!prev || !cur) continue;
+        if (prev.x !== cur.x || prev.y !== cur.y) moved++;
+      }
+      try {
+        ctx.log(`[TownAI] tick ${tick} phase=${phase}: moved ${moved}/${selected.length} npcs.`, "info");
+      } catch (_) {}
     }
   }
 
