@@ -1344,8 +1344,8 @@
     if (window.TownAI && typeof TownAI.populateTown === "function") {
       const ctxLocal = getCtx();
       TownAI.populateTown(ctxLocal);
-      // Diagnostics: run a self-check and report to log
-      if (typeof TownAI.selfCheck === "function") {
+      // Diagnostics: run a self-check only in DEV to avoid heavy work in production
+      if (window.DEV && typeof TownAI.selfCheck === "function") {
         TownAI.selfCheck(ctxLocal);
       }
     }
@@ -1396,13 +1396,12 @@
     enemies = [];
     corpses = [];
     decals = [];
-    // Diagnostics: run TownAI self-check after full town generation
+    // Diagnostics: run TownAI self-check after full town generation (DEV only)
     try {
-      if (window.TownAI && typeof TownAI.selfCheck === "function") {
+      if (window.DEV && window.TownAI && typeof TownAI.selfCheck === "function") {
         TownAI.selfCheck(getCtx());
       }
-    } catch (_) {}
-  }
+
 
   function ensureTownSpawnClear() {
     if (window.TownAI && typeof TownAI.ensureTownSpawnClear === "function") {

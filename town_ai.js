@@ -928,13 +928,21 @@
       const buildings = ctx.townBuildings || [];
       const allResidents = (ctx.npcs || []).filter(n => n.isResident);
       const beds = (ctx.townProps || []).filter(p => p.type === "bed");
+
+      // Short-circuit if no buildings or residents yet (e.g., called mid-generation)
+      if (!buildings.length || !allResidents.length) {
+        const msg = `[TownAI] (skip) Buildings: ${buildings.length}, Residents: ${allResidents.length}, Beds: ${beds.length}.`;
+        ctx.log && ctx.log(msg, "info");
+        return;
+      }
+
       const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree"]);
       const occRelaxed = new Set();
       occRelaxed.add(`${ctx.player.x},${ctx.player.y}`);
       for (const p of (ctx.townProps || [])) { if (blockingProps.has(p.type)) occRelaxed.add(`${p.x},${p.y}`); }
 
       // Keep diagnostics light: sample a subset of residents for reachability
-      const MAX_CHECKS = 20;
+      const MAX_CHECKS = 12;
       const residents = allResidents.slice();
       for (let i = residents.length - 1; i > 0; i--) {
         const j = Math.floor(ctx.rng() * (i + 1)); const t = residents[i]; residents[i] = residents[j]; residents[j] = t;
