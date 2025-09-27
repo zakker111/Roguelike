@@ -142,6 +142,10 @@
       npcs,
       shops,
       townProps,
+      townBuildings,
+      townPlaza,
+      tavern,
+      townExitAt,
       dungeon: currentDungeon,
       dungeonInfo: currentDungeon,
       time: getClock(),
@@ -1392,6 +1396,12 @@
     enemies = [];
     corpses = [];
     decals = [];
+    // Diagnostics: run TownAI self-check after full town generation
+    try {
+      if (window.TownAI && typeof TownAI.selfCheck === "function") {
+        TownAI.selfCheck(getCtx());
+      }
+    } catch (_) {}
   }
 
   function ensureTownSpawnClear() {
