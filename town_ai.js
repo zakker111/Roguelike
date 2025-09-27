@@ -9,7 +9,8 @@
  *  - isFreeTownFloor(ctx, x, y): utility used by placement helpers
  */
 (function () {
-  let perTurnEnabled = true; // allow toggling per-turn processing
+  // Processing configuration: control per-turn behavior to balance performance and movement
+  let processing = { enabled: true, mode: "all", modulo: 1, maxPerTurn: Infinity };
 
   function randInt(ctx, a, b) { return Math.floor(ctx.rng() * (b - a + 1)) + a; }
   function manhattan(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
@@ -565,14 +566,26 @@
                 : "day";
 
     // Shuffle iteration and batch to avoid heavy CPU on large towns
+    // Choose a subset of NPCs to process this turn, based on processing.mode
+    const tick = ctx.townTick || 0;
     const order = npcs.map((_, i) => i);
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(ctx.rng() * (i + 1));
       const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
     }
-    const tick = ctx.townTick || 0;
-    // Process all NPCs per turn to ensure visible movement; initial ticks can be slightly lighter if needed
-    const maxProcess = order.length;
+    let selected = [];
+    if (processing.mode === "all") {
+      selected = order;
+    } else if (processing.mode === "modulo") {
+      const m = Math.max(1, processing.modulo | 0);
+      selected = order.filter(i => (i % m) === (tick % m));
+    } else if (processing.mode === "random") {
+      const count = Math.min(order.length, isFinite(processing.maxPerTurn) ? processing.maxPerTurn : Math.ceil(order.length * 0.35));
+      selected = order.slice(0, count);
+    } else {
+      selected = order;
+    }
+    const maxProcess = Math.min(selected.length, isFinite(processing.maxPerTurn) ? processing.maxPerTurn : selected.length);
     let processed = 0;
 
     function routeIntoBuilding(ctx, occ, n, building, targetInside) {
@@ -654,20 +667,19 @@
       return true;
     }
 
-    for (const idx of order) {
+    for (const idx of selected) {
       if (processed++ >= maxProcess) break;
       const n = npcs[idx];
-      ensureHome(ctx,_code nnew)</;
-n);
+      ensureHome(ctx, n);
 
-      // Pets
+      // Pets: simple jiggle
       if (n.isPet) {
         if (ctx.rng() < 0.6) continue;
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
 
-      // Shopkeepers with schedule
+      // Shopkeepers follow shop schedule
       if (n.isShopkeeper) {
         const shop = n._shopRef || null;
         const o = shop ? shop.openMin : 8 * 60;
@@ -685,17 +697,14 @@ n);
             handled = stepTowards(ctx, occ, n, n._work.x, n._work.y);
           }
         } else if (n._home && n._home.building) {
-          // Off hours: go home, via door then inside (more steps to ensure progress)
+          // Off hours: go home, via door then inside
           handled = forceHomeProgress(ctx, occRelaxed, n, 3);
         }
-
         if (handled) continue;
-
-        // idle jiggle
         if (ctx.rng() < 0.9) continue;
       }
 
-      // Residents: homebound behavior + sleep system
+      // Residents: homebound + sleep system
       if (n.isResident) {
         const hasHome = !!(n._home && n._home.building);
         const insideNow = hasHome ? insideBuilding(n._home.building, n.x, n.y) : false;
@@ -707,32 +716,24 @@ n);
         }
 
         if (hasHome && (phase === "evening" || phase === "night")) {
-          // Aggressively make progress home with multiple steps per turn using relaxed occupancy
-          forceHomeProgress(ctx, occRelaxed, n, 3);
+          forceHomeProgress(ctx, occRelaxed, n, 5);
           continue;
         } else if (phase === "day") {
-          // Some residents choose to stay home today: route into building and idle
+          // Some residents choose to stay home today: route inside and idle
           if (n._homeToday && hasHome) {
             const homeTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
             if (!insideNow) {
               if (routeIntoBuilding(ctx, occ, n, n._home.building, homeTarget)) continue;
             } else {
-              // interior idle/jiggle near bed/home
-              if (ctx.rng() < 0.6) {
-                stepTowards(ctx, occ, n, homeTarget.x, homeTarget.y);
-              }
+              if (ctx.rng() < 0.6) stepTowards(ctx, occ, n, homeTarget.x, homeTarget.y);
               continue;
             }
           }
 
           const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
-          // Homebound residents prefer staying inside during daytime as well
           const stayInside = n._homebound && hasHome && insideNow && ctx.rng() < 0.9;
           if (stayInside) {
-            // occasional small interior jiggle
-            if (ctx.rng() < 0.4) {
-              stepTowards(ctx, occ, n, n._home.x, n._home.y);
-            }
+            if (ctx.rng() < 0.4) stepTowards(ctx, occ, n, n._home.x, n._home.y);
             continue;
           }
           if (target) {
@@ -747,7 +748,6 @@ n);
         } else if (phase === "morning") {
           if (hasHome) {
             const homeTarget = { x: n._home.x, y: n._home.y };
-            // Homebound residents prefer to remain inside in morning too
             if (n._homebound && insideNow) {
               if (ctx.rng() < 0.4) stepTowards(ctx, occ, n, homeTarget.x, homeTarget.y);
               continue;
@@ -762,21 +762,12 @@ n);
           if (ctx.rng() < 0.5) stepTowards(ctx, occ, n, goal.x, goal.y);
           continue;
         }
-
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
 
-      // Generic NPCs:
+      // Generic NPCs
       if (ctx.rng() < 0.25) continue;
-      if (phase === "evening" || phase === "night") {
-        // Strongly prefer going home if they have one; take multiple steps
-        if (n._home && n._home.building) {
-          forceHomeProgress(ctx, occRelaxed, n, 4);
-          continue;
-        }
-      }
-
       let target = null;
       if (phase === "morning") target = n._home ? { x: n._home.x, y: n._home.y } : null;
       else if (phase === "day") target = (n._work || ctx.townPlaza);
@@ -792,218 +783,30 @@ n);
     }
   }
 
-  // ---- Player spawn and gate greeters moved from game.js ----
-  function ensureTownSpawnClear(ctx) {
-    const H = ctx.map.length;
-    const W = ctx.map[0] ? ctx.map[0].length : 0;
-    const isWalk = (x, y) => x >= 0 && y >= 0 && x < W && y < H && (ctx.map[y][x] === ctx.TILES.FLOOR || ctx.map[y][x] === ctx.TILES.DOOR);
-    const p = ctx.player;
-    if (isWalk(p.x, p.y)) return;
-
-    const q = [];
-    const seenB = new Set();
-    q.push({ x: p.x, y: p.y, d: 0 });
-    seenB.add(`${p.x},${p.y}`);
-    const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
-    while (q.length) {
-      const cur = q.shift();
-      for (const d of dirs) {
-        const nx = cur.x + d.dx, ny = cur.y + d.dy;
-        const key = `${nx},${ny}`;
-        if (seenB.has(key)) continue;
-        seenB.add(key);
-        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-        if (isWalk(nx, ny)) {
-          p.x = nx; p.y = ny;
-          return;
-        }
-        q.push({ x: nx, y: ny, d: cur.d + 1 });
-      }
-    }
-    p.x = (W / 2) | 0;
-    p.y = (H / 2) | 0;
+  // Per-turn toggles and entry priming
+  function setPerTurnEnabled(v) { processing.enabled = !!v; }
+  function setProcessingMode(mode = "all", modulo = 3, maxPerTurn = Infinity) {
+    processing.mode = mode;
+    processing.modulo = modulo;
+    processing.maxPerTurn = maxPerTurn;
   }
 
-  function clearAdjacentNPCsAroundPlayer(ctx) {
-    const neighbors = [
-      { x: ctx.player.x + 1, y: ctx.player.y },
-      { x: ctx.player.x - 1, y: ctx.player.y },
-      { x: ctx.player.x, y: ctx.player.y + 1 },
-      { x: ctx.player.x, y: ctx.player.y - 1 },
-    ];
-    for (const pos of neighbors) {
-      const idx = ctx.npcs.findIndex(n => n.x === pos.x && n.y === pos.y);
-      if (idx !== -1) ctx.npcs.splice(idx, 1);
-    }
-  }
-
-  function spawnGateGreeters(ctx, count = 4) {
-    if (!ctx.townExitAt) return;
-    const dirs = [
-      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
-      { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 }
-    ];
-    const names = ["Ava", "Borin", "Cora", "Darin", "Eda", "Finn", "Goro", "Hana"];
-    const lines = [
-      `Welcome to ${ctx.townName || "our town"}.`,
-      "Shops are marked with S.",
-      "Stay as long as you like.",
-      "The plaza is at the center.",
-    ];
-    let placed = 0;
-    for (let ring = 1; ring <= 2 && placed < count; ring++) {
-      for (const d of dirs) {
-        const x = ctx.townExitAt.x + d.dx * ring;
-        const y = ctx.townExitAt.y + d.dy * ring;
-        if (isFreeTownFloor(ctx, x, y) && manhattan(ctx.player.x, ctx.player.y, x, y) > 1) {
-          const name = names[randInt(ctx, 0, names.length - 1)];
-          ctx.npcs.push({ x, y, name, lines });
-          placed++;
-          if (placed >= count) break;
-        }
-      }
-    }
-    clearAdjacentNPCsAroundPlayer(ctx);
-  }
-
-  function talkNearbyNPC(ctx) {
-    if (ctx.mode !== "town") return false;
-    const targets = [];
-    for (const n of ctx.npcs) {
-      const d = Math.abs(n.x - ctx.player.x) + Math.abs(n.y - ctx.player.y);
-      if (d <= 1) targets.push(n);
-    }
-    if (targets.length === 0) {
-      ctx.log && ctx.log("There is no one to talk to here.");
-      return false;
-    }
-    const npc = targets[randInt(ctx, 0, targets.length - 1)];
-    const line = npc.lines[randInt(ctx, 0, (npc.lines && npc.lines.length ? npc.lines.length : 1) - 1)] || "Hello.";
-    ctx.log && ctx.log(`${npc.name}: ${line}`, "info");
-    if (typeof ctx.requestDraw === "function") ctx.requestDraw();
-    return true;
-  }
-
-  // ---- Diagnostics: verify homes, beds, reachability; log summary
-  function canReach(ctx, start, goal, occSet) {
-    const { map, TILES, player } = ctx;
-    const rows = map.length, cols = map[0] ? map[0].length : 0;
-    const inB = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows;
-    const isWalk = (x, y) => inB(x, y) && (map[y][x] === TILES.FLOOR || map[y][x] === TILES.DOOR);
-    const h = (x, y) => Math.abs(x - goal.x) + Math.abs(y - goal.y);
-    const key = (x, y) => `${x},${y}`;
-    if (!isWalk(goal.x, goal.y)) return false;
-
-    const MAX_NODES = 1200; // keep diagnostics light
-    const open = [{ x: start.x, y: start.y, g: 0, f: h(start.x, start.y) }];
-    const gScore = new Map([[key(start.x, start.y), 0]]);
-    const inOpen = new Set([key(start.x, start.y)]);
-    const closed = new Set();
-
-    while (open.length) {
-      // pick node with lowest f
-      let bi = 0;
-      for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
-      const cur = open.splice(bi, 1)[0];
-      const ck = key(cur.x, cur.y);
-      if (closed.has(ck)) continue;
-      closed.add(ck);
-      if (cur.x === goal.x && cur.y === goal.y) return true;
-
-      const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
-      for (const d of dirs4) {
-        const nx = cur.x + d.dx, ny = cur.y + d.dy;
-        const nk = key(nx, ny);
-        if (!inB(nx, ny)) continue;
-        if (!isWalk(nx, ny)) continue;
-        if (player.x === nx && player.y === ny) continue;
-        if (occSet && occSet.has(nk) && !(nx === goal.x && ny === goal.y)) continue;
-
-        const tg = gScore.get(ck) + 1;
-        const pg = gScore.get(nk);
-        if (pg !== undefined && tg >= pg) continue;
-        gScore.set(nk, tg);
-        const bias = (map[ny][nx] === TILES.DOOR) ? -0.15 : 0;
-        const f = tg + h(nx, ny) + bias;
-        if (!inOpen.has(nk)) { open.push({ x: nx, y: ny, g: tg, f }); inOpen.add(nk); }
-      }
-      if (closed.size > MAX_NODES) break;
-    }
-    return false;
-  }
-
-  function selfCheck(ctx) {
-    try {
-      const buildings = ctx.townBuildings || [];
-      const allResidents = (ctx.npcs || []).filter(n => n.isResident);
-      const beds = (ctx.townProps || []).filter(p => p.type === "bed");
-
-      // Short-circuit if no buildings or residents yet (e.g., called mid-generation)
-      if (!buildings.length || !allResidents.length) {
-        const msg = `[TownAI] (skip) Buildings: ${buildings.length}, Residents: ${allResidents.length}, Beds: ${beds.length}.`;
-        ctx.log && ctx.log(msg, "info");
-        return;
-      }
-
-      const blockingProps = new Set(["well","fountain","bench","lamp","stall","tree"]);
-      const occRelaxed = new Set();
-      occRelaxed.add(`${ctx.player.x},${ctx.player.y}`);
-      for (const p of (ctx.townProps || [])) { if (blockingProps.has(p.type)) occRelaxed.add(`${p.x},${p.y}`); }
-
-      // Keep diagnostics light: sample a subset of residents for reachability
-      const MAX_CHECKS = 12;
-      const residents = allResidents.slice();
-      for (let i = residents.length - 1; i > 0; i--) {
-        const j = Math.floor(ctx.rng() * (i + 1)); const t = residents[i]; residents[i] = residents[j]; residents[j] = t;
-      }
-      const sample = residents.slice(0, Math.min(MAX_CHECKS, residents.length));
-
-      let noHome = 0, noBedAssigned = 0, unreachableBed = 0, insideSleeping = 0;
-      for (const n of sample) {
-        const hasHome = !!(n._home && n._home.building);
-        if (!hasHome) { noHome++; continue; }
-        const bedTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : null;
-        if (!bedTarget) { noBedAssigned++; continue; }
-        const reachable = canReach(ctx, { x: n.x, y: n.y }, bedTarget, occRelaxed);
-        if (!reachable) unreachableBed++;
-        if (n._sleeping) insideSleeping++;
-      }
-
-      const occPerBuilding = new Map();
-      for (const n of allResidents) {
-        if (!n._home || !n._home.building) continue;
-        const b = n._home.building;
-        const key = `${b.x},${b.y},${b.w},${b.h}`;
-        occPerBuilding.set(key, (occPerBuilding.get(key) || 0) + 1);
-      }
-      const occupiedBuildings = occPerBuilding.size;
-      const pctOcc = buildings.length ? Math.round((occupiedBuildings / buildings.length) * 100) : 0;
-
-      const msg = `[TownAI] Buildings: ${buildings.length}, Residents: ${allResidents.length}, Beds: ${beds.length}. ` +
-                  `OccupiedBuildings: ${occupiedBuildings} (${pctOcc}%). ` +
-                  `Issues (sampled ${sample.length}): noHome=${noHome}, noBed=${noBedAssigned}, unreachableBed=${unreachableBed}. ` +
-                  `Sleeping now: ${insideSleeping}.`;
-      ctx.log && ctx.log(msg, (unreachableBed || noHome) ? "warn" : "notice");
-    } catch (e) {
-      try { ctx.log && ctx.log(`[TownAI] selfCheck failed: ${String(e)}`, "warn"); } catch (_) {}
-    }
-  }
-
-  function setPerTurnEnabled(v) { perTurnEnabled = !!v; }
-
-  // Burst-process town NPCs on entry to settle them (e.g., move inside, toward shops/beds)
   function primeTownOnEntry(ctx, ticks = 8) {
     // Ensure homes exist
     for (const n of (ctx.npcs || [])) ensureHome(ctx, n);
     // Run a few act cycles to disperse crowds and settle initial positions
-    const old = perTurnEnabled;
-    perTurnEnabled = true;
+    const prev = { enabled: processing.enabled, mode: processing.mode, modulo: processing.modulo, maxPerTurn: processing.maxPerTurn };
+    processing.enabled = true;
+    processing.mode = "all";
+    processing.maxPerTurn = Infinity;
     for (let i = 0; i < ticks; i++) {
       townNPCsAct(ctx);
-      // Advance townTick to unlock larger batches if any logic depends on it
       ctx.townTick = (ctx.townTick || 0) + 1;
     }
-    perTurnEnabled = old;
+    processing.enabled = prev.enabled;
+    processing.mode = prev.mode;
+    processing.modulo = prev.modulo;
+    processing.maxPerTurn = prev.maxPerTurn;
   }
 
   window.TownAI = {
@@ -1016,5 +819,6 @@ n);
     selfCheck,
     setPerTurnEnabled,
     primeTownOnEntry,
+    setProcessingMode,
   };
 })();
