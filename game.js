@@ -1517,12 +1517,18 @@
       townExitAt = { x: player.x, y: player.y };
       // Make entry calmer: reduce greeters to avoid surrounding the player
       spawnGateGreeters(0);
-      // Prime town NPCs with a burst of processing, then disable per-turn processing
-      if (window.TownAI && typeof TownAI.primeTownOnEntry === "function") {
+      // Prime town NPCs with a burst of processing, then enable lightweight per-turn processing
+      if (window.TownAI) {
         const ctxLocal = getCtx();
-        TownAI.primeTownOnEntry(ctxLocal, 8);
+        if (typeof TownAI.primeTownOnEntry === "function") {
+          TownAI.primeTownOnEntry(ctxLocal, 8);
+        }
+        if (typeof TownAI.setProcessingMode === "function") {
+          // Process NPCs in thirds per turn to keep movement visible without heavy CPU
+          TownAI.setProcessingMode("modulo", 3, Infinity);
+        }
         if (typeof TownAI.setPerTurnEnabled === "function") {
-          TownAI.setPerTurnEnabled(false);
+          TownAI.setPerTurnEnabled(true);
         }
       }
       log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice");
