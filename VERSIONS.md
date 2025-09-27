@@ -16,6 +16,7 @@ v1.4 — Tavern, Barkeeper, and Shopkeepers
 - Added: Barkeeper NPC stationed at the bar desk during day; returns home at night.
 - Added: Each shop now has a dedicated shopkeeper NPC who stands at the shop door during the day and goes home at night.
 - Changed: Evening/night routines: a subset of villagers (those with a tavern preference) go to the Tavern instead of heading straight home.
+- Changed: Dungeons are single-level; descending is disabled. Stand on the entrance tile ('>') and press G to return to the overworld.
 - Dev: Context now exposes shops, townProps, and time to FOV; declared transition anchors (townExitAt, worldReturnPos, dungeonExitAt, cameFromWorld) used across mode changes.
 - Fixed: Runtime issues introduced during iteration:
   - Unterminated template string in lootCorpse() shop interaction.

@@ -26,6 +26,7 @@ FOV and LOS
   - Confirm enemies are only drawn when their tile is visible.
 - LOS consistency:
   - With mime_ghost behavior (rare but present early), confirm it uses ctx.los for visibility decisions.
+  - In towns, window tiles allow light to pass (see-through for FOV) but still block movement.
   - No console errors related to LOS functions.
 
 Movement and basic combat
@@ -59,11 +60,11 @@ Looting
 - Chest in start room:
   - On floor 1, confirm a chest can spawn near start; “You notice a chest nearby.” then open it for loot.
 
-Dungeon generation and descent
-- Stairs:
-  - Look for brown stairs glyph (>) or tileset stairs if configured.
-  - Standing on stairs and pressing N/Enter descends to next floor (log: “You descend to floor …”).
-  - Ensure at least one staircase is guaranteed per floor (fallback logic).
+Dungeon generation and exploration (single-level dungeons)
+- Entrance/exit:
+  - Look for the brown stairs glyph (>) marking the entrance/exit tile (or tileset stairs if configured).
+  - In dungeons, press G while standing on '>' to return to the overworld. Descending is disabled.
+  - Ensure at least one staircase tile exists per floor (fallback logic).
 - Rooms:
   - Rooms and corridors connect; explore to ensure no unreachable areas in typical runs.
 
@@ -71,7 +72,7 @@ GOD panel and toggles (P)
 - Heal: Fully heals and logs current HP.
 - Spawn Items: Adds items to inventory; names and stats show.
 - Spawn Enemy Nearby: Creates enemies around player; logs location and level.
-- Spawn Stairs Here: Puts stairs under player; descending works.
+- Spawn Stairs Here: Puts stairs under the player; use G on '>' to leave the dungeon.
 - FOV slider: Adjusts FOV (clamped 3..14) and logs changes; visible area updates.
 - Side Log toggle: Turns right-side log mirror on/off; persists in localStorage.
 - Always Crit toggle:
@@ -119,7 +120,7 @@ Quick regression checklist
 - [ ] Status effects apply/tick (dazed/bleed)
 - [ ] Inventory: equip/unequip, two-handed behavior correct
 - [ ] Loot corpses/chest: auto-equip better items and log summary
-- [ ] Descend on stairs: state resets, new floor OK
+- [ ] Return to overworld at entrance ('>') by pressing G: state transitions OK
 - [ ] GOD panel: all actions work as expected
 - [ ] FOV slider: changes radius and re-renders
 - [ ] Seed determinism: repeatable outcomes

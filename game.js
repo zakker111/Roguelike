@@ -569,11 +569,8 @@
         } catch (_) {}
       }
       updateUI();
-      if (mode === "dungeon") {
-        log("You explore the dungeon.");
-      } else {
-        log(`You descend to floor ${depth}.`);
-      }
+      // Unified message: dungeons are single-level; exploration only
+      log("You explore the dungeon.");
       // Save initial dungeon state snapshot
       saveCurrentDungeonState();
       requestDraw();
@@ -592,11 +589,8 @@
     recomputeFOV();
     updateCamera();
     updateUI();
-    if (mode === "dungeon") {
-      log("You explore the dungeon.");
-    } else {
-      log(`You descend to floor ${depth}.`);
-    }
+    // Unified message: dungeons are single-level; exploration only
+    log("You explore the dungeon.");
     // Save fallback dungeon state as well
     saveCurrentDungeonState();
     requestDraw();
@@ -2351,7 +2345,7 @@
         const el = document.getElementById("god-seed-help");
         if (el) el.textContent = `Current seed: ${s}`;
         const input = document.getElementById("god-seed-input");
-        if (input && !input.value) input.value = String(s);
+        if (input) input.value = String(s);
       }
     } catch (_) {}
   }
@@ -2376,6 +2370,10 @@
     floor = 1;
     window.floor = floor;
     isDead = false;
+    // Clear transient status effects on restart
+    try {
+      if (player) { player.bleedTurns = 0; player.dazedTurns = 0; }
+    } catch (_) {}
     mode = "world";
     initWorld();
   }

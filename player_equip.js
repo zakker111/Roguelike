@@ -50,6 +50,12 @@
       const score = (it) => (it ? (it.atk || 0) + (it.def || 0) : 0);
 
       if (twoH) {
+        // Compare against the combined score of current two hands; only auto-equip if strictly better
+        const newScore = score(item);
+        const curSum = score(eq.left) + score(eq.right);
+        if (!(newScore > curSum + 1e-9)) {
+          return false;
+        }
         const prevL = eq.left, prevR = eq.right;
         eq.left = item; eq.right = item;
         if (hooks.log) {

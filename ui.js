@@ -453,7 +453,8 @@
           const it = player.equipment[key];
           if (it) {
             const name = describeItem(it);
-            const title = `Decay: ${Number(it.decay || 0).toFixed(0)}%`;
+            const dec = Math.max(0, Math.min(100, Number(it.decay || 0)));
+            const title = `Decay: ${dec.toFixed(0)}%`;
             return `<div class="slot"><strong>${label}:</strong> <span class="name" data-slot="${key}" title="${title}" style="cursor:pointer; text-decoration:underline dotted;">${name}</span></div>`;
           } else {
             return `<div class="slot"><strong>${label}:</strong> <span class="name"><span class='empty'>(empty)</span></span></div>`;
@@ -470,9 +471,10 @@
           li.dataset.kind = it.kind || "misc";
           if (it.kind === "equip" && it.slot === "hand") {
             li.dataset.slot = "hand";
+            const dec = Math.max(0, Math.min(100, Number(it.decay || 0)));
             if (it.twoHanded) {
               li.dataset.twohanded = "true";
-              li.title = `Two-handed • Decay: ${Number(it.decay || 0).toFixed(0)}%`;
+              li.title = `Two-handed • Decay: ${dec.toFixed(0)}%`;
             } else {
               // If exactly one hand is empty, hint which one will be used automatically
               let autoHint = "";
@@ -480,12 +482,13 @@
                 if (this._equipState.leftEmpty && !this._equipState.rightEmpty) autoHint = " (Left is empty)";
                 else if (this._equipState.rightEmpty && !this._equipState.leftEmpty) autoHint = " (Right is empty)";
               }
-              li.title = `Click to equip${autoHint ? autoHint : " (choose hand)"} • Decay: ${Number(it.decay || 0).toFixed(0)}%`;
+              li.title = `Click to equip${autoHint ? autoHint : " (choose hand)"} • Decay: ${dec.toFixed(0)}%`;
             }
             li.style.cursor = "pointer";
           } else if (it.kind === "equip") {
             li.dataset.slot = it.slot || "";
-            li.title = `Click to equip • Decay: ${Number(it.decay || 0).toFixed(0)}%`;
+            const dec = Math.max(0, Math.min(100, Number(it.decay || 0)));
+            li.title = `Click to equip • Decay: ${dec.toFixed(0)}%`;
             li.style.cursor = "pointer";
           } else if (it.kind === "potion") {
             li.style.cursor = "pointer";
@@ -622,6 +625,7 @@
       if (!this.els.godToggleMirrorBtn) return;
       const on = this.getSideLogState();
       this.els.godToggleMirrorBtn.textContent = `Side Log: ${on ? "On" : "Off"}`;
+      this.els.godToggleMirrorBtn.title = on ? "Hide side log" : "Show side log";
     },
 
     // --- Render grid controls ---
@@ -665,6 +669,10 @@
         window.ALWAYS_CRIT = !!enabled;
         localStorage.setItem("ALWAYS_CRIT", enabled ? "1" : "0");
       } catch (_) {}
+      // When disabling, also clear any forced crit part to avoid stale display/state
+      if (!enabled) {
+        this.setCritPartState("");
+      }
       this.updateAlwaysCritButton();
     },
 
