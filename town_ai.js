@@ -879,6 +879,48 @@
     player.y = Math.max(1, Math.min(rows - 2, (rows / 2) | 0));
   }
 
+  // Spawn greeters near the town gate and clear adjacency around the player
+  function spawnGateGreeters(ctx, count = 4) {
+    const { townExitAt, player, npcs, townName } = ctx;
+    if (!townExitAt) return;
+    const dirs = [
+      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+      { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 }
+    ];
+    const names = ["Ava", "Borin", "Cora", "Darin", "Eda", "Finn", "Goro", "Hana"];
+    const lines = [
+      `Welcome to ${townName || "our town"}.`,
+      "Shops are marked with S.",
+      "Stay as long as you like.",
+      "The plaza is at the center.",
+    ];
+
+    let placed = 0;
+    for (let ring = 1; ring <= 2 && placed < count; ring++) {
+      for (const d of dirs) {
+        const x = townExitAt.x + d.dx * ring;
+        const y = townExitAt.y + d.dy * ring;
+        if (isFreeTownFloor(ctx, x, y) && manhattan(player.x, player.y, x, y) > 1) {
+          const name = names[randInt(ctx, 0, names.length - 1)];
+          npcs.push({ x, y, name, lines });
+          placed++;
+          if (placed >= count) break;
+        }
+      }
+    }
+    // Clear immediate neighbors around the player
+    const neighbors = [
+      { x: player.x + 1, y: player.y },
+      { x: player.x - 1, y: player.y },
+      { x: player.x, y: player.y + 1 },
+      { x: player.x, y: player.y - 1 },
+    ];
+    for (const pos of neighbors) {
+      const idx = npcs.findIndex(n => n.x === pos.x && n.y === pos.y);
+      if (idx !== -1) npcs.splice(idx, 1);
+    }
+  }
+
   window.TownAI = {
     populateTown,
     townNPCsAct,
