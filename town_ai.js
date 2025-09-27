@@ -61,51 +61,77 @@
     return alt || target;
   }
 
-  // Pre-planning BFS used for path debug and stable routing
+  // Pre-planning A* used for path debug and stable routing
   function computePath(ctx, occ, sx, sy, tx, ty) {
     const { map, player } = ctx;
     const rows = map.length, cols = map[0] ? map[0].length : 0;
     const inB = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows;
     const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
-    const start = { x: sx, y: sy };
-    const goal = { x: tx, y: ty };
-    const q = [];
-    const seenB = new Set();
-    const prev = new Map();
-    const key = (x, y) => `${x},${y}`;
+    const startKey = (x, y) => `${x},${y}`;
+    const h = (x, y) => Math.abs(x - tx) + Math.abs(y - ty);
 
-    q.push(start);
-    seenB.add(key(start.x, start.y));
+    const open = []; // min-heap substitute: small graphs, array+sort is fine
+    const gScore = new Map();
+    const fScore = new Map();
+    const cameFrom = new Map();
+    const startK = startKey(sx, sy);
+    gScore.set(startK, 0);
+    fScore.set(startK, h(sx, sy));
+    open.push({ x: sx, y: sy, f: fScore.get(startK) });
+
+    const MAX_VISITS = 4000;
+    const visited = new Set();
+
+    function pushOpen(x, y, f) {
+      open.push({ x, y, f });
+    }
+
+    function popOpen() {
+      open.sort((a, b) => a.f - b.f || h(a.x, a.y) - h(b.x, b.y));
+      return open.shift();
+    }
+
     let found = null;
-    const MAX_NODES = 1400;
+    while (open.length && visited.size < MAX_VISITS) {
+      const cur = popOpen();
+      const ck = startKey(cur.x, cur.y);
+      if (visited.has(ck)) continue;
+      visited.add(ck);
+      if (cur.x === tx && cur.y === ty) { found = cur; break; }
 
-    while (q.length && seenB.size < MAX_NODES) {
-      const cur = q.shift();
-      if (cur.x === goal.x && cur.y === goal.y) { found = cur; break; }
       for (const d of dirs4) {
         const nx = cur.x + d.dx, ny = cur.y + d.dy;
-        const k = key(nx, ny);
         if (!inB(nx, ny)) continue;
-        if (seenB.has(k)) continue;
         if (!isWalkTown(ctx, nx, ny)) continue;
         if (player.x === nx && player.y === ny) continue;
-        if (occ.has(k) && !(nx === goal.x && ny === goal.y)) continue;
-        seenB.add(k);
-        prev.set(k, cur);
-        q.push({ x: nx, y: ny });
+
+        const nk = startKey(nx, ny);
+        // Allow goal even if currently occupied; otherwise avoid occupied nodes
+        if (occ.has(nk) && !(nx === tx && ny === ty)) continue;
+
+        const tentativeG = (gScore.get(ck) ?? Infinity) + 1;
+        if (tentativeG < (gScore.get(nk) ?? Infinity)) {
+          cameFrom.set(nk, { x: cur.x, y: cur.y });
+          gScore.set(nk, tentativeG);
+          const f = tentativeG + h(nx, ny);
+          fScore.set(nk, f);
+          pushOpen(nx, ny, f);
+        }
       }
     }
 
     if (!found) return null;
 
-    const full = [];
-    let cur = found;
+    // Reconstruct path
+    const path = [];
+    let cur = { x: found.x, y: found.y };
     while (cur) {
-      full.push({ x: cur.x, y: cur.y });
-      cur = prev.get(key(cur.x, cur.y));
+      path.push({ x: cur.x, y: cur.y });
+      const prev = cameFrom.get(startKey(cur.x, cur.y));
+      cur = prev ? { x: prev.x, y: prev.y } : null;
     }
-    full.reverse();
-    return full;
+    path.reverse();
+    return path;
   }
 
   function stepTowards(ctx, occ, n, tx, ty) {
@@ -496,11 +522,12 @@
 
       // Residents: sleep system
       if (n.isResident) {
+        const eveKickIn = minutes >= 17 * 60 + 30; // start pushing home a bit before dusk
         if (n._sleeping) {
           if (phase === "morning") n._sleeping = false;
           else continue;
         }
-        if (phase === "evening") {
+        if (phase === "evening" || eveKickIn) {
           if (n._home && n._home.building) {
             const bedSpot = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : null;
             const sleepTarget = bedSpot ? bedSpot : { x: n._home.x, y: n._home.y };
@@ -514,11 +541,13 @@
             // Otherwise route via door and inside (target adjusted to nearest free interior tile)
             if (routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget)) continue;
           }
+          // If no home data for some reason, stop wandering at evening
+          continue;
         } else if (phase === "day") {
           const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
           if (target) {
             if (n.x === target.x && n.y === target.y) {
-              if (ctx.rng() < 0.8) continue;
+              if (ctx.rng() < 0.9) continue;
               stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
               continue;
             }
