@@ -17,6 +17,10 @@
     Numpad7: {x:-1,y:-1}, Numpad9: {x:1,y:-1}, Numpad1: {x:-1,y:1}, Numpad3: {x:1,y:1},
     // Arrow keys (4-directional)
     ArrowUp: {x:0,y:-1}, ArrowDown: {x:0,y:1}, ArrowLeft: {x:-1,y:0}, ArrowRight: {x:1,y:0},
+    // WASD
+    KeyW: {x:0,y:-1}, KeyS: {x:0,y:1}, KeyA: {x:-1,y:0}, KeyD: {x:1,y:0},
+    // vi-keys (h/j/k/l) 4-dir
+    KeyK: {x:0,y:-1}, KeyJ: {x:0,y:1}, KeyH: {x:-1,y:0}, KeyL: {x:1,y:0},
   };
 
   let _handlers = null;
