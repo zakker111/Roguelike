@@ -921,6 +921,31 @@
     }
   }
 
+  // Trigger speech from an adjacent NPC; returns true if someone talked
+  function talkNearbyNPC(ctx) {
+    const { player, npcs, rng } = ctx;
+    if (!Array.isArray(npcs) || npcs.length === 0) return false;
+    const neighbors = [
+      { x: player.x, y: player.y },
+      { x: player.x + 1, y: player.y },
+      { x: player.x - 1, y: player.y },
+      { x: player.x, y: player.y + 1 },
+      { x: player.x, y: player.y - 1 },
+    ];
+    let npc = null;
+    for (const pos of neighbors) {
+      npc = npcs.find(n => n.x === pos.x && n.y === pos.y);
+      if (npc) break;
+    }
+    if (!npc) return false;
+    const lines = Array.isArray(npc.lines) && npc.lines.length ? npc.lines : ["Hey there.", "Greetings.", "Nice weather."];
+    const li = Math.floor(rng() * lines.length);
+    try {
+      ctx.log(`${npc.name || "Villager"}: ${lines[li]}`, "info");
+    } catch (_) {}
+    return true;
+  }
+
   window.TownAI = {
     populateTown,
     townNPCsAct,
