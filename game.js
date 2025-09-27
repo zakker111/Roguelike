@@ -146,6 +146,7 @@
       townPlaza,
       tavern,
       townExitAt,
+      townTick,
       dungeon: currentDungeon,
       dungeonInfo: currentDungeon,
       time: getClock(),

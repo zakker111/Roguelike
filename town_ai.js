@@ -89,7 +89,7 @@
     }
 
     // A* search
-    const MAX_NODES = 5000;
+    const MAX_NODES = 2000;
     const open = [{ x: start.x, y: start.y, g: 0, f: h(start.x, start.y) }];
     const cameFrom = new Map();
     const gScore = new Map();
@@ -561,12 +561,15 @@
                 : (t && t.phase === "dusk") ? "evening"
                 : "day";
 
-    // Shuffle iteration
+    // Shuffle iteration and batch to avoid heavy CPU on large towns
     const order = npcs.map((_, i) => i);
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(ctx.rng() * (i + 1));
       const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
     }
+    const tick = ctx.townTick || 0;
+    const maxProcess = Math.min(order.length, tick < 3 ? 25 : 45);
+    let processed = 0;
 
     function routeIntoBuilding(ctx, occ, n, building, targetInside) {
       // If outside the building, aim for the door first
@@ -648,8 +651,10 @@
     }
 
     for (const idx of order) {
+      if (processed++ >= maxProcess) break;
       const n = npcs[idx];
-      ensureHome(ctx, n);
+      ensureHome(ctx,_code nnew)</;
+n);
 
       // Pets
       if (n.isPet) {
