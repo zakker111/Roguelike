@@ -89,7 +89,7 @@
     }
 
     // A* search
-    const MAX_NODES = 2000;
+    const MAX_NODES = 3000;
     const open = [{ x: start.x, y: start.y, g: 0, f: h(start.x, start.y) }];
     const cameFrom = new Map();
     const gScore = new Map();
@@ -568,7 +568,8 @@
       const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
     }
     const tick = ctx.townTick || 0;
-    const maxProcess = Math.min(order.length, tick < 3 ? 25 : 45);
+    // Process all NPCs per turn to ensure visible movement; initial ticks can be slightly lighter if needed
+    const maxProcess = order.length;
     let processed = 0;
 
     function routeIntoBuilding(ctx, occ, n, building, targetInside) {
