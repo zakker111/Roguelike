@@ -32,12 +32,18 @@
     return x > b.x && x < b.x + b.w - 1 && y > b.y && y < b.y + b.h - 1;
   }
 
+  function propBlocks(type) {
+    // Signs should be walkable; rugs are decorative and don't block.
+    // All other furniture/props block movement.
+    return !(type === "sign" || type === "rug");
+  }
+
   function isFreeTile(ctx, x, y) {
     if (!isWalkTown(ctx, x, y)) return false;
     const { player, npcs, townProps } = ctx;
     if (player.x === x && player.y === y) return false;
     if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
-    if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y)) return false;
+    if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y && propBlocks(p.type))) return false;
     return true;
   }
 
@@ -51,79 +57,161 @@
     return null;
   }
 
-  function stepTowards(ctx, occ, n, tx, ty) {
-    if (typeof tx !== "number" || typeof ty !== "number") return false;
+  // If the intended target tile is occupied by an interior prop (e.g., bed),
+  // pick the nearest free interior tile adjacent to it within the same building.
+  function adjustInteriorTarget(ctx, building, target) {
+    if (!target || !building) return target;
+    // If target is already free, keep it
+    if (isFreeTile(ctx, target.x, target.y) && insideBuilding(building, target.x, target.y)) return target;
+    const alt = nearestFreeAdjacent(ctx, target.x, target.y, building);
+    return alt || target;
+  }
+
+  // Pre-planning A* used for path debug and stable routing
+  function computePath(ctx, occ, sx, sy, tx, ty) {
     const { map, player } = ctx;
     const rows = map.length, cols = map[0] ? map[0].length : 0;
     const inB = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows;
-    const start = { x: n.x, y: n.y };
-    const goal = { x: tx, y: ty };
-
     const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
-    // Direct adjacent
-    for (const d of dirs4) {
-      const nx = n.x + d.dx, ny = n.y + d.dy;
-      if (nx === goal.x && ny === goal.y && isWalkTown(ctx, nx, ny) && !occ.has(`${nx},${ny}`) && !(player.x === nx && player.y === ny)) {
-        occ.delete(`${n.x},${n.y}`); n.x = nx; n.y = ny; occ.add(`${nx},${ny}`); return true;
-      }
+    const startKey = (x, y) => `${x},${y}`;
+    const h = (x, y) => Math.abs(x - tx) + Math.abs(y - ty);
+
+    const open = []; // min-heap substitute: small graphs, array+sort is fine
+    const gScore = new Map();
+    const fScore = new Map();
+    const cameFrom = new Map();
+    const startK = startKey(sx, sy);
+    gScore.set(startK, 0);
+    fScore.set(startK, h(sx, sy));
+    open.push({ x: sx, y: sy, f: fScore.get(startK) });
+
+    const MAX_VISITS = 4000;
+    const visited = new Set();
+
+    function pushOpen(x, y, f) {
+      open.push({ x, y, f });
     }
 
-    const q = [];
-    const seenB = new Set();
-    const prev = new Map();
-    const key = (x, y) => `${x},${y}`;
-    q.push(start);
-    seenB.add(key(start.x, start.y));
-    let found = null;
-    const MAX_NODES = 1200;
+    function popOpen() {
+      open.sort((a, b) => a.f - b.f || h(a.x, a.y) - h(b.x, b.y));
+      return open.shift();
+    }
 
-    let nodes = 0;
-    while (q.length && nodes < MAX_NODES) {
-      nodes++;
-      const cur = q.shift();
-      if (cur.x === goal.x && cur.y === goal.y) { found = cur; break; }
+    let found = null;
+    while (open.length && visited.size < MAX_VISITS) {
+      const cur = popOpen();
+      const ck = startKey(cur.x, cur.y);
+      if (visited.has(ck)) continue;
+      visited.add(ck);
+      if (cur.x === tx && cur.y === ty) { found = cur; break; }
+
       for (const d of dirs4) {
         const nx = cur.x + d.dx, ny = cur.y + d.dy;
-        const k = key(nx, ny);
         if (!inB(nx, ny)) continue;
-        if (seenB.has(k)) continue;
         if (!isWalkTown(ctx, nx, ny)) continue;
         if (player.x === nx && player.y === ny) continue;
-        if (occ.has(k) && !(nx === goal.x && ny === goal.y)) continue;
-        seenB.add(k);
-        prev.set(k, cur);
-        q.push({ x: nx, y: ny });
+
+        const nk = startKey(nx, ny);
+        // Allow goal even if currently occupied; otherwise avoid occupied nodes
+        if (occ.has(nk) && !(nx === tx && ny === ty)) continue;
+
+        const tentativeG = (gScore.get(ck) ?? Infinity) + 1;
+        if (tentativeG < (gScore.get(nk) ?? Infinity)) {
+          cameFrom.set(nk, { x: cur.x, y: cur.y });
+          gScore.set(nk, tentativeG);
+          const f = tentativeG + h(nx, ny);
+          fScore.set(nk, f);
+          pushOpen(nx, ny, f);
+        }
       }
     }
 
-    if (!found) {
-      const dirs = dirs4.slice().sort((a, b) =>
-        (Math.abs((n.x + a.dx) - tx) + Math.abs((n.y + a.dy) - ty)) -
-        (Math.abs((n.x + b.dx) - tx) + Math.abs((n.y + b.dy) - ty))
-      );
-      for (const d of dirs) {
-        const nx = n.x + d.dx, ny = n.y + d.dy;
-        if (!isWalkTown(ctx, nx, ny)) continue;
-        if (ctx.player.x === nx && ctx.player.y === ny) continue;
-        if (occ.has(`${nx},${ny}`)) continue;
-        occ.delete(`${n.x},${n.y}`); n.x = nx; n.y = ny; occ.add(`${nx},${ny}`); return true;
+    if (!found) return null;
+
+    // Reconstruct path
+    const path = [];
+    let cur = { x: found.x, y: found.y };
+    while (cur) {
+      path.push({ x: cur.x, y: cur.y });
+      const prev = cameFrom.get(startKey(cur.x, cur.y));
+      cur = prev ? { x: prev.x, y: prev.y } : null;
+    }
+    path.reverse();
+    return path;
+  }
+
+  function stepTowards(ctx, occ, n, tx, ty) {
+    if (typeof tx !== "number" || typeof ty !== "number") return false;
+
+    // Consume existing plan if valid and targeted to the same goal
+    if (n._plan && n._planGoal && n._planGoal.x === tx && n._planGoal.y === ty) {
+      // Ensure current position matches first node
+      if (n._plan.length && (n._plan[0].x !== n.x || n._plan[0].y !== n.y)) {
+        // Resync by searching for current position within plan
+        const idx = n._plan.findIndex(p => p.x === n.x && p.y === n.y);
+        if (idx >= 0) n._plan = n._plan.slice(idx);
+        else n._plan = null;
       }
-      return false;
+      if (n._plan && n._plan.length >= 2) {
+        const next = n._plan[1];
+        const keyNext = `${next.x},${next.y}`;
+        if (isWalkTown(ctx, next.x, next.y) && !occ.has(keyNext) && !(ctx.player.x === next.x && ctx.player.y === next.y)) {
+          if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
+            n._debugPath = n._plan.slice(0);
+          } else {
+            n._debugPath = null;
+          }
+          occ.delete(`${n.x},${n.y}`); n.x = next.x; n.y = next.y; occ.add(`${n.x},${n.y}`);
+          return true;
+        } else {
+          // Blocked: force replan below
+          n._plan = null;
+        }
+      } else if (n._plan && n._plan.length === 1) {
+        // Already at goal
+        if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) n._debugPath = n._plan.slice(0);
+        return false;
+      }
     }
 
-    // Reconstruct first step
-    let cur = found;
-    let back = prev.get(key(cur.x, cur.y));
-    while (back && !(back.x === start.x && back.y === start.y)) {
-      cur = back;
-      back = prev.get(key(cur.x, cur.y));
+    // No valid plan; compute new plan
+    const full = computePath(ctx, occ, n.x, n.y, tx, ty);
+    if (full && full.length >= 2) {
+      n._plan = full;
+      n._planGoal = { x: tx, y: ty };
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) n._debugPath = full.slice(0);
+      const next = full[1];
+      const keyNext = `${next.x},${next.y}`;
+      if (isWalkTown(ctx, next.x, next.y) && !occ.has(keyNext) && !(ctx.player.x === next.x && ctx.player.y === next.y)) {
+        occ.delete(`${n.x},${n.y}`); n.x = next.x; n.y = next.y; occ.add(`${n.x},${n.y}`);
+        return true;
+      }
+      // If first step blocked right away, drop plan and try nudge
+      n._plan = null; n._planGoal = null;
     }
-    if (cur && isWalkTown(ctx, cur.x, cur.y) && !(ctx.player.x === cur.x && ctx.player.y === cur.y) && !occ.has(key(cur.x, cur.y))) {
-      occ.delete(`${n.x},${n.y}`);
-      n.x = cur.x; n.y = cur.y;
-      occ.add(`${n.x},${n.y}`);
+
+    // Fallback: greedy nudge step
+    const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+    const dirs = dirs4.slice().sort((a, b) =>
+      (Math.abs((n.x + a.dx) - tx) + Math.abs((n.y + a.dy) - ty)) -
+      (Math.abs((n.x + b.dx) - tx) + Math.abs((n.y + b.dy) - ty))
+    );
+    for (const d of dirs) {
+      const nx = n.x + d.dx, ny = n.y + d.dy;
+      if (!isWalkTown(ctx, nx, ny)) continue;
+      if (ctx.player.x === nx && ctx.player.y === ny) continue;
+      if (occ.has(`${nx},${ny}`)) continue;
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
+        n._debugPath = [{ x: n.x, y: n.y }, { x: nx, y: ny }];
+      } else {
+        n._debugPath = null;
+      }
+      n._plan = null; n._planGoal = null;
+      occ.delete(`${n.x},${n.y}`); n.x = nx; n.y = ny; occ.add(`${nx},${ny}`);
       return true;
     }
+    n._debugPath = null;
+    n._plan = null; n._planGoal = null;
     return false;
   }
 
@@ -350,7 +438,12 @@
     const occ = new Set();
     occ.add(`${player.x},${player.y}`);
     for (const n of npcs) occ.add(`${n.x},${n.y}`);
-    if (Array.isArray(townProps)) for (const p of townProps) occ.add(`${p.x},${p.y}`);
+    if (Array.isArray(townProps)) {
+      for (const p of townProps) {
+        // Only blocking furniture contributes to occupancy; signs/rugs are walkable
+        if (propBlocks(p.type)) occ.add(`${p.x},${p.y}`);
+      }
+    }
 
     const t = ctx.time;
     const minutes = t ? (t.hours * 60 + t.minutes) : 12 * 60;
@@ -367,25 +460,29 @@
     }
 
     function routeIntoBuilding(ctx, occ, n, building, targetInside) {
+      // Adjust unreachable interior targets (like beds) to a free adjacent tile
+      const adjTarget = targetInside ? adjustInteriorTarget(ctx, building, targetInside) : null;
+
       // If outside the building, aim for the door first
       const insideNow = insideBuilding(building, n.x, n.y);
       if (!insideNow) {
         const door = building.door || nearestFreeAdjacent(ctx, building.x + ((building.w / 2) | 0), building.y, null);
         if (door) {
           if (n.x === door.x && n.y === door.y) {
-            // Step just inside
-            const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building) || targetInside || { x: door.x, y: door.y };
+            // Step just inside to a free interior tile (planned)
+            const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building) || adjTarget || { x: door.x, y: door.y };
             stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
             return true;
           }
+          // Plan/step toward the door, persist plan across turns
           stepTowards(ctx, occ, n, door.x, door.y);
           return true;
         }
       } else {
         // Already inside: go to targetInside or nearest free interior tile
-        const inSpot = (targetInside && isFreeTile(ctx, targetInside.x, targetInside.y))
-          ? targetInside
-          : nearestFreeAdjacent(ctx, targetInside ? targetInside.x : n.x, targetInside ? targetInside.y : n.y, building);
+        const inSpot = (adjTarget && isFreeTile(ctx, adjTarget.x, adjTarget.y))
+          ? adjTarget
+          : nearestFreeAdjacent(ctx, adjTarget ? adjTarget.x : n.x, adjTarget ? adjTarget.y : n.y, building);
         if (inSpot) {
           stepTowards(ctx, occ, n, inSpot.x, inSpot.y);
           return true;
@@ -436,26 +533,32 @@
 
       // Residents: sleep system
       if (n.isResident) {
+        const eveKickIn = minutes >= 17 * 60 + 30; // start pushing home a bit before dusk
         if (n._sleeping) {
           if (phase === "morning") n._sleeping = false;
           else continue;
         }
-        if (phase === "evening") {
+        if (phase === "evening" || eveKickIn) {
           if (n._home && n._home.building) {
-            const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-            // If at sleep target, go to sleep
-            if (n.x === sleepTarget.x && n.y === sleepTarget.y) {
+            const bedSpot = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : null;
+            const sleepTarget = bedSpot ? bedSpot : { x: n._home.x, y: n._home.y };
+            // If at, or adjacent to, the bed spot (or home spot if no bed), go to sleep
+            const atExact = (n.x === sleepTarget.x && n.y === sleepTarget.y);
+            const nearBed = bedSpot ? (manhattan(n.x, n.y, bedSpot.x, bedSpot.y) === 1) : false;
+            if (atExact || nearBed) {
               n._sleeping = true;
               continue;
             }
-            // Otherwise route via door and inside
+            // Otherwise route via door and inside (target adjusted to nearest free interior tile)
             if (routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget)) continue;
           }
+          // If no home data for some reason, stop wandering at evening
+          continue;
         } else if (phase === "day") {
           const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
           if (target) {
             if (n.x === target.x && n.y === target.y) {
-              if (ctx.rng() < 0.8) continue;
+              if (ctx.rng() < 0.9) continue;
               stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
               continue;
             }
