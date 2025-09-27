@@ -730,9 +730,9 @@
           if (n._homeToday && hasHome) {
             const homeTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
             if (!insideNow) {
-              if (routeIntoBuilding(ctx, occ, n, n._home.building, homeTarget)) continue;
+              if (routeIntoBuilding(ctx, occRelaxed, n, n._home.building, homeTarget)) continue;
             } else {
-              if (ctx.rng() < 0.6) stepTowards(ctx, occ, n, homeTarget.x, homeTarget.y);
+              if (ctx.rng() < 0.6) stepTowards(ctx, occRelaxed, n, homeTarget.x, homeTarget.y);
               continue;
             }
           }
@@ -740,36 +740,38 @@
           const target = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
           const stayInside = n._homebound && hasHome && insideNow && ctx.rng() < 0.9;
           if (stayInside) {
-            if (ctx.rng() < 0.4) stepTowards(ctx, occ, n, n._home.x, n._home.y);
+            if (ctx.rng() < 0.4) stepTowards(ctx, occRelaxed, n, n._home.x, n._home.y);
             continue;
           }
           if (target) {
             if (n.x === target.x && n.y === target.y) {
               if (ctx.rng() < 0.85) continue;
-              stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+              stepTowards(ctx, occRelaxed, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
               continue;
             }
-            stepTowards(ctx, occ, n, target.x, target.y);
+            if (!stepTowards(ctx, occ, n, target.x, target.y)) {
+              stepTowards(ctx, occRelaxed, n, target.x, target.y);
+            }
             continue;
           }
         } else if (phase === "morning") {
           if (hasHome) {
             const homeTarget = { x: n._home.x, y: n._home.y };
             if (n._homebound && insideNow) {
-              if (ctx.rng() < 0.4) stepTowards(ctx, occ, n, homeTarget.x, homeTarget.y);
+              if (ctx.rng() < 0.4) stepTowards(ctx, occRelaxed, n, homeTarget.x, homeTarget.y);
               continue;
             }
-            if (routeIntoBuilding(ctx, occ, n, n._home.building, homeTarget)) continue;
+            if (routeIntoBuilding(ctx, occRelaxed, n, n._home.building, homeTarget)) continue;
           }
         }
 
         // default small wander (prefer interior if homebound and inside)
         if (n._homebound && hasHome && insideNow) {
           const goal = { x: n._home.x, y: n._home.y };
-          if (ctx.rng() < 0.5) stepTowards(ctx, occ, n, goal.x, goal.y);
+          if (ctx.rng() < 0.5) stepTowards(ctx, occRelaxed, n, goal.x, goal.y);
           continue;
         }
-        stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+        stepTowards(ctx, occRelaxed, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
 
@@ -783,10 +785,14 @@
         target = (n._home ? { x: n._home.x, y: n._home.y } : (ctx.tavern && n._likesTavern) ? { x: ctx.tavern.door.x, y: ctx.tavern.door.y } : null);
       }
       if (!target) {
-        stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+        // Fallback random jiggle, prefer relaxed occ to avoid crowd stalls
+        stepTowards(ctx, occRelaxed, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
-      stepTowards(ctx, (phase === "evening" || phase === "night") ? occRelaxed : occ, n, target.x, target.y);
+      // Try target with appropriate occupancy, then relaxed as fallback
+      if (!stepTowards(ctx, (phase === "evening" || phase === "night") ? occRelaxed : occ, n, target.x, target.y)) {
+        stepTowards(ctx, occRelaxed, n, target.x, target.y);
+      }
     }
 
     // Movement diagnostics and fallback: ensure at least some visible motion
