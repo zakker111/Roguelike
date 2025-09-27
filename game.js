@@ -1543,15 +1543,15 @@
           TownAI.primeTownOnEntry(ctxLocal, 8);
         }
         if (typeof TownAI.setProcessingMode === "function") {
-          // Process NPCs in thirds per tick to keep movement visible without heavy CPU
-          TownAI.setProcessingMode("modulo", 3, Infinity);
+          // Ensure strong visible movement: process all NPCs each tick
+          TownAI.setProcessingMode("all", 1, Infinity);
         }
         if (typeof TownAI.setPerTurnEnabled === "function") {
           TownAI.setPerTurnEnabled(true);
         }
       }
-      // Start ambient auto-tick for town mode
-      startTownAutoTick(600);
+      // Start ambient auto-tick for town mode (snappier cadence)
+      startTownAutoTick(400);
 
       log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
