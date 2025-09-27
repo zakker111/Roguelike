@@ -35,6 +35,7 @@
   let tavern = null;         // tavern info: { building:{x,y,w,h,door}, door:{x,y} }
   let townTick = 0;          // simple turn counter for town routines
   let townName = null;       // current town's generated name
+  let townAutoTimer = null;  // ambient auto-tick timer for town mode
 
   // World/town/dungeon transition anchors
   let townExitAt = null;     // gate position inside town used to exit back to overworld
@@ -1504,6 +1505,24 @@
     clearAdjacentNPCsAroundPlayer();
   }
 
+  function startTownAutoTick(intervalMs = 500) {
+    // Ambient movement: advance town NPCs periodically without requiring player turns
+    if (townAutoTimer) clearInterval(townAutoTimer);
+    townAutoTimer = setInterval(() => {
+      if (mode !== "town") return;
+      townTick = (townTick + 1) | 0;
+      if (window.TownAI && typeof TownAI.townNPCsAct === "function") {
+        TownAI.townNPCsAct(getCtx());
+      }
+      recomputeFOV();
+      updateUI();
+      requestDraw();
+    }, Math.max(200, intervalMs | 0));
+  }
+  function stopTownAutoTick() {
+    if (townAutoTimer) { clearInterval(townAutoTimer); townAutoTimer = null; }
+  }
+
   function enterTownIfOnTile() {
     if (mode !== "world" || !world) return false;
     const WT = window.World && World.TILES;
@@ -1524,13 +1543,16 @@
           TownAI.primeTownOnEntry(ctxLocal, 8);
         }
         if (typeof TownAI.setProcessingMode === "function") {
-          // Process NPCs in thirds per turn to keep movement visible without heavy CPU
+          // Process NPCs in thirds per tick to keep movement visible without heavy CPU
           TownAI.setProcessingMode("modulo", 3, Infinity);
         }
         if (typeof TownAI.setPerTurnEnabled === "function") {
           TownAI.setPerTurnEnabled(true);
         }
       }
+      // Start ambient auto-tick for town mode
+      startTownAutoTick(600);
+
       log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();
@@ -1588,6 +1610,7 @@
   }
 
   function leaveTownNow() {
+    stopTownAutoTick();
     mode = "world";
     map = world.map;
     npcs = [];
