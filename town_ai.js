@@ -776,7 +776,7 @@
       }
 
       // Generic NPCs
-      if (ctx.rng() < 0.25) continue;
+      if (ctx.rng() < 0.05) continue; // much less idling
       let target = null;
       if (phase === "morning") target = n._home ? { x: n._home.x, y: n._home.y } : null;
       else if (phase === "day") target = (n._work || ctx.townPlaza);
@@ -807,14 +807,14 @@
     if (typeof window !== "undefined" && window.DEV && ctx && typeof ctx.log === "function") {
       try { ctx.log(`[TownAI] tick ${tick} phase=${phase}: moved ${moved}/${selected.length} npcs.`, "info"); } catch (_) {}
     }
-    // Fallback: if nothing moved for this batch, nudge a small random subset to avoid apparent stalling
+    // Fallback: if nothing moved for this batch, nudge a larger subset to avoid apparent stalling
     if (moved === 0 && selected.length > 0) {
-      const fallbackCount = Math.min(20, selected.length);
+      const fallbackCount = Math.min(Math.ceil(selected.length * 0.6), selected.length);
       for (let i = 0; i < fallbackCount; i++) {
         const idx = selected[i];
         const n = npcs[idx];
-        // Prefer tiny jiggle within building if homebound and inside, else random small step
-        const jig = (dx,dy) => stepTowards(ctx, occ, n, n.x + dx, n.y + dy);
+        // Prefer tiny jiggle with relaxed occupancy to avoid stalls
+        const jig = (dx,dy) => stepTowards(ctx, occRelaxed, n, n.x + dx, n.y + dy);
         if (n.isResident && n._home && insideBuilding(n._home.building, n.x, n.y)) {
           jig(randInt(ctx, -1, 1), randInt(ctx, -1, 1));
         } else {

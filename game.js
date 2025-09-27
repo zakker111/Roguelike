@@ -1550,8 +1550,9 @@
           TownAI.setPerTurnEnabled(true);
         }
       }
-      // Start ambient auto-tick for town mode (snappier cadence)
-      startTownAutoTick(400);
+
+      // Movement is turn-based: NPCs act when you move or wait. No ambient auto-tick.
+      stopTownAutoTick();
 
       log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
