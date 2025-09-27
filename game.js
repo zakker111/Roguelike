@@ -1517,6 +1517,14 @@
       townExitAt = { x: player.x, y: player.y };
       // Make entry calmer: reduce greeters to avoid surrounding the player
       spawnGateGreeters(0);
+      // Prime town NPCs with a burst of processing, then disable per-turn processing
+      if (window.TownAI && typeof TownAI.primeTownOnEntry === "function") {
+        const ctxLocal = getCtx();
+        TownAI.primeTownOnEntry(ctxLocal, 8);
+        if (typeof TownAI.setPerTurnEnabled === "function") {
+          TownAI.setPerTurnEnabled(false);
+        }
+      }
       log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();

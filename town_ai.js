@@ -9,6 +9,8 @@
  *  - isFreeTownFloor(ctx, x, y): utility used by placement helpers
  */
 (function () {
+  let perTurnEnabled = true; // allow toggling per-turn processing
+
   function randInt(ctx, a, b) { return Math.floor(ctx.rng() * (b - a + 1)) + a; }
   function manhattan(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
 
@@ -533,6 +535,7 @@
   function townNPCsAct(ctx) {
     const { npcs, player, townProps } = ctx;
     if (!Array.isArray(npcs) || npcs.length === 0) return;
+    if (!perTurnEnabled) return;
 
     const occ = new Set();
     occ.add(`${player.x},${player.y}`);
@@ -986,6 +989,23 @@ n);
     }
   }
 
+  function setPerTurnEnabled(v) { perTurnEnabled = !!v; }
+
+  // Burst-process town NPCs on entry to settle them (e.g., move inside, toward shops/beds)
+  function primeTownOnEntry(ctx, ticks = 8) {
+    // Ensure homes exist
+    for (const n of (ctx.npcs || [])) ensureHome(ctx, n);
+    // Run a few act cycles to disperse crowds and settle initial positions
+    const old = perTurnEnabled;
+    perTurnEnabled = true;
+    for (let i = 0; i < ticks; i++) {
+      townNPCsAct(ctx);
+      // Advance townTick to unlock larger batches if any logic depends on it
+      ctx.townTick = (ctx.townTick || 0) + 1;
+    }
+    perTurnEnabled = old;
+  }
+
   window.TownAI = {
     populateTown,
     townNPCsAct,
@@ -994,5 +1014,7 @@ n);
     talkNearbyNPC,
     isFreeTownFloor,
     selfCheck,
+    setPerTurnEnabled,
+    primeTownOnEntry,
   };
 })();
