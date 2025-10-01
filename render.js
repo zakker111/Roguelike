@@ -462,7 +462,7 @@
       }
 
       // Optional: draw planned paths for NPCs when debug paths enabled
-      if (typeof window !== "undefined" && window.DEBUG_TOWN_OVERLAY && window.DEBUG_TOWN_PATHS && Array.isArray(npcs)) {
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS && Array.isArray(npcs)) {
         try {
           ctx2d.save();
           ctx2d.strokeStyle = "rgba(0, 200, 255, 0.85)";

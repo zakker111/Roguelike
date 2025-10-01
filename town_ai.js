@@ -149,15 +149,22 @@
       if (n._plan.length && (n._plan[0].x !== n.x || n._plan[0].y !== n.y)) {
         // Resync by searching for current position within plan
         const idx = n._plan.findIndex(p => p.x === n.x && p.y === n.y);
-        if (idx >= 0) n._plan = n._plan.slice(idx);
-        else n._plan = null;
+        if (idx >= 0) {
+          n._plan = n._plan.slice(idx);
+          // Keep full path intact for visualization
+        } else {
+          n._plan = null;
+          n._fullPlan = null;
+          n._fullPlanGoal = null;
+        }
       }
       if (n._plan && n._plan.length >= 2) {
         const next = n._plan[1];
         const keyNext = `${next.x},${next.y}`;
         if (isWalkTown(ctx, next.x, next.y) && !occ.has(keyNext) && !(ctx.player.x === next.x && ctx.player.y === next.y)) {
           if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
-            n._debugPath = n._plan.slice(0);
+            // Show entire planned route, not just remaining slice
+            n._debugPath = (Array.isArray(n._fullPlan) ? n._fullPlan.slice(0) : n._plan.slice(0));
           } else {
             n._debugPath = null;
           }
@@ -166,10 +173,14 @@
         } else {
           // Blocked: force replan below
           n._plan = null;
+          n._fullPlan = null;
+          n._fullPlanGoal = null;
         }
       } else if (n._plan && n._plan.length === 1) {
         // Already at goal
-        if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) n._debugPath = n._plan.slice(0);
+        if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
+          n._debugPath = (Array.isArray(n._fullPlan) ? n._fullPlan.slice(0) : n._plan.slice(0));
+        }
         return false;
       }
     }
@@ -177,8 +188,11 @@
     // No valid plan; compute new plan
     const full = computePath(ctx, occ, n.x, n.y, tx, ty);
     if (full && full.length >= 2) {
-      n._plan = full;
+      n._plan = full.slice(0);
       n._planGoal = { x: tx, y: ty };
+      // Store full path for visualization
+      n._fullPlan = full.slice(0);
+      n._fullPlanGoal = { x: tx, y: ty };
       if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) n._debugPath = full.slice(0);
       const next = full[1];
       const keyNext = `${next.x},${next.y}`;
@@ -188,6 +202,7 @@
       }
       // If first step blocked right away, drop plan and try nudge
       n._plan = null; n._planGoal = null;
+      n._fullPlan = null; n._fullPlanGoal = null;
     }
 
     // Fallback: greedy nudge step
@@ -202,16 +217,19 @@
       if (ctx.player.x === nx && ctx.player.y === ny) continue;
       if (occ.has(`${nx},${ny}`)) continue;
       if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
+        // Single-step nudge visualization
         n._debugPath = [{ x: n.x, y: n.y }, { x: nx, y: ny }];
       } else {
         n._debugPath = null;
       }
       n._plan = null; n._planGoal = null;
+      n._fullPlan = null; n._fullPlanGoal = null;
       occ.delete(`${n.x},${n.y}`); n.x = nx; n.y = ny; occ.add(`${nx},${ny}`);
       return true;
     }
     n._debugPath = null;
     n._plan = null; n._planGoal = null;
+    n._fullPlan = null; n._fullPlanGoal = null;
     return false;
   }
 
