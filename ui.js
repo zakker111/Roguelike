@@ -743,7 +743,8 @@
         if (v === "1") return true;
         if (v === "0") return false;
       } catch (_) {}
-      return false;
+      // Default ON so users see home paths without extra steps
+      return true;
     },
 
     setHomePathsState(enabled) {

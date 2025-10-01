@@ -496,18 +496,28 @@
       if (typeof window !== "undefined" && window.DEBUG_TOWN_HOME_PATHS && Array.isArray(npcs)) {
         try {
           ctx2d.save();
-          ctx2d.strokeStyle = "rgba(60, 120, 255, 0.95)"; // deep blue
           ctx2d.lineWidth = 2;
-          for (const n of npcs) {
+          for (let i = 0; i < npcs.length; i++) {
+            const n = npcs[i];
             const path = n._homeDebugPath;
+            // Use deep blue for all; draw name near start for clarity
+            ctx2d.strokeStyle = "rgba(60, 120, 255, 0.95)";
             if (path && path.length >= 2) {
+              // label NPC name near start of path
+              const start = path[0];
+              const sx = (start.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const sy = (start.y - startY) * TILE - tileOffsetY + TILE / 2;
+              ctx2d.fillStyle = "rgba(60, 120, 255, 0.95)";
+              if (typeof n.name === "string" && n.name) {
+                ctx2d.fillText(n.name, sx + 12, sy + 4);
+              }
               // main polyline
               ctx2d.beginPath();
-              for (let i = 0; i < path.length; i++) {
-                const p = path[i];
+              for (let j = 0; j < path.length; j++) {
+                const p = path[j];
                 const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
                 const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
-                if (i === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
+                if (j === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
               }
               ctx2d.stroke();
               // nodes
@@ -538,11 +548,14 @@
               ctx2d.fillStyle = "rgba(60, 120, 255, 0.95)";
               ctx2d.fillText("H", ex + 10, ey - 10);
             } else {
-              // No home path available: draw a small red '!' over NPC
-              const sx = (n.x - startX) * TILE - tileOffsetX + TILE / 2;
-              const sy = (n.y - startY) * TILE - tileOffsetY + TILE / 2;
+              // No home path available: draw a small red '!' over NPC and name
+              const sx2 = (n.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const sy2 = (n.y - startY) * TILE - tileOffsetY + TILE / 2;
               ctx2d.fillStyle = "rgba(255, 80, 80, 0.95)";
-              ctx2d.fillText("!", sx + 10, sy - 10);
+              ctx2d.fillText("!", sx2 + 10, sy2 - 10);
+              if (typeof n.name === "string" && n.name) {
+                ctx2d.fillText(n.name, sx2 + 12, sy2 + 4);
+              }
             }
           }
           ctx2d.restore();
