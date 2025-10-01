@@ -1500,6 +1500,99 @@
       townExitAt = { x: player.x, y: player.y };
       // Make entry calmer: reduce greeters to avoid surrounding the player
       spawnGateGreeters(0);
+
+      // If entering at night, place NPCs at homes; allow a small number in tavern or at plaza
+      (function setNightState() {
+        try {
+          const t = getClock();
+          if (!t || t.phase !== "night") return;
+          const occupied = new Set();
+          const occKey = (x, y) => `${x},${y}`;
+          const isInside = (b, x, y) => x > b.x && x < b.x + b.w - 1 && y > b.y && y < b.y + b.h - 1;
+          const isFreeInside = (b, x, y) => {
+            if (!isInside(b, x, y)) return false;
+            if (map[y][x] !== TILES.FLOOR && map[y][x] !== TILES.DOOR) return false;
+            if (occupied.has(occKey(x, y))) return false;
+            if (npcs.some(n => n.x === x && n.y === y)) return false;
+            if (townProps.some(p => p.x === x && p.y === y && p.type !== "sign" && p.type !== "rug")) return false;
+            return true;
+          };
+          const placeNear = (b, tx, ty) => {
+            if (isFreeInside(b, tx, ty)) return { x: tx, y: ty };
+            // search small radius inside building
+            for (let r = 1; r <= 3; r++) {
+              for (let dy = -r; dy <= r; dy++) {
+                for (let dx = -r; dx <= r; dx++) {
+                  const nx = tx + dx, ny = ty + dy;
+                  if (isFreeInside(b, nx, ny)) return { x: nx, y: ny };
+                }
+              }
+            }
+            // fallback to door
+            const d = b.door || { x: Math.max(b.x + 1, Math.min(b.x + b.w - 2, tx)), y: Math.max(b.y + 1, Math.min(b.y + b.h - 2, ty)) };
+            if (isFreeInside(b, d.x, d.y)) return { x: d.x, y: d.y };
+            return null;
+          };
+
+          // Select a small set to remain at tavern/plaza
+          const keepOutCount = Math.min(6, Math.max(2, Math.floor(npcs.length * 0.1)));
+          const indices = npcs.map((_, i) => i);
+          for (let i = indices.length - 1; i > 0; i--) {
+            const j = Math.floor(rng() * (i + 1)); const tmp = indices[i]; indices[i] = indices[j]; indices[j] = tmp;
+          }
+          const keepOut = new Set(indices.slice(0, keepOutCount));
+
+          for (let i = 0; i < npcs.length; i++) {
+            const n = npcs[i];
+            // Pets: keep behavior light, let some stay outside
+            if (n.isPet) continue;
+
+            // Some NPCs stay at tavern/plaza
+            if (keepOut.has(i)) {
+              // Prefer tavern door if present; else near plaza
+              if (tavern && tavern.door && isFreeTownFloor(tavern.door.x, tavern.door.y)) {
+                n.x = tavern.door.x; n.y = tavern.door.y;
+                occupied.add(occKey(n.x, n.y));
+                // Make sure they're visible at night entry for clarity
+                if (visible[n.y] && typeof visible[n.y][n.x] !== "undefined") visible[n.y][n.x] = true;
+                if (seen[n.y] && typeof seen[n.y][n.x] !== "undefined") seen[n.y][n.x] = true;
+                continue;
+              } else if (townPlaza) {
+                const px = Math.max(1, Math.min(map[0].length - 2, townPlaza.x + randInt(-2, 2)));
+                const py = Math.max(1, Math.min(map.length - 2, townPlaza.y + randInt(-2, 2)));
+                if (isFreeTownFloor(px, py)) {
+                  n.x = px; n.y = py;
+                  occupied.add(occKey(n.x, n.y));
+                  if (visible[py] && typeof visible[py][px] !== "undefined") visible[py][px] = true;
+                  if (seen[py] && typeof seen[py][px] !== "undefined") seen[py][px] = true;
+                  continue;
+                }
+              }
+              // If couldn't place out, fall through to home
+            }
+
+            // Default: place at home inside building and set sleeping
+            if (n._home && n._home.building) {
+              const b = n._home.building;
+              const target = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+              const spot = placeNear(b, target.x, target.y);
+              if (spot) {
+                n.x = spot.x; n.y = spot.y;
+                n._sleeping = true;
+                occupied.add(occKey(n.x, n.y));
+                // Ensure these tiles are visible/seen so the user can confirm placement
+                if (visible[n.y] && typeof visible[n.y][n.x] !== "undefined") visible[n.y][n.x] = true;
+                if (seen[n.y] && typeof seen[n.y][n.x] !== "undefined") seen[n.y][n.x] = true;
+                continue;
+              }
+            }
+            // If no home/building info, leave as-is but ensure visibility if near the player
+            if (visible[n.y] && typeof visible[n.y][n.x] !== "undefined") visible[n.y][n.x] = true;
+            if (seen[n.y] && typeof seen[n.y][n.x] !== "undefined") seen[n.y][n.x] = true;
+          }
+        } catch (_) {}
+      })();
+
       log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
       updateCamera();

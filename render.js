@@ -462,16 +462,17 @@
       }
 
       // Optional: draw planned paths for NPCs when debug paths enabled
-      if (typeof window !== "undefined" && window.DEBUG_TOWN_OVERLAY && window.DEBUG_TOWN_PATHS && Array.isArray(npcs)) {
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS && Array.isArray(npcs)) {
         try {
           ctx2d.save();
           ctx2d.strokeStyle = "rgba(0, 200, 255, 0.85)";
           ctx2d.lineWidth = 2;
           for (const n of npcs) {
-            if (!n._debugPath || n._debugPath.length < 2) continue;
+            const path = n._debugPath || n._fullPlan;
+            if (!path || path.length < 2) continue;
             ctx2d.beginPath();
-            for (let i = 0; i < n._debugPath.length; i++) {
-              const p = n._debugPath[i];
+            for (let i = 0; i < path.length; i++) {
+              const p = path[i];
               const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
               const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
               if (i === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
@@ -479,7 +480,109 @@
             ctx2d.stroke();
             // draw small nodes
             ctx2d.fillStyle = "rgba(0, 200, 255, 0.85)";
-            for (const p of n._debugPath) {
+            for (const p of path) {
+              const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+              ctx2d.beginPath();
+              ctx2d.arc(px, py, Math.max(2, Math.floor(TILE * 0.12)), 0, Math.PI * 2);
+              ctx2d.fill();
+            }
+          }
+          ctx2d.restore();
+        } catch (_) {}
+      }
+
+      // Optional: draw home paths when enabled (deep blue)
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_HOME_PATHS && Array.isArray(npcs)) {
+        try {
+          ctx2d.save();
+          ctx2d.lineWidth = 2;
+          for (let i = 0; i < npcs.length; i++) {
+            const n = npcs[i];
+            // Prefer actual movement plan if present; else fallback to visualization path
+            const path = (n._homePlan && n._homePlan.length >= 2) ? n._homePlan : n._homeDebugPath;
+            ctx2d.strokeStyle = "rgba(60, 120, 255, 0.95)";
+            if (path && path.length >= 2) {
+              // label NPC name near start of path
+              const start = path[0];
+              const sx = (start.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const sy = (start.y - startY) * TILE - tileOffsetY + TILE / 2;
+              ctx2d.fillStyle = "rgba(60, 120, 255, 0.95)";
+              if (typeof n.name === "string" && n.name) {
+                ctx2d.fillText(n.name, sx + 12, sy + 4);
+              }
+              // main polyline
+              ctx2d.beginPath();
+              for (let j = 0; j < path.length; j++) {
+                const p = path[j];
+                const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+                const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+                if (j === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
+              }
+              ctx2d.stroke();
+              // nodes
+              ctx2d.fillStyle = "rgba(60, 120, 255, 0.95)";
+              for (const p of path) {
+                const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+                const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+                ctx2d.beginPath();
+                ctx2d.arc(px, py, Math.max(2, Math.floor(TILE * 0.12)), 0, Math.PI * 2);
+                ctx2d.fill();
+              }
+              // arrowhead at end toward home
+              const end = path[path.length - 1];
+              const prev = path[path.length - 2];
+              const ex = (end.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const ey = (end.y - startY) * TILE - tileOffsetY + TILE / 2;
+              const px2 = (prev.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const py2 = (prev.y - startY) * TILE - tileOffsetY + TILE / 2;
+              const angle = Math.atan2(ey - py2, ex - px2);
+              const ah = Math.max(6, Math.floor(TILE * 0.25));
+              ctx2d.beginPath();
+              ctx2d.moveTo(ex, ey);
+              ctx2d.lineTo(ex - Math.cos(angle - Math.PI / 6) * ah, ey - Math.sin(angle - Math.PI / 6) * ah);
+              ctx2d.moveTo(ex, ey);
+              ctx2d.lineTo(ex - Math.cos(angle + Math.PI / 6) * ah, ey - Math.sin(angle + Math.PI / 6) * ah);
+              ctx2d.stroke();
+              // label 'H' at endpoint
+              ctx2d.fillStyle = "rgba(60, 120, 255, 0.95)";
+              ctx2d.fillText("H", ex + 10, ey - 10);
+            } else {
+              // No home path available: draw a small red '!' over NPC and name
+              const sx2 = (n.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const sy2 = (n.y - startY) * TILE - tileOffsetY + TILE / 2;
+              ctx2d.fillStyle = "rgba(255, 80, 80, 0.95)";
+              ctx2d.fillText("!", sx2 + 10, sy2 - 10);
+              if (typeof n.name === "string" && n.name) {
+                ctx2d.fillText(n.name, sx2 + 12, sy2 + 4);
+              }
+            }
+          }
+          ctx2d.restore();
+        } catch (_) {}
+      }
+
+      // Optional: draw current-destination route paths when enabled (blue)
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_ROUTE_PATHS && Array.isArray(npcs)) {
+        try {
+          ctx2d.save();
+          ctx2d.lineWidth = 2;
+          ctx2d.strokeStyle = "rgba(80, 140, 255, 0.9)";
+          for (const n of npcs) {
+            const path = n._routeDebugPath;
+            if (!path || path.length < 2) continue;
+            // main polyline
+            ctx2d.beginPath();
+            for (let j = 0; j < path.length; j++) {
+              const p = path[j];
+              const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+              if (j === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
+            }
+            ctx2d.stroke();
+            // nodes
+            ctx2d.fillStyle = "rgba(80, 140, 255, 0.9)";
+            for (const p of path) {
               const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
               const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
               ctx2d.beginPath();
