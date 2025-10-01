@@ -453,6 +453,7 @@
     const { npcs, player, townProps } = ctx;
     if (!Array.isArray(npcs) || npcs.length === 0) return;
 
+    // Runtime occupancy (used for actual movement)
     const occ = new Set();
     occ.add(`${player.x},${player.y}`);
     for (const n of npcs) occ.add(`${n.x},${n.y}`);
@@ -470,21 +471,70 @@
                 : (t && t.phase === "dusk") ? "evening"
                 : "day";
 
+    // Build a relaxed occupancy for debug visualization:
+    // - Ignore other NPCs and the player so we show the "theoretical" full path
+    // - Keep blocking furniture and map boundaries
+    function makeRelaxedOcc() {
+      const r = new Set();
+      if (Array.isArray(townProps)) {
+        for (const p of townProps) {
+          if (propBlocks(p.type)) r.add(`${p.x},${p.y}`);
+        }
+      }
+      return r;
+    }
+
+    function concatPaths(a, b) {
+      if (!a || !b) return a || b || null;
+      if (a.length === 0) return b.slice(0);
+      if (b.length === 0) return a.slice(0);
+      // Avoid duplicating the connecting node
+      const res = a.slice(0);
+      const firstB = b[0];
+      const lastA = a[a.length - 1];
+      const skipFirst = (firstB.x === lastA.x && firstB.y === lastA.y);
+      for (let i = skipFirst ? 1 : 0; i < b.length; i++) res.push(b[i]);
+      return res;
+    }
+
+    // Compute a two-stage home path: to door (if outside) then inside to bed/home
+    function computeHomePath(ctx, n) {
+      if (!n._home || !n._home.building) return null;
+      const B = n._home.building;
+      const relaxedOcc = makeRelaxedOcc();
+
+      // Adjust target inside the building to a free interior tile
+      let targetInside = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+      targetInside = adjustInteriorTarget(ctx, B, targetInside);
+
+      const insideNow = insideBuilding(B, n.x, n.y);
+      let path = null;
+
+      if (!insideNow) {
+        const door = B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null);
+        if (!door) return null;
+
+        // Stage 1: path to door (outside)
+        const p1 = computePath(ctx, relaxedOcc, n.x, n.y, door.x, door.y);
+
+        // Stage 2: step just inside, then path to targetInterior
+        const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B) || targetInside || { x: door.x, y: door.y };
+        const p2 = computePath(ctx, relaxedOcc, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
+
+        // Combine; if p1 missing, still try to show interior path
+        path = concatPaths(p1, p2);
+      } else {
+        // Already inside: direct interior path
+        path = computePath(ctx, relaxedOcc, n.x, n.y, targetInside.x, targetInside.y);
+      }
+      return (path && path.length >= 2) ? path : null;
+    }
+
     // Precompute debug home paths when enabled (non-destructive to behavior)
     if (typeof window !== "undefined" && window.DEBUG_TOWN_HOME_PATHS) {
       try {
         for (const n of npcs) {
-          // Determine home target: bed if available, else home spot
-          let target = null;
-          if (n._home) {
-            target = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-            // If inside a building, adjust to nearest free interior tile
-            if (n._home.building) {
-              target = adjustInteriorTarget(ctx, n._home.building, target);
-            }
-          }
-          if (!target) { n._homeDebugPath = null; continue; }
-          const path = computePath(ctx, occ, n.x, n.y, target.x, target.y);
+          const path = computeHomePath(ctx, n);
           n._homeDebugPath = (path && path.length >= 2) ? path.slice(0) : null;
         }
       } catch (_) {}
