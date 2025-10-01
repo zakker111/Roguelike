@@ -1553,6 +1553,9 @@
               if (tavern && tavern.door && isFreeTownFloor(tavern.door.x, tavern.door.y)) {
                 n.x = tavern.door.x; n.y = tavern.door.y;
                 occupied.add(occKey(n.x, n.y));
+                // Make sure they're visible at night entry for clarity
+                if (visible[n.y] && typeof visible[n.y][n.x] !== "undefined") visible[n.y][n.x] = true;
+                if (seen[n.y] && typeof seen[n.y][n.x] !== "undefined") seen[n.y][n.x] = true;
                 continue;
               } else if (townPlaza) {
                 const px = Math.max(1, Math.min(map[0].length - 2, townPlaza.x + randInt(-2, 2)));
@@ -1560,6 +1563,8 @@
                 if (isFreeTownFloor(px, py)) {
                   n.x = px; n.y = py;
                   occupied.add(occKey(n.x, n.y));
+                  if (visible[py] && typeof visible[py][px] !== "undefined") visible[py][px] = true;
+                  if (seen[py] && typeof seen[py][px] !== "undefined") seen[py][px] = true;
                   continue;
                 }
               }
@@ -1575,10 +1580,15 @@
                 n.x = spot.x; n.y = spot.y;
                 n._sleeping = true;
                 occupied.add(occKey(n.x, n.y));
+                // Ensure these tiles are visible/seen so the user can confirm placement
+                if (visible[n.y] && typeof visible[n.y][n.x] !== "undefined") visible[n.y][n.x] = true;
+                if (seen[n.y] && typeof seen[n.y][n.x] !== "undefined") seen[n.y][n.x] = true;
                 continue;
               }
             }
-            // If no home/building info, leave as-is but reduce roaming later via AI
+            // If no home/building info, leave as-is but ensure visibility if near the player
+            if (visible[n.y] && typeof visible[n.y][n.x] !== "undefined") visible[n.y][n.x] = true;
+            if (seen[n.y] && typeof seen[n.y][n.x] !== "undefined") seen[n.y][n.x] = true;
           }
         } catch (_) {}
       })();
