@@ -247,6 +247,16 @@
         });
         this.updateHomePathsButton();
       }
+      // Route paths toggle (current destination)
+      this.els.godToggleRoutePathsBtn = document.getElementById("god-toggle-route-paths-btn");
+      if (this.els.godToggleRoutePathsBtn) {
+        this.els.godToggleRoutePathsBtn.addEventListener("click", () => {
+          const next = !this.getRoutePathsState();
+          this.setRoutePathsState(next);
+          this.updateRoutePathsButton();
+        });
+        this.updateRoutePathsButton();
+      }
       // RNG seed controls
       if (this.els.godApplySeedBtn) {
         this.els.godApplySeedBtn.addEventListener("click", () => {
@@ -760,6 +770,32 @@
       const on = this.getHomePathsState();
       this.els.godToggleHomePathsBtn.textContent = `Home Paths: ${on ? "On" : "Off"}`;
       this.els.godToggleHomePathsBtn.title = on ? "Hide NPC home paths (blue)" : "Show full NPC home paths in blue (town only)";
+    },
+
+    // --- Route path debug controls (current destination) ---
+    getRoutePathsState() {
+      try {
+        if (typeof window.DEBUG_TOWN_ROUTE_PATHS === "boolean") return window.DEBUG_TOWN_ROUTE_PATHS;
+        const v = localStorage.getItem("DEBUG_TOWN_ROUTE_PATHS");
+        if (v === "1") return true;
+        if (v === "0") return false;
+      } catch (_) {}
+      return false;
+    },
+
+    setRoutePathsState(enabled) {
+      try {
+        window.DEBUG_TOWN_ROUTE_PATHS = !!enabled;
+        localStorage.setItem("DEBUG_TOWN_ROUTE_PATHS", enabled ? "1" : "0");
+      } catch (_) {}
+      this.updateRoutePathsButton();
+    },
+
+    updateRoutePathsButton() {
+      if (!this.els.godToggleRoutePathsBtn) return;
+      const on = this.getRoutePathsState();
+      this.els.godToggleRoutePathsBtn.textContent = `Routes: ${on ? "On" : "Off"}`;
+      this.els.godToggleRoutePathsBtn.title = on ? "Hide NPC current-destination routes (blue)" : "Show NPC current-destination routes in blue (town only)";
     },
 
     // --- Always Crit controls ---

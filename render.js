@@ -562,6 +562,38 @@
         } catch (_) {}
       }
 
+      // Optional: draw current-destination route paths when enabled (blue)
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_ROUTE_PATHS && Array.isArray(npcs)) {
+        try {
+          ctx2d.save();
+          ctx2d.lineWidth = 2;
+          ctx2d.strokeStyle = "rgba(80, 140, 255, 0.9)";
+          for (const n of npcs) {
+            const path = n._routeDebugPath;
+            if (!path || path.length < 2) continue;
+            // main polyline
+            ctx2d.beginPath();
+            for (let j = 0; j < path.length; j++) {
+              const p = path[j];
+              const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+              if (j === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
+            }
+            ctx2d.stroke();
+            // nodes
+            ctx2d.fillStyle = "rgba(80, 140, 255, 0.9)";
+            for (const p of path) {
+              const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+              ctx2d.beginPath();
+              ctx2d.arc(px, py, Math.max(2, Math.floor(TILE * 0.12)), 0, Math.PI * 2);
+              ctx2d.fill();
+            }
+          }
+          ctx2d.restore();
+        } catch (_) {}
+      }
+
       // Lamp light glow at night/dusk/dawn
       try {
         const time = ctx.time;

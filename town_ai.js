@@ -625,6 +625,58 @@
       for (const n of npcs) { n._homeDebugPath = null; }
     }
 
+    // Precompute current-destination route debug paths when enabled
+    if (typeof window !== "undefined" && window.DEBUG_TOWN_ROUTE_PATHS) {
+      try {
+        const relaxedOcc = makeRelaxedOcc();
+        function currentTargetFor(n) {
+          const minutesNow = minutes;
+          const phaseNow = phase;
+          if (n.isShopkeeper) {
+            const shop = n._shopRef || null;
+            const o = shop ? shop.openMin : 8 * 60;
+            const c = shop ? shop.closeMin : 18 * 60;
+            const arriveStart = (o - 60 + 1440) % 1440;
+            const leaveEnd = (c + 30) % 1440;
+            const shouldBeAtWorkZone = inWindow(arriveStart, leaveEnd, minutesNow, 1440);
+            const openNow = isOpenAt(shop, minutesNow, 1440);
+            if (shouldBeAtWorkZone) {
+              if (openNow && n._workInside && shop && shop.building) {
+                return n._workInside;
+              } else if (n._work) {
+                return n._work;
+              }
+            } else if (n._home) {
+              return n._home.bed ? n._home.bed : { x: n._home.x, y: n._home.y };
+            }
+            return null;
+          } else if (n.isResident) {
+            if (phaseNow === "evening") {
+              return n._home ? (n._home.bed ? n._home.bed : { x: n._home.x, y: n._home.y }) : null;
+            } else if (phaseNow === "day") {
+              return n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
+            } else if (phaseNow === "morning") {
+              return n._home ? { x: n._home.x, y: n._home.y } : null;
+            } else {
+              return n._home ? { x: n._home.x, y: n._home.y } : null;
+            }
+          } else {
+            if (phaseNow === "morning") return n._home ? { x: n._home.x, y: n._home.y } : null;
+            else if (phaseNow === "day") return (n._work || ctx.townPlaza);
+            else return n._home ? { x: n._home.x, y: n._home.y } : null;
+          }
+        }
+        for (const n of npcs) {
+          const target = currentTargetFor(n);
+          if (!target) { n._routeDebugPath = null; continue; }
+          const path = computePath(ctx, relaxedOcc, n.x, n.y, target.x, target.y, { ignorePlayer: true });
+          n._routeDebugPath = (path && path.length >= 2) ? path.slice(0) : null;
+        }
+      } catch (_) {}
+    } else {
+      for (const n of npcs) { n._routeDebugPath = null; }
+    }
+
     // Shuffle iteration
     const order = npcs.map((_, i) => i);
     for (let i = order.length - 1; i > 0; i--) {
