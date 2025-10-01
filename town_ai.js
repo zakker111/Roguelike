@@ -68,8 +68,8 @@
   }
 
   // Pre-planning A* used for path debug and stable routing
-  function computePath(ctx, occ, sx, sy, tx, ty) {
-    const { map, player } = ctx;
+  function computePath(ctx, occ, sx, sy, tx, ty, opts = {}) {
+    const { map } = ctx;
     const rows = map.length, cols = map[0] ? map[0].length : 0;
     const inB = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows;
     const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
@@ -85,7 +85,7 @@
     fScore.set(startK, h(sx, sy));
     open.push({ x: sx, y: sy, f: fScore.get(startK) });
 
-    const MAX_VISITS = 4000;
+    const MAX_VISITS = 12000;
     const visited = new Set();
 
     function pushOpen(x, y, f) {
@@ -109,7 +109,6 @@
         const nx = cur.x + d.dx, ny = cur.y + d.dy;
         if (!inB(nx, ny)) continue;
         if (!isWalkTown(ctx, nx, ny)) continue;
-        if (player.x === nx && player.y === ny) continue;
 
         const nk = startKey(nx, ny);
         // Allow goal even if currently occupied; otherwise avoid occupied nodes
@@ -515,17 +514,17 @@
         if (!door) return null;
 
         // Stage 1: path to door (outside)
-        const p1 = computePath(ctx, relaxedOcc, n.x, n.y, door.x, door.y);
+        const p1 = computePath(ctx, relaxedOcc, n.x, n.y, door.x, door.y, { ignorePlayer: true });
 
         // Stage 2: step just inside, then path to targetInterior
         const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B) || targetInside || { x: door.x, y: door.y };
-        const p2 = computePath(ctx, relaxedOcc, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
+        const p2 = computePath(ctx, relaxedOcc, inSpot.x, inSpot.y, targetInside.x, targetInside.y, { ignorePlayer: true });
 
         // Combine; if p1 missing, still try to show interior path
         path = concatPaths(p1, p2);
       } else {
         // Already inside: direct interior path
-        path = computePath(ctx, relaxedOcc, n.x, n.y, targetInside.x, targetInside.y);
+        path = computePath(ctx, relaxedOcc, n.x, n.y, targetInside.x, targetInside.y, { ignorePlayer: true });
       }
       return (path && path.length >= 2) ? path : null;
     }
