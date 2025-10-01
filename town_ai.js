@@ -557,8 +557,10 @@
       // If outside the building, aim for the door first
       const insideNow = insideBuilding(building, n.x, n.y);
       if (!insideNow) {
-        const door = building.door || nearestFreeAdjacent(ctx, building.x + ((building.w / 2) | 0), building.y, null);
-        if (door) {
+        // Prefer building.door; otherwise choose a reasonable perimeter tile near center
+        const candidate = building.door || nearestFreeAdjacent(ctx, building.x + ((building.w / 2) | 0), building.y, null);
+        if (candidate) {
+          const door = { x: candidate.x, y: candidate.y };
           if (n.x === door.x && n.y === door.y) {
             // Step just inside to a free interior tile (planned)
             const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, building) || adjTarget || { x: door.x, y: door.y };
@@ -614,6 +616,11 @@
           // Off hours: go home, via door then inside
           const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
           handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
+          // Fallback: if routing failed (crowded door), try stepping to door directly
+          if (!handled) {
+            const door = n._home.building.door || nearestFreeAdjacent(ctx, n._home.building.x + ((n._home.building.w / 2) | 0), n._home.building.y, null);
+            if (door) handled = stepTowards(ctx, occ, n, door.x, door.y);
+          }
         }
 
         if (handled) continue;

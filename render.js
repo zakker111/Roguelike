@@ -500,23 +500,49 @@
           ctx2d.lineWidth = 2;
           for (const n of npcs) {
             const path = n._homeDebugPath;
-            if (!path || path.length < 2) continue;
-            ctx2d.beginPath();
-            for (let i = 0; i < path.length; i++) {
-              const p = path[i];
-              const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
-              const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
-              if (i === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
-            }
-            ctx2d.stroke();
-            // nodes
-            ctx2d.fillStyle = "rgba(60, 120, 255, 0.95)";
-            for (const p of path) {
-              const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
-              const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+            if (path && path.length >= 2) {
+              // main polyline
               ctx2d.beginPath();
-              ctx2d.arc(px, py, Math.max(2, Math.floor(TILE * 0.12)), 0, Math.PI * 2);
-              ctx2d.fill();
+              for (let i = 0; i < path.length; i++) {
+                const p = path[i];
+                const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+                const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+                if (i === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
+              }
+              ctx2d.stroke();
+              // nodes
+              ctx2d.fillStyle = "rgba(60, 120, 255, 0.95)";
+              for (const p of path) {
+                const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+                const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+                ctx2d.beginPath();
+                ctx2d.arc(px, py, Math.max(2, Math.floor(TILE * 0.12)), 0, Math.PI * 2);
+                ctx2d.fill();
+              }
+              // arrowhead at end toward home
+              const end = path[path.length - 1];
+              const prev = path[path.length - 2];
+              const ex = (end.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const ey = (end.y - startY) * TILE - tileOffsetY + TILE / 2;
+              const px2 = (prev.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const py2 = (prev.y - startY) * TILE - tileOffsetY + TILE / 2;
+              const angle = Math.atan2(ey - py2, ex - px2);
+              const ah = Math.max(6, Math.floor(TILE * 0.25));
+              ctx2d.beginPath();
+              ctx2d.moveTo(ex, ey);
+              ctx2d.lineTo(ex - Math.cos(angle - Math.PI / 6) * ah, ey - Math.sin(angle - Math.PI / 6) * ah);
+              ctx2d.moveTo(ex, ey);
+              ctx2d.lineTo(ex - Math.cos(angle + Math.PI / 6) * ah, ey - Math.sin(angle + Math.PI / 6) * ah);
+              ctx2d.stroke();
+              // label 'H' at endpoint
+              ctx2d.fillStyle = "rgba(60, 120, 255, 0.95)";
+              ctx2d.fillText("H", ex + 10, ey - 10);
+            } else {
+              // No home path available: draw a small red '!' over NPC
+              const sx = (n.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const sy = (n.y - startY) * TILE - tileOffsetY + TILE / 2;
+              ctx2d.fillStyle = "rgba(255, 80, 80, 0.95)";
+              ctx2d.fillText("!", sx + 10, sy - 10);
             }
           }
           ctx2d.restore();
