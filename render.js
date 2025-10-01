@@ -492,11 +492,11 @@
         } catch (_) {}
       }
 
-      // Optional: draw home paths when enabled
+      // Optional: draw home paths when enabled (deep blue)
       if (typeof window !== "undefined" && window.DEBUG_TOWN_HOME_PATHS && Array.isArray(npcs)) {
         try {
           ctx2d.save();
-          ctx2d.strokeStyle = "rgba(255, 180, 50, 0.9)"; // orange-ish
+          ctx2d.strokeStyle = "rgba(60, 120, 255, 0.95)"; // deep blue
           ctx2d.lineWidth = 2;
           for (const n of npcs) {
             const path = n._homeDebugPath;
@@ -510,7 +510,7 @@
             }
             ctx2d.stroke();
             // nodes
-            ctx2d.fillStyle = "rgba(255, 180, 50, 0.9)";
+            ctx2d.fillStyle = "rgba(60, 120, 255, 0.95)";
             for (const p of path) {
               const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
               const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;

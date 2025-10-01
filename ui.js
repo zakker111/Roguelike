@@ -758,7 +758,7 @@
       if (!this.els.godToggleHomePathsBtn) return;
       const on = this.getHomePathsState();
       this.els.godToggleHomePathsBtn.textContent = `Home Paths: ${on ? "On" : "Off"}`;
-      this.els.godToggleHomePathsBtn.title = on ? "Hide NPC home paths" : "Show NPC paths to home/bed (town only)";
+      this.els.godToggleHomePathsBtn.title = on ? "Hide NPC home paths (blue)" : "Show full NPC home paths in blue (town only)";
     },
 
     // --- Always Crit controls ---
