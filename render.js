@@ -499,8 +499,8 @@
           ctx2d.lineWidth = 2;
           for (let i = 0; i < npcs.length; i++) {
             const n = npcs[i];
-            const path = n._homeDebugPath;
-            // Use deep blue for all; draw name near start for clarity
+            // Prefer actual movement plan if present; else fallback to visualization path
+            const path = (n._homePlan && n._homePlan.length >= 2) ? n._homePlan : n._homeDebugPath;
             ctx2d.strokeStyle = "rgba(60, 120, 255, 0.95)";
             if (path && path.length >= 2) {
               // label NPC name near start of path

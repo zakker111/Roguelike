@@ -496,7 +496,7 @@
       return res;
     }
 
-    // Compute a two-stage home path: to door (if outside) then inside to bed/home
+    // Compute a two-stage home path for visualization (relaxed occupancy)
     function computeHomePath(ctx, n) {
       if (!n._home || !n._home.building) return null;
       const B = n._home.building;
@@ -527,6 +527,68 @@
         path = computePath(ctx, relaxedOcc, n.x, n.y, targetInside.x, targetInside.y, { ignorePlayer: true });
       }
       return (path && path.length >= 2) ? path : null;
+    }
+
+    // Movement path to home with runtime occupancy; NPC will follow this plan strictly and wait if blocked.
+    function ensureHomePlan(ctx, occ, n) {
+      if (!n._home || !n._home.building) { n._homePlan = null; n._homePlanGoal = null; return; }
+      const B = n._home.building;
+      let targetInside = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+      targetInside = adjustInteriorTarget(ctx, B, targetInside);
+
+      const insideNow = insideBuilding(B, n.x, n.y);
+      let plan = null;
+
+      if (!insideNow) {
+        const door = B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null);
+        if (!door) { n._homePlan = null; n._homePlanGoal = null; return; }
+        const p1 = computePath(ctx, occ, n.x, n.y, door.x, door.y);
+        const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B) || targetInside || { x: door.x, y: door.y };
+        const p2 = computePath(ctx, occ, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
+        plan = concatPaths(p1, p2);
+      } else {
+        plan = computePath(ctx, occ, n.x, n.y, targetInside.x, targetInside.y);
+      }
+
+      if (plan && plan.length >= 2) {
+        n._homePlan = plan.slice(0);
+        n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
+        n._homeWait = 0;
+      } else {
+        n._homePlan = null;
+        n._homePlanGoal = null;
+      }
+    }
+
+    function followHomePlan(ctx, occ, n) {
+      if (!n._homePlan || n._homePlan.length < 2) return false;
+      // Re-sync plan to current position
+      if (n._homePlan[0].x !== n.x || n._homePlan[0].y !== n.y) {
+        const idx = n._homePlan.findIndex(p => p.x === n.x && p.y === n.y);
+        if (idx >= 0) {
+          n._homePlan = n._homePlan.slice(idx);
+        } else {
+          // Lost the plan; recompute once
+          ensureHomePlan(ctx, occ, n);
+        }
+      }
+      if (!n._homePlan || n._homePlan.length < 2) return false;
+      const next = n._homePlan[1];
+      const keyNext = `${next.x},${next.y}`;
+      // If next step blocked, wait a bit, then recompute
+      if (occ.has(keyNext) || !isWalkTown(ctx, next.x, next.y)) {
+        n._homeWait = (n._homeWait || 0) + 1;
+        if (n._homeWait >= 3) {
+          ensureHomePlan(ctx, occ, n);
+        }
+        // Do not move this turn
+        return true; // consumed intent by waiting
+      }
+      // Take the step
+      occ.delete(`${n.x},${n.y}`); n.x = next.x; n.y = next.y; occ.add(`${n.x},${n.y}`);
+      n._homePlan = n._homePlan.slice(1);
+      n._homeWait = 0;
+      return true;
     }
 
     // Precompute debug home paths when enabled (non-destructive to behavior)
@@ -612,13 +674,15 @@
             handled = stepTowards(ctx, occ, n, n._work.x, n._work.y);
           }
         } else if (n._home && n._home.building) {
-          // Off hours: go home, via door then inside
+          // Off hours: go home strictly along a planned path; wait if blocked
           const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-          handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
-          // Fallback: if routing failed (crowded door), try stepping to door directly
+          if (!n._homePlan || !n._homePlanGoal) {
+            ensureHomePlan(ctx, occ, n);
+          }
+          handled = followHomePlan(ctx, occ, n);
           if (!handled) {
-            const door = n._home.building.door || nearestFreeAdjacent(ctx, n._home.building.x + ((n._home.building.w / 2) | 0), n._home.building.y, null);
-            if (door) handled = stepTowards(ctx, occ, n, door.x, door.y);
+            // Fallback: route via door
+            handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
           }
         }
 
@@ -646,7 +710,12 @@
               n._sleeping = true;
               continue;
             }
-            // Otherwise route via door and inside (target adjusted to nearest free interior tile)
+            // Ensure and follow a deterministic home plan; if blocked, wait and retry
+            if (!n._homePlan || !n._homePlanGoal) {
+              ensureHomePlan(ctx, occ, n);
+            }
+            if (followHomePlan(ctx, occ, n)) continue;
+            // Fallback: attempt routing via door if plan absent
             if (routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget)) continue;
           }
           // If no home data for some reason, stop wandering at evening
@@ -665,6 +734,10 @@
         } else if (phase === "morning") {
           if (n._home && n._home.building) {
             const homeTarget = { x: n._home.x, y: n._home.y };
+            if (!n._homePlan || !n._homePlanGoal) {
+              ensureHomePlan(ctx, occ, n);
+            }
+            if (followHomePlan(ctx, occ, n)) continue;
             if (routeIntoBuilding(ctx, occ, n, n._home.building, homeTarget)) continue;
           }
         }
