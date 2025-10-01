@@ -470,6 +470,29 @@
                 : (t && t.phase === "dusk") ? "evening"
                 : "day";
 
+    // Precompute debug home paths when enabled (non-destructive to behavior)
+    if (typeof window !== "undefined" && window.DEBUG_TOWN_HOME_PATHS) {
+      try {
+        for (const n of npcs) {
+          // Determine home target: bed if available, else home spot
+          let target = null;
+          if (n._home) {
+            target = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+            // If inside a building, adjust to nearest free interior tile
+            if (n._home.building) {
+              target = adjustInteriorTarget(ctx, n._home.building, target);
+            }
+          }
+          if (!target) { n._homeDebugPath = null; continue; }
+          const path = computePath(ctx, occ, n.x, n.y, target.x, target.y);
+          n._homeDebugPath = (path && path.length >= 2) ? path.slice(0) : null;
+        }
+      } catch (_) {}
+    } else {
+      // Clear any previous debug data when disabled
+      for (const n of npcs) { n._homeDebugPath = null; }
+    }
+
     // Shuffle iteration
     const order = npcs.map((_, i) => i);
     for (let i = order.length - 1; i > 0; i--) {

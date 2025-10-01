@@ -468,10 +468,11 @@
           ctx2d.strokeStyle = "rgba(0, 200, 255, 0.85)";
           ctx2d.lineWidth = 2;
           for (const n of npcs) {
-            if (!n._debugPath || n._debugPath.length < 2) continue;
+            const path = n._debugPath || n._fullPlan;
+            if (!path || path.length < 2) continue;
             ctx2d.beginPath();
-            for (let i = 0; i < n._debugPath.length; i++) {
-              const p = n._debugPath[i];
+            for (let i = 0; i < path.length; i++) {
+              const p = path[i];
               const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
               const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
               if (i === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
@@ -479,7 +480,38 @@
             ctx2d.stroke();
             // draw small nodes
             ctx2d.fillStyle = "rgba(0, 200, 255, 0.85)";
-            for (const p of n._debugPath) {
+            for (const p of path) {
+              const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+              ctx2d.beginPath();
+              ctx2d.arc(px, py, Math.max(2, Math.floor(TILE * 0.12)), 0, Math.PI * 2);
+              ctx2d.fill();
+            }
+          }
+          ctx2d.restore();
+        } catch (_) {}
+      }
+
+      // Optional: draw home paths when enabled
+      if (typeof window !== "undefined" && window.DEBUG_TOWN_HOME_PATHS && Array.isArray(npcs)) {
+        try {
+          ctx2d.save();
+          ctx2d.strokeStyle = "rgba(255, 180, 50, 0.9)"; // orange-ish
+          ctx2d.lineWidth = 2;
+          for (const n of npcs) {
+            const path = n._homeDebugPath;
+            if (!path || path.length < 2) continue;
+            ctx2d.beginPath();
+            for (let i = 0; i < path.length; i++) {
+              const p = path[i];
+              const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
+              const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
+              if (i === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
+            }
+            ctx2d.stroke();
+            // nodes
+            ctx2d.fillStyle = "rgba(255, 180, 50, 0.9)";
+            for (const p of path) {
               const px = (p.x - startX) * TILE - tileOffsetX + TILE / 2;
               const py = (p.y - startY) * TILE - tileOffsetY + TILE / 2;
               ctx2d.beginPath();
