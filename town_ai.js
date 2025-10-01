@@ -333,14 +333,20 @@
     // Residents
     (function spawnResidents() {
       if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
-      const targetFraction = 0.6;
-      const shuffled = townBuildings.slice();
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1)); const t = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = t;
+
+      // Helper to find any free interior spot deterministically
+      function firstFreeInteriorSpot(ctx, b) {
+        for (let y = b.y + 1; y < b.y + b.h - 1; y++) {
+          for (let x = b.x + 1; x < b.x + b.w - 1; x++) {
+            if (ctx.map[y][x] !== ctx.TILES.FLOOR) continue;
+            if ((ctx.townProps || []).some(p => p.x === x && p.y === y && p.type && p.type !== "sign" && p.type !== "rug")) continue;
+            if ((ctx.npcs || []).some(n => n.x === x && n.y === y)) continue;
+            return { x, y };
+          }
+        }
+        return null;
       }
-      const pickCount = Math.min(shuffled.length, Math.max(4, Math.floor(shuffled.length * targetFraction)));
-      const picked = shuffled.slice(0, pickCount);
-      const remaining = shuffled.slice(pickCount);
+
       const linesHome = ["Home sweet home.","A quiet day indoors.","Just tidying up."];
 
       const benches = (ctx.townProps || []).filter(p => p.type === "bench");
@@ -356,13 +362,17 @@
         return { x: s.x, y: s.y };
       };
 
-      for (const b of picked) {
+      // Ensure every building has occupants (at least one), scaled by area
+      for (const b of townBuildings) {
         const area = b.w * b.h;
-        const residentCount = Math.max(1, Math.min(3, Math.floor(area / 30))) + (rng() < 0.4 ? 1 : 0);
+        const baseCount = Math.max(1, Math.min(3, Math.floor(area / 30)));
+        const residentCount = baseCount + (rng() < 0.4 ? 1 : 0);
         const bedList = bedsFor(ctx, b);
-        for (let i = 0; i < residentCount; i++) {
-          const pos = randomInteriorSpot(ctx, b);
-          if (!pos) continue;
+        let created = 0;
+        let tries = 0;
+        while (created < residentCount && tries++ < 200) {
+          const pos = randomInteriorSpot(ctx, b) || firstFreeInteriorSpot(ctx, b) || { x: b.door.x, y: b.door.y };
+          if (!pos) break;
           if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
           let errand = null;
           if (rng() < 0.5) {
@@ -385,14 +395,11 @@
             _home: { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y }, bed: sleepSpot },
             _work: errand,
           });
+          created++;
         }
-      }
-
-      for (const b of remaining) {
-        if (rng() < 0.45) {
-          const pos = randomInteriorSpot(ctx, b);
-          if (!pos) continue;
-          if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
+        // Guarantee at least one occupant
+        if (created === 0) {
+          const pos = firstFreeInteriorSpot(ctx, b) || { x: b.door.x, y: b.door.y };
           npcs.push({
             x: pos.x, y: pos.y,
             name: `Resident`,
@@ -517,7 +524,21 @@
         const p1 = computePath(ctx, relaxedOcc, n.x, n.y, door.x, door.y, { ignorePlayer: true });
 
         // Stage 2: step just inside, then path to targetInterior
-        const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B) || targetInside || { x: door.x, y: door.y };
+        let inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B);
+        if (!inSpot) {
+          // Deterministic fallback: use first free interior spot
+          inSpot = (function firstFreeInteriorSpot() {
+            for (let y = B.y + 1; y < B.y + B.h - 1; y++) {
+              for (let x = B.x + 1; x < B.x + B.w - 1; x++) {
+                if (ctx.map[y][x] !== ctx.TILES.FLOOR) continue;
+                if ((ctx.townProps || []).some(p => p.x === x && p.y === y && p.type && p.type !== "sign" && p.type !== "rug")) continue;
+                return { x, y };
+              }
+            }
+            return null;
+          })();
+        }
+        inSpot = inSpot || targetInside || { x: door.x, y: door.y };
         const p2 = computePath(ctx, relaxedOcc, inSpot.x, inSpot.y, targetInside.x, targetInside.y, { ignorePlayer: true });
 
         // Combine; if p1 missing, still try to show interior path
