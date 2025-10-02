@@ -838,9 +838,14 @@
   // Shop schedule helpers
   function minutesOfDay(h, m = 0) { return ((h | 0) * 60 + (m | 0)) % DAY_MINUTES; }
   function isOpenAt(shop, minutes) {
-    if (!shop || typeof shop.openMin !== "number" || typeof shop.closeMin !== "number") return false;
+    if (!shop) return false;
+    if (shop.alwaysOpen) return true;
+    if (typeof shop.openMin !== "number" || typeof shop.closeMin !== "number") return false;
     const o = shop.openMin, c = shop.closeMin;
-    if (o === c) return false; // closed all day (edge)
+    if (o === c) {
+      // Interpret o===c with alwaysOpen=false as closed all day
+      return false;
+    }
     if (c > o) return minutes >= o && minutes < c; // same-day window
     // overnight window (e.g., 18:00 -> 06:00)
     return minutes >= o || minutes < c;
@@ -1076,16 +1081,21 @@
       const n = (name || "").toLowerCase();
       // Defaults
       let openH = 8, closeH = 18;
+      let alwaysOpen = false;
       if (n.includes("blacksmith") || n.includes("armorer") || n.includes("fletcher") || n.includes("trader") || n.includes("fishmonger")) {
         openH = 8; closeH = 17;
       } else if (n.includes("apothecary") || n.includes("herbalist")) {
         openH = 9; closeH = 18;
       } else if (n.includes("inn")) {
-        openH = 18; closeH = 6; // overnight
+        // Inns are always open
+        alwaysOpen = true;
+        openH = 0; closeH = 0;
       } else if (n.includes("tavern")) {
-        openH = 16; closeH = 1; // evening to after midnight
+        // Taverns are always open
+        alwaysOpen = true;
+        openH = 0; closeH = 0;
       }
-      return { openMin: minutesOfDay(openH), closeMin: minutesOfDay(closeH) };
+      return { openMin: minutesOfDay(openH), closeMin: minutesOfDay(closeH), alwaysOpen };
     }
 
     // Pick buildings closest to plaza for shops
@@ -1308,8 +1318,8 @@
 
       // Add "Tavern" as a shop marker at the door so it's easy to find
       (function addTavernShop() {
-        const sched = (typeof minutesOfDay === "function") ? { openMin: minutesOfDay(16), closeMin: minutesOfDay(1) } : { openMin: 16 * 60, closeMin: 1 * 60 };
-        shops.push({ x: door.x, y: door.y, type: "shop", name: "Tavern", openMin: sched.openMin, closeMin: sched.closeMin });
+        // Taverns are always open
+        shops.push({ x: door.x, y: door.y, type: "shop", name: "Tavern", openMin: 0, closeMin: 0, alwaysOpen: true });
       })();
       // Place a street sign near the tavern door
       addSignNear(door.x, door.y, "Tavern");
@@ -1341,6 +1351,18 @@
         if (townProps.some(p => p.x === bx && p.y === by)) continue;
         addProp(bx, by, "bench", "Bench");
         benchesPlaced++;
+      }
+
+      // Beds: ensure the tavern has a modest dorm area (6–10 beds)
+      let bedsPlaced = 0, triesBed = 0;
+      const bedTarget = Math.min(10, Math.max(6, Math.floor((best.w * best.h) / 18)));
+      while (bedsPlaced < bedTarget && triesBed++ < 600) {
+        const bx = randInt(best.x + 1, best.x + best.w - 2);
+        const by = randInt(best.y + 1, best.y + best.h - 2);
+        if (map[by][bx] !== TILES.FLOOR) continue;
+        if (townProps.some(p => p.x === bx && p.y === by)) continue;
+        addProp(bx, by, "bed", "Tavern Bed");
+        bedsPlaced++;
       }
 
       // Barkeeper NPC stationed at desk or door
