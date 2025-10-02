@@ -1361,6 +1361,56 @@
       addProp(tx, ty, "tree", "Tree");
     }
 
+    // ---- Crop fields to fill empty space (walkable, decorative) ----
+    (function placeFields() {
+      const fieldTypes = [
+        { type: "field_wheat", name: "Wheat Field" },
+        { type: "field_potato", name: "Potato Field" },
+        { type: "field_carrot", name: "Carrot Field" },
+      ];
+      // Helper to check if inside any building interior
+      function insideAnyBuilding(x, y) {
+        for (const b of townBuildings) {
+          if (x > b.x && x < b.x + b.w - 1 && y > b.y && y < b.y + b.h - 1) return true;
+        }
+        return false;
+      }
+      // Try to place small rectangular patches that don't overlap shops/props or interiors
+      const maxFields = (function () {
+        if (townSize === "small") return randInt(4, 8);
+        if (townSize === "city") return randInt(12, 20);
+        return randInt(6, 12);
+      })();
+      let placed = 0, attempts = 0, maxAttempts = 600;
+      while (placed < maxFields && attempts++ < maxAttempts) {
+        const w = randInt(3, 6);  // width tiles
+        const h = randInt(2, 5);  // height tiles
+        // Bias placement toward outskirts away from plaza
+        const ox = randInt(2, W - w - 3);
+        const oy = randInt(2, H - h - 3);
+        const centerDist = Math.abs(ox + Math.floor(w / 2) - plaza.x) + Math.abs(oy + Math.floor(h / 2) - plaza.y);
+        if (centerDist < 10) continue; // keep fields away from plaza center
+        let ok = true;
+        for (let yy = oy; yy < oy + h && ok; yy++) {
+          for (let xx = ox; xx < ox + w && ok; xx++) {
+            if (xx <= 0 || yy <= 0 || xx >= W - 1 || yy >= H - 1) { ok = false; break; }
+            if (map[yy][xx] !== TILES.FLOOR) { ok = false; break; }
+            if (insideAnyBuilding(xx, yy)) { ok = false; break; }
+            if (shops.some(s => s.x === xx && s.y === yy)) { ok = false; break; }
+            if (townProps.some(p => p.x === xx && p.y === yy)) { ok = false; break; }
+          }
+        }
+        if (!ok) continue;
+        const def = fieldTypes[randInt(0, fieldTypes.length - 1)];
+        for (let yy = oy; yy < oy + h; yy++) {
+          for (let xx = ox; xx < ox + w; xx++) {
+            addProp(xx, yy, def.type, def.name);
+          }
+        }
+        placed++;
+      }
+    })();
+
     // Town NPCs around plaza and along main road, avoid player adjacency
     npcs = [];
     // Populate shopkeepers, residents, and pets via TownAI

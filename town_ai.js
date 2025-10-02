@@ -33,9 +33,11 @@
   }
 
   function propBlocks(type) {
-    // Signs should be walkable; rugs are decorative and don't block.
+    // Walkable props: signs, rugs, and crop fields (non-blocking decoration)
+    if (type === "sign" || type === "rug") return false;
+    if (typeof type === "string" && type.indexOf("field_") === 0) return false;
     // All other furniture/props block movement.
-    return !(type === "sign" || type === "rug");
+    return true;
   }
 
   function isFreeTile(ctx, x, y) {

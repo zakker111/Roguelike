@@ -306,7 +306,7 @@
         }
       }
 
-      // draw props (wells, benches, lamps, stalls, fountain, trees, interiors) only if visible
+      // draw props (wells, benches, lamps, stalls, fountain, trees, interiors, fields) only if visible
       if (Array.isArray(ctx.townProps)) {
         for (const p of ctx.townProps) {
           if (p.x < startX || p.x > endX || p.y < startY || p.y > endY) continue;
@@ -332,6 +332,9 @@
           else if (p.type === "plant") { glyph = "❀"; color = "#84cc16"; }
           else if (p.type === "rug") { glyph = "≈"; color = "#a3be8c"; }
           else if (p.type === "sign") { glyph = "∎"; color = "#ffd166"; }
+          else if (p.type === "field_wheat") { glyph = "≈"; color = "#d7ba7d"; }
+          else if (p.type === "field_potato") { glyph = "≈"; color = "#8b7355"; }
+          else if (p.type === "field_carrot") { glyph = "≈"; color = "#ff884d"; }
           drawGlyphScreen(ctx2d, screenX, screenY, glyph, color, TILE);
         }
       }
