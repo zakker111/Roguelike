@@ -1317,8 +1317,13 @@
         // First tavern becomes global shelter
         if (!tavern) tavern = { building: b, door };
 
-        // Shop marker (always open)
-        shops.push({ x: door.x, y: door.y, type: "shop", name: "Tavern", openMin: 0, closeMin: 0, alwaysOpen: true });
+        // Shop marker (always open) with building reference
+        shops.push({
+          x: door.x, y: door.y, type: "shop", name: "Tavern",
+          openMin: 0, closeMin: 0, alwaysOpen: true,
+          building: { x: b.x, y: b.y, w: b.w, h: b.h, door: { x: door.x, y: door.y } },
+          inside: deskPos || { x: Math.max(b.x + 1, Math.min(b.x + b.w - 2, door.x)), y: Math.max(b.y + 1, Math.min(b.y + b.h - 2, door.y)) }
+        });
         addSignNear(door.x, door.y, "Tavern");
 
         // Bar desk just inside the door

@@ -293,9 +293,14 @@
           ctx2d.fillRect(screenX, screenY, TILE, TILE);
           if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
 
-          // If shop door, overlay S (only when visible)
-          if (vis && Array.isArray(shops) && shops.some(s => s.x === x && s.y === y)) {
-            drawGlyphScreen(ctx2d, screenX, screenY, "S", TCOL.shop, TILE);
+          // If shop door, overlay glyph (T for Tavern, I for Inn, otherwise S) when visible
+          if (vis && Array.isArray(shops)) {
+            const s = shops.find(s => s.x === x && s.y === y);
+            if (s) {
+              const nm = (s.name || "").toLowerCase();
+              const glyph = nm.includes("tavern") ? "T" : nm.includes("inn") ? "I" : "S";
+              drawGlyphScreen(ctx2d, screenX, screenY, glyph, TCOL.shop, TILE);
+            }
           }
 
           // If not currently visible, dim it
