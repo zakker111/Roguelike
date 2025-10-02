@@ -13,7 +13,9 @@
     return (end > start) ? (m >= start && m < end) : (m >= start || m < end);
   }
   function isOpenAt(shop, minutes, dayMinutes) {
-    if (!shop || typeof shop.openMin !== "number" || typeof shop.closeMin !== "number") return false;
+    if (!shop) return false;
+    if (shop.alwaysOpen) return true;
+    if (typeof shop.openMin !== "number" || typeof shop.closeMin !== "number") return false;
     const o = shop.openMin, c = shop.closeMin;
     if (o === c) return false;
     return inWindow(o, c, minutes, dayMinutes);
@@ -38,11 +40,15 @@
     return !(type === "sign" || type === "rug");
   }
 
+  // Fast occupancy-aware free-tile check:
+  // If ctx._occ is provided (Set of "x,y"), prefer it over O(n) scans of npcs.
   function isFreeTile(ctx, x, y) {
     if (!isWalkTown(ctx, x, y)) return false;
     const { player, npcs, townProps } = ctx;
     if (player.x === x && player.y === y) return false;
-    if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
+    const occ = ctx._occ;
+    if (occ && occ.has(`${x},${y}`)) return false;
+    if (!occ && Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
     if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y && propBlocks(p.type))) return false;
     return true;
   }
@@ -146,7 +152,7 @@
   // ---- Pathfinding budget/throttling ----
   // Limit the number of A* computations per tick to avoid CPU spikes in dense towns.
   function initPathBudget(ctx, npcCount) {
-    const defaultBudget = Math.max(1, Math.floor(npcCount * 0.4)); // ~40% of NPCs may compute a new path per tick
+    const defaultBudget = Math.max(1, Math.floor(npcCount * 0.2)); // ~20% of NPCs may compute a new path per tick
     ctx._townPathBudgetRemaining = (typeof ctx.townPathBudget === "number")
       ? Math.max(0, ctx.townPathBudget)
       : defaultBudget;
@@ -262,7 +268,8 @@
     if (x < 0 || x >= (map[0] ? map[0].length : 0)) return false;
     if (map[y][x] !== TILES.FLOOR && map[y][x] !== TILES.DOOR) return false;
     if (x === player.x && y === player.y) return false;
-    if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
+    const occ = ctx._occ;
+    if (occ ? occ.has(`${x},${y}`) : (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y))) return false;
     if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y)) return false;
     return true;
   }
@@ -497,7 +504,10 @@
       }
     }
 
-    // Initialize per-tick pathfinding budget to avoid heavy recomputation
+    // Expose fast occupancy to helpers for this tick
+    ctx._occ = occ;
+
+    // Initialize per-tick pathfinding budget to avoid heavy recomputation (lowered)
     initPathBudget(ctx, npcs.length);
 
     const t = ctx.time;
@@ -506,6 +516,48 @@
                 : (t && t.phase === "dawn") ? "morning"
                 : (t && t.phase === "dusk") ? "evening"
                 : "day";
+    // Late night window: 02:00–05:00
+    const LATE_START = 2 * 60, LATE_END = 5 * 60;
+    const inLateWindow = minutes >= LATE_START && minutes < LATE_END;
+
+    // Helper: pick a target inside the tavern (prefer a bed, fallback to a free interior near door)
+    function tavernBedSpots(ctx) {
+      const tv = ctx.tavern && ctx.tavern.building ? ctx.tavern.building : null;
+      if (!tv) return [];
+      const beds = (ctx.townProps || []).filter(p =>
+        p.type === "bed" &&
+        p.x > tv.x && p.x < tv.x + tv.w - 1 &&
+        p.y > tv.y && p.y < tv.y + tv.h - 1
+      );
+      return beds;
+    }
+    function chooseTavernTarget(ctx) {
+      const tv = ctx.tavern && ctx.tavern.building ? ctx.tavern.building : null;
+      if (!tv) return null;
+      const beds = tavernBedSpots(ctx);
+      if (beds.length) {
+        const b = beds[randInt(ctx, 0, beds.length - 1)];
+        return { x: b.x, y: b.y };
+      }
+      // Fallback to a free interior tile near the door
+      const door = ctx.tavern.door || { x: tv.x + ((tv.w / 2) | 0), y: tv.y + ((tv.h / 2) | 0) };
+      const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, tv);
+      return inSpot || { x: door.x, y: door.y };
+    }
+
+    // Lightweight per-NPC rate limiting: each NPC only acts every N ticks.
+    // Defaults: residents/shopkeepers every 2 ticks, pets every 3 ticks, generic 2.
+    const tickMod = ((t && typeof t.turnCounter === "number") ? t.turnCounter : 0) | 0;
+    function shouldSkipThisTick(n, idx) {
+      if (typeof n._stride !== "number") {
+        n._stride = n.isPet ? 3 : 2;
+      }
+      if (typeof n._strideOffset !== "number") {
+        // Deterministic offset from index to evenly stagger across the stride
+        n._strideOffset = idx % n._stride;
+      }
+      return (tickMod % n._stride) !== n._strideOffset;
+    }
 
     // Staggered home-start window (18:00–21:00)
     function ensureHomeStart(n) {
@@ -783,6 +835,9 @@
       const n = npcs[idx];
       ensureHome(ctx, n);
 
+      // Per-NPC tick rate limiting (skip some NPCs this tick to reduce CPU)
+      if (shouldSkipThisTick(n, idx)) continue;
+
       // Daily scheduling: reset stagger assignment at dawn, assign in morning if missing
       if (t && t.phase === "dawn") {
         n._departAssignedForDay = false;
@@ -824,7 +879,17 @@
         } else if (n._home && n._home.building) {
           // Off hours: stagger departure between 18:00-21:00
           const departReady = typeof n._homeDepartMin === "number" ? (minutes >= n._homeDepartMin) : true;
-          if (!departReady) {
+
+          // If it's very late and the NPC is not inside home, seek tavern as fallback shelter
+          if (inLateWindow && !(insideBuilding(n._home.building, n.x, n.y))) {
+            const tv = ctx.tavern && ctx.tavern.building ? ctx.tavern.building : null;
+            if (tv) {
+              const tvTarget = chooseTavernTarget(ctx);
+              handled = routeIntoBuilding(ctx, occ, n, tv, tvTarget);
+            }
+          }
+
+          if (!handled && !departReady) {
             // Not yet time: linger around shop door or nearby plaza
             const linger = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
             if (linger) {
@@ -836,7 +901,7 @@
               }
               handled = true;
             }
-          } else {
+          } else if (!handled) {
             // Go home strictly along a planned path; wait if blocked
             const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
             if (!n._homePlan || !n._homePlanGoal) {
@@ -866,6 +931,16 @@
         if (phase === "evening" || eveKickIn) {
           // Stagger: only start going home after personal departure minute (18:00..21:00)
           const departReady = typeof n._homeDepartMin === "number" ? (minutes >= n._homeDepartMin) : true;
+
+          // Late-night shelter fallback: if very late and not inside home, go to tavern
+          if (inLateWindow && n._home && n._home.building && !insideBuilding(n._home.building, n.x, n.y)) {
+            const tv = ctx.tavern && ctx.tavern.building ? ctx.tavern.building : null;
+            if (tv) {
+              const tvTarget = chooseTavernTarget(ctx);
+              if (routeIntoBuilding(ctx, occ, n, tv, tvTarget)) continue;
+            }
+          }
+
           if (!departReady) {
             // Not yet time to head home: keep day behavior (work/plaza/idle)
             const targetLate = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
@@ -897,6 +972,15 @@
             if (followHomePlan(ctx, occ, n)) continue;
             // Fallback: attempt routing via door if plan absent
             if (routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget)) continue;
+
+            // If still not able to go home and it's very late, seek tavern
+            if (inLateWindow) {
+              const tv = ctx.tavern && ctx.tavern.building ? ctx.tavern.building : null;
+              if (tv) {
+                const tvTarget = chooseTavernTarget(ctx);
+                if (routeIntoBuilding(ctx, occ, n, tv, tvTarget)) continue;
+              }
+            }
           }
           // If no home data for some reason, stop wandering at evening
           continue;
@@ -932,17 +1016,37 @@
       else if (phase === "day") target = (n._work || ctx.townPlaza);
       else target = (ctx.tavern && n._likesTavern) ? { x: ctx.tavern.door.x, y: ctx.tavern.door.y }
                                                    : (n._home ? { x: n._home.x, y: n._home.y } : null);
+
+      // Very late at night: prefer shelter (tavern) if not at home
+      if (inLateWindow && ctx.tavern && ctx.tavern.building && (!n._home || !insideBuilding(n._home.building, n.x, n.y))) {
+        const tvTarget = chooseTavernTarget(ctx) || { x: ctx.tavern.door.x, y: ctx.tavern.door.y };
+        target = tvTarget;
+      }
+
       if (!target) {
         stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
         continue;
       }
       stepTowards(ctx, occ, n, target.x, target.y);
     }
+    // Clear fast occupancy handle after processing to avoid leaking into other modules
+    ctx._occ = null;
   }
 
   function checkHomeRoutes(ctx, opts = {}) {
     const res = { total: 0, reachable: 0, unreachable: 0, skipped: 0, details: [] };
     const npcs = Array.isArray(ctx.npcs) ? ctx.npcs : [];
+
+    // Track resident presence
+    let residentsTotal = 0, residentsAtHome = 0, residentsAtTavern = 0;
+    const tavernB = (ctx.tavern && ctx.tavern.building) ? ctx.tavern.building : null;
+
+    // Late-night window determination (02:00–05:00)
+    const t = ctx.time;
+    const minutes = t ? (t.hours * 60 + t.minutes) : 12 * 60;
+    const LATE_START = 2 * 60, LATE_END = 5 * 60;
+    const inLateWindow = minutes >= LATE_START && minutes < LATE_END;
+    const residentsAwayLate = [];
 
     // Helper: skip NPCs that are not expected to have homes (e.g., pets)
     function shouldSkip(n) {
@@ -1000,6 +1104,23 @@
     for (let i = 0; i < npcs.length; i++) {
       const n = npcs[i];
 
+      // Count residents' current locations
+      if (n.isResident) {
+        residentsTotal++;
+        const atHomeNow = n._home && n._home.building && insideBuilding(n._home.building, n.x, n.y);
+        const atTavernNow = tavernB && insideBuilding(tavernB, n.x, n.y);
+        if (atHomeNow) residentsAtHome++;
+        else if (atTavernNow) residentsAtTavern++;
+        // Late-night away list
+        if (inLateWindow && !atHomeNow && !atTavernNow) {
+          residentsAwayLate.push({
+            index: i,
+            name: typeof n.name === "string" ? n.name : `Resident ${i + 1}`,
+            x: n.x, y: n.y
+          });
+        }
+      }
+
       if (shouldSkip(n)) {
         res.skipped++;
         continue;
@@ -1036,6 +1157,8 @@
 
     // total = checked NPCs (excluding skipped like pets)
     res.total = Math.max(0, npcs.length - res.skipped);
+    res.residents = { total: residentsTotal, atHome: residentsAtHome, atTavern: residentsAtTavern };
+    res.residentsAwayLate = residentsAwayLate;
     return res;
   }
 

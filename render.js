@@ -293,9 +293,14 @@
           ctx2d.fillRect(screenX, screenY, TILE, TILE);
           if (drawGrid) ctx2d.strokeRect(screenX, screenY, TILE, TILE);
 
-          // If shop door, overlay S (only when visible)
-          if (vis && Array.isArray(shops) && shops.some(s => s.x === x && s.y === y)) {
-            drawGlyphScreen(ctx2d, screenX, screenY, "S", TCOL.shop, TILE);
+          // If shop door, overlay glyph (T for Tavern, I for Inn, otherwise S) when visible
+          if (vis && Array.isArray(shops)) {
+            const s = shops.find(s => s.x === x && s.y === y);
+            if (s) {
+              const nm = (s.name || "").toLowerCase();
+              const glyph = nm.includes("tavern") ? "T" : nm.includes("inn") ? "I" : "S";
+              drawGlyphScreen(ctx2d, screenX, screenY, glyph, TCOL.shop, TILE);
+            }
           }
 
           // If not currently visible, dim it
@@ -384,6 +389,22 @@
             ctx2d.fillStyle = "rgba(255, 215, 0, 0.22)";
             ctx2d.strokeStyle = "rgba(255, 215, 0, 0.9)";
             ctx2d.lineWidth = 2;
+
+            // Helper: label each building by type/name in its center
+            function labelForBuilding(b) {
+              // Tavern?
+              if (ctx.tavern && ctx.tavern.building && b === ctx.tavern.building) {
+                return "Tavern";
+              }
+              // Shop name if any shop maps to this building
+              if (Array.isArray(shops)) {
+                const shop = shops.find(s => s.building && s.building.x === b.x && s.building.y === b.y && s.building.w === b.w && s.building.h === b.h);
+                if (shop && shop.name) return shop.name;
+              }
+              // Fallback
+              return "House";
+            }
+
             for (const b of ctx.townBuildings) {
               if (!occ.has(b)) continue;
               const bx0 = (b.x - startX) * TILE - tileOffsetX;
@@ -394,6 +415,34 @@
               if (bx0 + bw < 0 || by0 + bh < 0 || bx0 > cam.width || by0 > cam.height) continue;
               ctx2d.fillRect(bx0, by0, bw, bh);
               ctx2d.strokeRect(bx0 + 1, by0 + 1, bw - 2, bh - 2);
+
+              // Label at center
+              try {
+                const cx = bx0 + bw / 2;
+                const cy = by0 + bh / 2;
+                const label = labelForBuilding(b);
+                ctx2d.save();
+                ctx2d.globalAlpha = 0.95;
+                ctx2d.fillStyle = "rgba(13,16,24,0.65)";
+                const padX = Math.max(6, Math.floor(TILE * 0.25));
+                const padY = Math.max(4, Math.floor(TILE * 0.20));
+                const textW = Math.max(32, label.length * (TILE * 0.35));
+                const boxW = Math.min(bw - 8, textW + padX * 2);
+                const boxH = Math.min(bh - 8, TILE * 0.8 + padY * 2);
+                ctx2d.fillRect(cx - boxW / 2, cy - boxH / 2, boxW, boxH);
+                ctx2d.strokeStyle = "rgba(255, 215, 0, 0.85)";
+                ctx2d.lineWidth = 1;
+                ctx2d.strokeRect(cx - boxW / 2 + 0.5, cy - boxH / 2 + 0.5, boxW - 1, boxH - 1);
+                ctx2d.fillStyle = "#ffd166";
+                // Slightly smaller font for labels to fit inside
+                const prevFont = ctx2d.font;
+                ctx2d.font = "bold 16px JetBrains Mono, monospace";
+                ctx2d.textAlign = "center";
+                ctx2d.textBaseline = "middle";
+                ctx2d.fillText(label, cx, cy);
+                ctx2d.font = prevFont;
+                ctx2d.restore();
+              } catch (_) {}
             }
             ctx2d.restore();
           }
@@ -405,7 +454,9 @@
             return (end > start) ? (m >= start && m < end) : (m >= start || m < end);
           }
           function isOpenAt(shop, minutes, dayMinutes) {
-            if (!shop || typeof shop.openMin !== "number" || typeof shop.closeMin !== "number") return false;
+            if (!shop) return false;
+            if (shop.alwaysOpen) return true;
+            if (typeof shop.openMin !== "number" || typeof shop.closeMin !== "number") return false;
             const o = shop.openMin, c = shop.closeMin;
             if (o === c) return false;
             return inWindow(o, c, minutes, dayMinutes);
