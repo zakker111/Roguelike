@@ -362,10 +362,11 @@
         // Occupied houses: any building referenced by an npc _home
         try {
           if (Array.isArray(ctx.townBuildings) && Array.isArray(npcs)) {
-            // precompute occupancy set of building ids (by reference)
-            const occ = new Set();
+            // precompute occupancy set of building keys (by geometry) to avoid object-identity mismatch
+            const bkey = (b) => `${b.x},${b.y},${b.w},${b.h}`;
+            const occKeys = new Set();
             for (const n of npcs) {
-              if (n._home && n._home.building) occ.add(n._home.building);
+              if (n._home && n._home.building) occKeys.add(bkey(n._home.building));
             }
             ctx2d.save();
             ctx2d.globalAlpha = 0.22;
@@ -373,7 +374,7 @@
             ctx2d.strokeStyle = "rgba(255, 215, 0, 0.9)";
             ctx2d.lineWidth = 2;
             for (const b of ctx.townBuildings) {
-              if (!occ.has(b)) continue;
+              if (!occKeys.has(bkey(b))) continue;
               const bx0 = (b.x - startX) * TILE - tileOffsetX;
               const by0 = (b.y - startY) * TILE - tileOffsetY;
               const bw = b.w * TILE;

@@ -1528,11 +1528,12 @@
                 }
               }
             }
-            // fallback to door
+            // fallback to door (allow placing on the door tile even if it's on the border)
             const d = b.door || { x: Math.max(b.x + 1, Math.min(b.x + b.w - 2, tx)), y: Math.max(b.y + 1, Math.min(b.y + b.h - 2, ty)) };
-            if (isFreeInside(b, d.x, d.y)) return { x: d.x, y: d.y };
-            return null;
-          };
+            // Door tile is walkable; ensure it's not occupied by another NPC
+            const dKey = occKey(d.x, d.y);
+            const doorFree = (map[d.y] && map[d.y][d.x] === TILES.DOOR) && !occupied.has(dKey) && !npcs.some(nn => nn.x === d.x && nn.y === d.y);
+            if ( };
 
           // Select a small set to remain at tavern/plaza
           const keepOutCount = Math.min(6, Math.max(2, Math.floor(npcs.length * 0.1)));

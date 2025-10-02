@@ -388,6 +388,11 @@
         }
       });
 
+      // Apply default debug states so Home Paths shows without extra clicks
+      try {
+        this.setHomePathsState(this.getHomePathsState());
+      } catch (_) {}
+
       return true;
     },
 
