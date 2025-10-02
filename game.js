@@ -2670,30 +2670,42 @@
               const res = TownAI.checkHomeRoutes(ctx);
               const totalChecked = (typeof res.total === "number") ? res.total : (res.reachable + res.unreachable);
               const skippedStr = res.skipped ? `, ${res.skipped} skipped` : "";
-              log(`Home route check: ${res.reachable}/${totalChecked} reachable, ${res.unreachable} unreachable${skippedStr}.`, res.unreachable ? "warn" : "good");
+              const summaryLine = `Home route check: ${res.reachable}/${totalChecked} reachable, ${res.unreachable} unreachable${skippedStr}.`;
+              log(summaryLine, res.unreachable ? "warn" : "good");
+              let extraLines = [];
               if (res.residents && typeof res.residents.total === "number") {
                 const r = res.residents;
-                log(`Residents: ${r.atHome}/${r.total} at home, ${r.atTavern}/${r.total} at tavern.`, "info");
+                extraLines.push(`Residents: ${r.atHome}/${r.total} at home, ${r.atTavern}/${r.total} at tavern.`);
               }
               // Per-resident list of late-night away residents
               if (Array.isArray(res.residentsAwayLate) && res.residentsAwayLate.length) {
-                log(`Late-night (02:00–05:00): ${res.residentsAwayLate.length} resident(s) away from home and tavern:`, "warn");
+                extraLines.push(`Late-night (02:00–05:00): ${res.residentsAwayLate.length} resident(s) away from home and tavern:`);
                 res.residentsAwayLate.slice(0, 10).forEach(d => {
-                  log(`- ${d.name} at (${d.x},${d.y})`, "warn");
+                  extraLines.push(`- ${d.name} at (${d.x},${d.y})`);
                 });
                 if (res.residentsAwayLate.length > 10) {
-                  log(`...and ${res.residentsAwayLate.length - 10} more.`, "warn");
+                  extraLines.push(`...and ${res.residentsAwayLate.length - 10} more.`);
                 }
               }
               if (res.skipped) {
-                log(`Skipped ${res.skipped} NPCs not expected to have homes (e.g., pets).`, "info");
+                extraLines.push(`Skipped ${res.skipped} NPCs not expected to have homes (e.g., pets).`);
               }
               if (res.unreachable && Array.isArray(res.details)) {
                 res.details.slice(0, 8).forEach(d => {
-                  log(`- ${d.name}: ${d.reason}`, "warn");
+                  extraLines.push(`- ${d.name}: ${d.reason}`);
                 });
-                if (res.details.length > 8) log(`...and ${res.details.length - 8} more.`, "warn");
+                if (res.details.length > 8) extraLines.push(`...and ${res.details.length - 8} more.`);
               }
+              // Mirror summary inside GOD panel output area for visibility while modal is open
+              try {
+                const el = document.getElementById("god-check-output");
+                if (el) {
+                  const html = [summaryLine].concat(extraLines).map(s => `<div>${s}</div>`).join("");
+                  el.innerHTML = html;
+                }
+              } catch (_) {}
+              // Also write all extra lines to the main log
+              extraLines.forEach(line => log(line, "info"));
               // Request draw to show updated debug paths (if enabled)
               requestDraw();
             } else {
