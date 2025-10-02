@@ -171,7 +171,9 @@
         if (typeof this.handlers.onGodSpawnStairs === "function") this.handlers.onGodSpawnStairs();
       });
       this.els.godCheckHomeBtn?.addEventListener("click", () => {
-        if (typeof this.handlers      if (this.els.godFov) {
+        if (typeof this.handlers.onGodCheckHomes === "function") this.handlers.onGodCheckHomes();
+      });
+      if (this.els.godFov) {
         const updateFov = () => {
           const val = parseInt(this.els.godFov.value, 10);
           this.setGodFov(val);
