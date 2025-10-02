@@ -322,11 +322,11 @@
             const nx = e.x + d.x;
             const ny = e.y + d.y;
             if (isFree(nx, ny)) {
-              occClearEnemy(occ, e.x, e.y);
-              e.x = nx; e.y = ny;
-              occSetd(occKey(e.x, e.y));
-              break;
-            }
+                occClearEnemy(occ, e.x, e.y);
+                e.x = nx; e.y = ny;
+                occSetEnemy(occ, e.x, e.y);
+                break;
+              }
           }
         }
       } else if (chance(0.4)) {
@@ -334,7 +334,7 @@
         const d = WANDER_DIRS[randInt(0, WANDER_DIRS.length - 1)];
         const nx = e.x + d.x, ny = e.y + d.y;
         if (isFree(nx, ny)) {
-          occClearEnemy(occ, e.x, ey));
+          occClearEnemy(occ, e.x, e.y);
           e.x = nx; e.y = ny;
           occ.add(occKey(e.x, e.y));
         }
