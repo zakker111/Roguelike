@@ -210,8 +210,11 @@ Planned / Ideas
 - Shop UI (buy/sell) and currency
 - District themes (market/residential/temple) and signage
 - Movement costs or effects per biome (swamp slow, snow visibility, desert hazard)
+- if there is not enought beds for npc at home make em sleep at floor
 
 Bugs
 - chek there is not sleep walkers some npc have z top of them dont sure is thiss still existing
-- when inn god panel in routes it shows unendifid/17 it is not correct
+- when inn god panel in routes it shows unendifid/17 it is not correct chek too that inn is used
 - inns dont have invidual rooms and not enought beds
+- some npc stay at their homes at day time 
+- some npc dont sleep in theid beds
