@@ -822,7 +822,7 @@
 
         // idle jiggle
         if (ctx.rng() < 0.9) continue;
-      
+      }
 
       // Residents: sleep system
       if (n.isResident) {
