@@ -601,6 +601,11 @@
           n._fullPlan = plan.slice(0);
           n._debugPath = plan.slice(0);
         }
+      } else {
+        n._homePlan = null;
+        n._homePlanFull = null;
+        n._homePlanGoal = null;
+      }
     }
 
     function followHomePlan(ctx, occ, n) {
