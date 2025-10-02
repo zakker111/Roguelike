@@ -1270,12 +1270,11 @@
       if (rng() < 0.5) placeRandom("plant", "Plant");
       if (rng() < 0.5) placeRandom("rug", "Rug");
 
-      // Ensure a clear walkway from the building door to the nearest bed:
+      // Ensure clear walkways from the building door to every bed:
       // - Find the building door and a tile just inside
-      // - Find nearest bed inside the building
-      // - Compute a simple BFS path along FLOOR tiles (ignoring furniture)
-      // - Remove blocking props (everything except signs/rugs/bed) along that path
-      (function clearWalkwayToBed() {
+      // - For each bed inside, compute a BFS path along FLOOR tiles (ignoring furniture)
+      // - Remove blocking props (everything except signs/rugs/bed) along those paths
+      (function clearWalkwaysToBeds() {
         // Find door
         const d = getExistingDoor(b);
         const inward = [
@@ -1302,45 +1301,55 @@
         }
         if (!beds.length) return;
 
-        // Pick nearest bed by Manhattan distance from door
-        const manhattan = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
-        const goal = beds.slice().sort((a, c) => manhattan(d.x, d.y, a.x, a.y) - manhattan(d.x, d.y, c.x, c.y))[0];
-
-        // BFS on interior floor tiles
         const key = (x, y) => `${x},${y}`;
-        const seenB = new Set();
-        const q = [];
-        q.push({ x: entry.x, y: entry.y, prev: null });
-        seenB.add(key(entry.x, entry.y));
-        let end = null;
         const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
-        while (q.length) {
-          const cur = q.shift();
-          if (cur.x === goal.x && cur.y === goal.y) { end = cur; break; }
-          for (const dxy of dirs4) {
-            const nx = cur.x + dxy.dx, ny = cur.y + dxy.dy;
-            const k = key(nx, ny);
-            if (seenB.has(k)) continue;
-            if (!insideFloor(nx, ny)) continue;
-            seenB.add(k);
-            q.push({ x: nx, y: ny, prev: cur });
-          }
-        }
-        if (!end) return;
 
-        // Reconstruct path and clear blocking props along it (keep bed/sign/rug intact)
-        const pathSet = new Set();
-        let cur = end;
-        while (cur) {
-          pathSet.add(key(cur.x, cur.y));
-          cur = cur.prev;
+        // Build a union of all path tiles from entry to each bed
+        const walkwaySet = new Set();
+
+        function bfsTo(goal) {
+          const seenB = new Set();
+          const q = [];
+          q.push({ x: entry.x, y: entry.y, prev: null });
+          seenB.add(key(entry.x, entry.y));
+          let end = null;
+          while (q.length) {
+            const cur = q.shift();
+            if (cur.x === goal.x && cur.y === goal.y) { end = cur; break; }
+            for (const dxy of dirs4) {
+              const nx = cur.x + dxy.dx, ny = cur.y + dxy.dy;
+              const k = key(nx, ny);
+              if (seenB.has(k)) continue;
+              if (!insideFloor(nx, ny)) continue;
+              seenB.add(k);
+              q.push({ x: nx, y: ny, prev: cur });
+            }
+          }
+          if (!end) return null;
+          const path = [];
+          let cur = end;
+          while (cur) {
+            path.push({ x: cur.x, y: cur.y });
+            cur = cur.prev;
+          }
+          path.reverse();
+          return path;
         }
+
+        for (const bed of beds) {
+          const path = bfsTo(bed);
+          if (!path || path.length < 2) continue;
+          for (const p of path) walkwaySet.add(key(p.x, p.y));
+        }
+
+        if (walkwaySet.size === 0) return;
+
+        // Remove blocking props that lie on any walkway (keep bed/sign/rug intact)
         townProps = townProps.filter(p => {
           if (p.type === "bed" || p.type === "sign" || p.type === "rug") return true;
           // Only consider props inside this building
           if (!(p.x > b.x && p.x < b.x + b.w - 1 && p.y > b.y && p.y < b.y + b.h - 1)) return true;
-          // Remove if it lies on the walkway
-          return !pathSet.has(key(p.x, p.y));
+          return !walkwaySet.has(key(p.x, p.y));
         });
       })();
     }

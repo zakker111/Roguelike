@@ -94,7 +94,7 @@
     fScore.set(startK, h(sx, sy));
     open.push({ x: sx, y: sy, f: fScore.get(startK) });
 
-    const MAX_VISITS = 12000;
+    const MAX_VISITS = 30000;
     const visited = new Set();
 
     function pushOpen(x, y, f) {
