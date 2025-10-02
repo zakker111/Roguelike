@@ -38,11 +38,15 @@
     return !(type === "sign" || type === "rug");
   }
 
+  // Fast occupancy-aware free-tile check:
+  // If ctx._occ is provided (Set of "x,y"), prefer it over O(n) scans of npcs.
   function isFreeTile(ctx, x, y) {
     if (!isWalkTown(ctx, x, y)) return false;
     const { player, npcs, townProps } = ctx;
     if (player.x === x && player.y === y) return false;
-    if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
+    const occ = ctx._occ;
+    if (occ && occ.has(`${x},${y}`)) return false;
+    if (!occ && Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
     if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y && propBlocks(p.type))) return false;
     return true;
   }
@@ -146,7 +150,7 @@
   // ---- Pathfinding budget/throttling ----
   // Limit the number of A* computations per tick to avoid CPU spikes in dense towns.
   function initPathBudget(ctx, npcCount) {
-    const defaultBudget = Math.max(1, Math.floor(npcCount * 0.4)); // ~40% of NPCs may compute a new path per tick
+    const defaultBudget = Math.max(1, Math.floor(npcCount * 0.2)); // ~20% of NPCs may compute a new path per tick
     ctx._townPathBudgetRemaining = (typeof ctx.townPathBudget === "number")
       ? Math.max(0, ctx.townPathBudget)
       : defaultBudget;
@@ -262,7 +266,8 @@
     if (x < 0 || x >= (map[0] ? map[0].length : 0)) return false;
     if (map[y][x] !== TILES.FLOOR && map[y][x] !== TILES.DOOR) return false;
     if (x === player.x && y === player.y) return false;
-    if (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y)) return false;
+    const occ = ctx._occ;
+    if (occ ? occ.has(`${x},${y}`) : (Array.isArray(npcs) && npcs.some(n => n.x === x && n.y === y))) return false;
     if (Array.isArray(townProps) && townProps.some(p => p.x === x && p.y === y)) return false;
     return true;
   }
@@ -497,7 +502,10 @@
       }
     }
 
-    // Initialize per-tick pathfinding budget to avoid heavy recomputation
+    // Expose fast occupancy to helpers for this tick
+    ctx._occ = occ;
+
+    // Initialize per-tick pathfinding budget to avoid heavy recomputation (lowered)
     initPathBudget(ctx, npcs.length);
 
     const t = ctx.time;
@@ -506,6 +514,20 @@
                 : (t && t.phase === "dawn") ? "morning"
                 : (t && t.phase === "dusk") ? "evening"
                 : "day";
+
+    // Lightweight per-NPC rate limiting: each NPC only acts every N ticks.
+    // Defaults: residents/shopkeepers every 2 ticks, pets every 3 ticks, generic 2.
+    const tickMod = ((t && typeof t.turnCounter === "number") ? t.turnCounter : 0) | 0;
+    function shouldSkipThisTick(n, idx) {
+      if (typeof n._stride !== "number") {
+        n._stride = n.isPet ? 3 : 2;
+      }
+      if (typeof n._strideOffset !== "number") {
+        // Deterministic offset from index to evenly stagger across the stride
+        n._strideOffset = idx % n._stride;
+      }
+      return (tickMod % n._stride) !== n._strideOffset;
+    }
 
     // Staggered home-start window (18:00–21:00)
     function ensureHomeStart(n) {
@@ -783,6 +805,9 @@
       const n = npcs[idx];
       ensureHome(ctx, n);
 
+      // Per-NPC tick rate limiting (skip some NPCs this tick to reduce CPU)
+      if (shouldSkipThisTick(n, idx)) continue;
+
       // Daily scheduling: reset stagger assignment at dawn, assign in morning if missing
       if (t && t.phase === "dawn") {
         n._departAssignedForDay = false;
@@ -938,6 +963,8 @@
       }
       stepTowards(ctx, occ, n, target.x, target.y);
     }
+    // Clear fast occupancy handle after processing to avoid leaking into other modules
+    ctx._occ = null;
   }
 
   function checkHomeRoutes(ctx, opts = {}) {
