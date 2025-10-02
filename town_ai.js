@@ -591,6 +591,38 @@
       return (plan && plan.length >= 2) ? plan : null;
     }
 
+    // Find all DOOR tiles on the building border as candidate entrances
+    function candidateDoors(ctx, B) {
+      const res = [];
+      const inB = (x, y) => x >= 0 && y >= 0 && y < ctx.map.length && x < (ctx.map[0] ? ctx.map[0].length : 0);
+      const pushIfDoor = (x, y) => {
+        if (!inB(x, y)) return;
+        if (ctx.map[y][x] === ctx.TILES.DOOR) res.push({ x, y });
+      };
+      // top/bottom edges (exclude corners)
+      for (let x = B.x + 1; x < B.x + B.w - 1; x++) {
+        pushIfDoor(x, B.y);
+        pushIfDoor(x, B.y + B.h - 1);
+      }
+      // left/right edges (exclude corners)
+      for (let y = B.y + 1; y < B.y + B.h - 1; y++) {
+        pushIfDoor(B.x, y);
+        pushIfDoor(B.x + B.w - 1, y);
+      }
+      // Ensure at least the known door is included
+      if (B.door) res.push({ x: B.door.x, y: B.door.y });
+      // Deduplicate
+      const seenSet = new Set();
+      const out = [];
+      for (const d of res) {
+        const k = `${d.x},${d.y}`;
+        if (seenSet.has(k)) continue;
+        seenSet.add(k);
+        out.push(d);
+      }
+      return out;
+    }
+
     // Movement path to home with runtime occupancy; NPC will follow this plan strictly and wait if blocked.
     function ensureHomePlan(ctx, occ, n) {
       if (!n._home || !n._home.building) { n._homePlan = null; n._homePlanGoal = null; return; }
@@ -626,14 +658,67 @@
         n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
         n._homeWait = 0;
         // Expose for GOD \"Paths\" toggle to draw the route that will be followed
-        if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
+        if (typeof window !== \"undefined\" && window.DEBUG_TOWN_PATHS) {
           n._fullPlan = plan.slice(0);
           n._debugPath = plan.slice(0);
         }
       } else {
-        n._homePlan = null;
-        n._homePlanFull = null;
-        n._homePlanGoal = null;
+        // Robust fallbacks:
+        // 1) Try a direct path from current position to targetInside (may pass through the door naturally)
+        let direct = computePath(ctx, occ, n.x, n.y, targetInside.x, targetInside.y);
+        if (direct && direct.length >= 2) {
+          n._homePlan = direct.slice(0);
+          n._homePlanFull = direct.slice(0);
+          n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
+          n._homeWait = 0;
+          if (typeof window !== \"undefined\" && window.DEBUG_TOWN_PATHS) { n._fullPlan = direct.slice(0); n._debugPath = direct.slice(0); }
+          return;
+        }
+
+        // 2) Try alternate door candidates on the building border
+        const doors = candidateDoors(ctx, B);
+        for (const d of doors) {
+          const p1 = computePath(ctx, occ, n.x, n.y, d.x, d.y);
+          if (!p1 || p1.length < 2) continue;
+          let inSpot = nearestFreeAdjacent(ctx, d.x, d.y, B);
+          if (!inSpot && B.homeSpot) {
+            if (isFreeTile(ctx, B.homeSpot.x, B.homeSpot.y)) inSpot = { x: B.homeSpot.x, y: B.homeSpot.y };
+            else inSpot = nearestFreeAdjacent(ctx, B.homeSpot.x, B.homeSpot.y, B);
+          }
+          inSpot = inSpot || targetInside || { x: d.x, y: d.y };
+          const p2 = computePath(ctx, occ, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
+          const cand = concatPaths(p1, p2);
+          if (cand && cand.length >= 2) {
+            n._homePlan = cand.slice(0);
+            n._homePlanFull = cand.slice(0);
+            n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
+            n._homeWait = 0;
+            if (typeof window !== \"undefined\" && window.DEBUG_TOWN_PATHS) { n._fullPlan = cand.slice(0); n._debugPath = cand.slice(0); }
+            return;
+          }
+        }
+
+        // 3) As a final fallback, compute with relaxed occupancy and adopt that plan (will wait on blocked steps)
+        const relaxed = makeRelaxedOcc();
+        let soft = computePath(ctx, relaxed, n.x, n.y, targetInside.x, targetInside.y);
+        if (!soft || soft.length < 2) {
+          const d = B.door || { x: B.x + ((B.w / 2) | 0), y: B.y };
+          const p1r = computePath(ctx, relaxed, n.x, n.y, d.x, d.y);
+          let inSpot = nearestFreeAdjacent(ctx, d.x, d.y, B) || targetInside || { x: d.x, y: d.y };
+          const p2r = computePath(ctx, relaxed, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
+          soft = concatPaths(p1r, p2r);
+        }
+        if (soft && soft.length >= 2) {
+          n._homePlan = soft.slice(0);
+          n._homePlanFull = soft.slice(0);
+          n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
+          n._homeWait = 0;
+          if (typeof window !== \"undefined\" && window.DEBUG_TOWN_PATHS) { n._fullPlan = soft.slice(0); n._debugPath = soft.slice(0); }
+        } else {
+          n._homePlan = null;
+          n._homePlanFull = null;
+          n._homePlanGoal = null;
+        }
       }
     }
 
