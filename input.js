@@ -39,7 +39,8 @@
 
       
       if (_handlers.isInventoryOpen && _handlers.isInventoryOpen()) {
-        if (e.key && (e.key.toLowerCase() === "i" || e.key === "Escape")) {
+        const isEsc = e.key === "Escape" || e.key === "Esc";
+        if (e.key && (e.key.toLowerCase() === "i" || isEsc)) {
           e.preventDefault();
           _handlers.onHideInventory && _handlers.onHideInventory();
         } else {
@@ -64,13 +65,12 @@
 
       
       if (_handlers.isGodOpen && _handlers.isGodOpen()) {
-        if (e.key === "Escape") {
+        const isEsc = e.key === "Escape" || e.key === "Esc";
+        if (isEsc) {
           e.preventDefault();
           _handlers.onHideGod && _handlers.onHideGod();
         } else {
-          e.preventDefault();
-        }
-        return;
+return;
       }
 
       
