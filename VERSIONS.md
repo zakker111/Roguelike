@@ -191,4 +191,8 @@ Planned / Ideas
 - Shop UI (buy/sell) and currency
 - District themes (market/residential/temple) and signage
 - Movement costs or effects per biome (swamp slow, snow visibility, desert hazard)
-- More optimization for town ai town ai game lags and is kinda slow for one trun for player
+
+Bugs
+- chek there is not sleep walkers some npc have z top of them dont sure is thiss still existing
+- when inn god panel in routes it shows unendifid/17 it is not correct
+- inns dont have invidual rooms and not enought beds
