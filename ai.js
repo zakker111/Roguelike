@@ -63,9 +63,17 @@
 
     const senseRange = 8;
 
-    // O(1) occupancy for this turn using packed integer keys (avoid string allocs)
-    const occ = new Set(enemies.map(en => occKey(en.x, en.y)));
-    const isFree = (x, y) => ctx.isWalkable(x, y) && !occ.has(occKey(x, y)) && !(player.x === x && player.y === y);
+    // Prefer shared OccupancyGrid if provided in ctx; fallback to per-turn set
+    let isFree = (x, y) => {
+      const blocked = !ctx.isWalkable(x, y) || (player.x === x && player.y === y);
+      if (blocked) return false;
+      const occ = ctx.occupancy || null;
+      if (occ && typeof occ.isFree === "function") {
+        return occ.isFree(x, y, { ignorePlayer: true });
+      }
+      // Fallback: check enemies only
+      return !new Set(enemies.map(en => occKey(en.x, en.y))).has(occKey(x, y));
+    };
 
     for (const e of enemies) {
       const dx = player.x - e.x;

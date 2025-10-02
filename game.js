@@ -117,6 +117,13 @@
   let corpses = [];
   // Visual decals like blood stains on the floor; array of { x, y, a (alpha 0..1), r (radius px) }
   let decals = [];
+  // Occupancy Grid (entities on tiles)
+  let occupancy = null;
+  function rebuildOccupancy() {
+    if (typeof window !== "undefined" && window.OccupancyGrid && typeof OccupancyGrid.build === "function") {
+      occupancy = OccupancyGrid.build({ map, enemies, npcs, props: townProps, player });
+    }
+  }
   let floor = 1;
   window.floor = floor;
   // RNG: centralized via RNG service; allow persisted seed for reproducibility
@@ -164,7 +171,7 @@
     const base = {
       rng,
       ROWS, COLS, MAP_ROWS, MAP_COLS, TILE, TILES,
-      player, enemies, corpses, decals, map, seen, visible,
+      player, enemies, corpses, decals, map, seen, visible, occupancy,
       floor, depth: floor,
       fovRadius,
       // world/overworld

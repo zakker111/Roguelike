@@ -1,5 +1,5 @@
-wn# Game Version History
-Last updated: 2025-10-02 00:00 UTC
+# Game Version History
+Last updated: 2025-10-02 00:10 UTC
 
 This file tracks notable changes to the game across iterations. Versions here reflect functional milestones rather than semantic releases.
 
@@ -9,6 +9,15 @@ Conventions
 - Fixed: bug fixes
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
+
+v1.6 — Core Services (RNG/Time/Combat/Decay) scaffolding + minimal RNG integration
+- Added: rng_service.js — centralized deterministic RNG helpers over mulberry32 (create/int/float/chance).
+- Added: rng_compat.js — compatibility shim exposing window.RNG (autoInit, rng, int, float, chance, applySeed) using rng_service under the hood.
+- Added: time_service.js — central time-of-day math (getClock, minutesUntil, advanceMinutes, tick). Not yet wired into game.js.
+- Added: combat_engine.js — centralized combat helpers (rollHitLocation, critMultiplier, getPlayerBlockChance, enemyDamageAfterDefense, enemyBlockChance). Ready for phased adoption.
+- Added: equipment_decay.js — centralized item wear/decay helpers (initialDecay, decayEquipped, decayAttackHands, decayBlockingHands). Ready for phased adoption.
+- Changed: game.js uses window.RNG when present for rng(), and uses RNG.applySeed in GOD seed workflow; safe fallback remains when RNG shim isn’t available.
+- Dev: Kept behavior identical; no gameplay changes from wiring yet except RNG centralization.
 
 v1.5 — TownAI Performance, Staggered Departures, and Pathing Fixes
 - Changed: A* pathfinding performance in towns
