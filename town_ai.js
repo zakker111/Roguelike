@@ -657,8 +657,8 @@
         n._homePlanFull = plan.slice(0);
         n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
         n._homeWait = 0;
-        // Expose for GOD \"Paths\" toggle to draw the route that will be followed
-        if (typeof window !== \"undefined\" && window.DEBUG_TOWN_PATHS) {
+        // Expose for GOD "Paths" toggle to draw the route that will be followed
+        if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
           n._fullPlan = plan.slice(0);
           n._debugPath = plan.slice(0);
         }
@@ -671,7 +671,7 @@
           n._homePlanFull = direct.slice(0);
           n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
           n._homeWait = 0;
-          if (typeof window !== \"undefined\" && window.DEBUG_TOWN_PATHS) { n._fullPlan = direct.slice(0); n._debugPath = direct.slice(0); }
+          if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) { n._fullPlan = direct.slice(0); n._debugPath = direct.slice(0); }
           return;
         }
 
@@ -693,7 +693,7 @@
             n._homePlanFull = cand.slice(0);
             n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
             n._homeWait = 0;
-            if (typeof window !== \"undefined\" && window.DEBUG_TOWN_PATHS) { n._fullPlan = cand.slice(0); n._debugPath = cand.slice(0); }
+            if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) { n._fullPlan = cand.slice(0); n._debugPath = cand.slice(0); }
             return;
           }
         }
@@ -713,7 +713,7 @@
           n._homePlanFull = soft.slice(0);
           n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
           n._homeWait = 0;
-          if (typeof window !== \"undefined\" && window.DEBUG_TOWN_PATHS) { n._fullPlan = soft.slice(0); n._debugPath = soft.slice(0); }
+          if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) { n._fullPlan = soft.slice(0); n._debugPath = soft.slice(0); }
         } else {
           n._homePlan = null;
           n._homePlanFull = null;
