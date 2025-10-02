@@ -2861,6 +2861,35 @@
               log("TownAI.checkHomeRoutes not available.", "warn");
             }
           },
+          onGodCheckInnTavern: () => {
+            const ctx = getCtx();
+            if (ctx.mode !== "town") {
+              log("Inn/Tavern check is available in town mode only.", "warn");
+              requestDraw();
+              return;
+            }
+            const list = Array.isArray(shops) ? shops : [];
+            const inns = list.filter(s => (s.name || "").toLowerCase().includes("inn"));
+            const taverns = list.filter(s => (s.name || "").toLowerCase().includes("tavern"));
+            const line = `Inn/Tavern: ${taverns.length} tavern(s), ${inns.length} inn(s).`;
+            log(line, (taverns.length || inns.length) ? "info" : "warn");
+            const lines = [];
+            taverns.slice(0, 6).forEach((s, i) => {
+              lines.push(`- Tavern ${i + 1} at door (${s.x},${s.y})`);
+            });
+            inns.slice(0, 6).forEach((s, i) => {
+              lines.push(`- Inn ${i + 1} at door (${s.x},${s.y})`);
+            });
+            try {
+              const el = document.getElementById("god-check-output");
+              if (el) {
+                const html = [line].concat(lines).map(s => `<div>${s}</div>`).join("");
+                el.innerHTML = html;
+              }
+            } catch (_) {}
+            lines.forEach(l => log(l, "info"));
+            requestDraw();
+          },
         });
       }
     }
