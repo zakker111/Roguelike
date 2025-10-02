@@ -562,6 +562,35 @@
       return (path && path.length >= 2) ? path : null;
     }
 
+    // Preview the actual runtime-occupancy route to home without mutating NPC state.
+    function previewHomePlan(ctx, occ, n) {
+      if (!n._home || !n._home.building) return null;
+      const B = n._home.building;
+      let targetInside = n._home.bed
+        ? { x: n._home.bed.x, y: n._home.bed.y }
+        : adjustInteriorTarget(ctx, B, { x: n._home.x, y: n._home.y });
+
+      const insideNow = insideBuilding(B, n.x, n.y);
+      let plan = null;
+
+      if (!insideNow) {
+        const door = B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null);
+        if (!door) return null;
+        const p1 = computePath(ctx, occ, n.x, n.y, door.x, door.y);
+        let inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B);
+        if (!inSpot && B.homeSpot) {
+          if (isFreeTile(ctx, B.homeSpot.x, B.homeSpot.y)) inSpot = { x: B.homeSpot.x, y: B.homeSpot.y };
+          else inSpot = nearestFreeAdjacent(ctx, B.homeSpot.x, B.homeSpot.y, B);
+        }
+        inSpot = inSpot || targetInside || { x: door.x, y: door.y };
+        const p2 = computePath(ctx, occ, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
+        plan = concatPaths(p1, p2);
+      } else {
+        plan = computePath(ctx, occ, n.x, n.y, targetInside.x, targetInside.y);
+      }
+      return (plan && plan.length >= 2) ? plan : null;
+    }
+
     // Movement path to home with runtime occupancy; NPC will follow this plan strictly and wait if blocked.
     function ensureHomePlan(ctx, occ, n) {
       if (!n._home || !n._home.building) { n._homePlan = null; n._homePlanGoal = null; return; }
@@ -679,6 +708,16 @@
     } else {
       // Clear any previous debug data when disabled
       for (const n of npcs) { n._homeDebugPath = null; }
+    }
+
+    // When \"Paths\" is ON, precompute the actual runtime route to home for each NPC so the cyan overlay shows the route they'd follow.
+    if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
+      try {
+        for (const n of npcs) {
+          const plan = previewHomePlan(ctx, occ, n);
+          n._homePlanFull = (plan && plan.length >= 2) ? plan.slice(0) : null;
+        }
+      } catch (_) {}
     }
 
     // Precompute current-destination route debug paths when enabled
