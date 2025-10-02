@@ -4,18 +4,57 @@
  * Exports (window.Dungeon):
  * - generateLevel(ctx, depth): mutates ctx.map/seen/visible/enemies/corpses/startRoomRect and positions player.
  *
- * ctx (expected subset):
- * {
- *   ROWS,COLS,MAP_ROWS,MAP_COLS,TILES, player, rng(), utils?:{randInt,chance},
- *   inBounds(x,y), enemyFactory(x,y,depth), Flavor?, DungeonItems?
- * }
+ * Determinism:
+ * - Uses a per-dungeon PRNG derived from the root RNG seed and the overworld entrance (x,y), level, and size.
+ * - Avoids Math.random; all randomness goes through the local dungeon PRNG so initial generation is reproducible.
+ * - Runtime changes (corpses/decals/enemies) should be persisted via DungeonState.
  */
 (function () {
+  function mix32(a) {
+    a = (a ^ 61) ^ (a >>> 16);
+    a = (a + (a << 3)) | 0;
+    a = a ^ (a >>> 4);
+    a = Math.imul(a, 0x27d4eb2d);
+    a = a ^ (a >>> 15);
+    return a >>> 0;
+  }
+  function mulberry32(a) {
+    return function() {
+      a |= 0;
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function sizeCode(sizeStr) {
+    const s = String(sizeStr || "medium").toLowerCase();
+    return s === "small" ? 1 : s === "large" ? 3 : 2;
+  }
+  function deriveDungeonSeed(rootSeed, x, y, level, sizeStr) {
+    let s = (Number(rootSeed) >>> 0);
+    s = mix32(s ^ Math.imul(0x9e3779b1, (x >>> 0)));
+    s = mix32(s ^ Math.imul(0x85ebca6b, (y >>> 0)));
+    s = mix32(s ^ Math.imul(0xc2b2ae35, (level >>> 0)));
+    s = mix32(s ^ (sizeCode(sizeStr) >>> 0));
+    return s >>> 0;
+  }
+
   function generateLevel(ctx, depth) {
     const { ROWS, COLS, MAP_ROWS, MAP_COLS, TILES, player } = ctx;
 
+    // Determine per-dungeon seed from root RNG + entrance/level/size
+    const rootSeed = (typeof window !== "undefined" && window.RNG && typeof RNG.getSeed === "function")
+      ? (RNG.getSeed() || 0)
+      : 0;
+    const dinfo = ctx.dungeonInfo || ctx.dungeon || { x: player.x, y: player.y, level: depth, size: "medium" };
+    const dseed = deriveDungeonSeed(rootSeed, dinfo.x | 0, dinfo.y | 0, (depth | 0) || (dinfo.level | 0) || 1, dinfo.size);
+    const drng = mulberry32(dseed);
+    const ri = (min, max) => Math.floor(drng() * (Math.max(min|0, max|0) - Math.min(min|0, max|0) + 1)) + Math.min(min|0, max|0);
+    const ch = (p) => drng() < p;
+
     // Size/difficulty config from ctx.dungeon
-    const sizeStr = (ctx.dungeon && ctx.dungeon.size) ? String(ctx.dungeon.size).toLowerCase() : "medium";
+    const sizeStr = (dinfo && dinfo.size) ? String(dinfo.size).toLowerCase() : "medium";
     const sizeFactor = sizeStr === "small" ? 0.6 : sizeStr === "large" ? 1.0 : 0.85;
     const baseRows = (typeof MAP_ROWS === "number" && MAP_ROWS > 0) ? MAP_ROWS : ROWS;
     const baseCols = (typeof MAP_COLS === "number" && MAP_COLS > 0) ? MAP_COLS : COLS;
@@ -29,10 +68,6 @@
     ctx.enemies = [];
     ctx.corpses = [];
     ctx.isDead = false;
-
-    // Use RNG helpers from ctx
-    const ri = ctx.randInt;
-    const ch = ctx.chance;
 
     // Rooms
     const rooms = [];
@@ -114,6 +149,8 @@
 
       const DI = (ctx.DungeonItems || (typeof window !== "undefined" ? window.DungeonItems : null));
       if (DI && typeof DI.placeChestInStartRoom === "function") {
+        // Note: DI may use RNG service or ctx.utils; initial chest placement may vary slightly.
+        // Persistence ensures consistency on re-entry.
         DI.placeChestInStartRoom(ctx);
       }
     } else {
@@ -121,7 +158,7 @@
       player.y = start.y;
     }
 
-    // Optional: place an additional exit tile far from start (acts as a landmark; descending is disabled in game logic)
+    // Place a landmark exit tile far from start (descending disabled in game logic)
     let endRoomIndex = rooms.length - 1;
     if (rooms.length > 1 && ctx.startRoomRect) {
       const sc = center(ctx.startRoomRect);
@@ -169,8 +206,8 @@
     const enemyCount = Math.max(4, Math.floor(baseEnemies * sizeMult));
     const makeEnemy = ctx.enemyFactory || defaultEnemyFactory;
     for (let i = 0; i < enemyCount; i++) {
-      const p = randomFloor(ctx, rooms);
-      ctx.enemies.push(makeEnemy(p.x, p.y, depth, ctx.rng));
+      const p = randomFloor(ctx, rooms, ri);
+      ctx.enemies.push(makeEnemy(p.x, p.y, depth, drng));
     }
 
     const FlavorMod = (ctx.Flavor || (typeof window !== "undefined" ? window.Flavor : null));
@@ -217,7 +254,7 @@
     return x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
   }
 
-  function randomFloor(ctx, rooms) {
+  function randomFloor(ctx, rooms, ri) {
     const { TILES, player } = ctx;
     // Use the actual generated map dimensions to avoid mismatches with MAP_ROWS/COLS
     const rRows = Array.isArray(ctx.map) ? ctx.map.length : 0;
@@ -227,8 +264,8 @@
     let x, y;
     let tries = 0;
     do {
-      x = ctx.randInt(1, Math.max(1, rCols - 2));
-      y = ctx.randInt(1, Math.max(1, rRows - 2));
+      x = ri(1, Math.max(1, rCols - 2));
+      y = ri(1, Math.max(1, rRows - 2));
       tries++;
       if (tries > 500) {
         // Scan for any suitable floor tile as a safe fallback
