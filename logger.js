@@ -4,6 +4,8 @@
  * Exports (window.Logger):
  * - init(target = "#log", max = 60): boolean
  * - log(message, type = "info")
+ * - captureGlobalErrors(): attach window error handlers that log with line numbers
+ * - logError(err, context?): logs an Error with best-effort file:line:col extraction
  * Types: info, crit, block, death, good, warn, flavor.
  *
  * Notes:
@@ -70,11 +72,82 @@
           }
         }
       }
+    },
+
+    // Best-effort stack frame (file:line:col) extraction
+    _extractFrame(errOrStack) {
+      let stack = "";
+      if (!errOrStack) return null;
+      if (typeof errOrStack === "string") stack = errOrStack;
+      else if (errOrStack && typeof errOrStack.stack === "string") stack = errOrStack.stack;
+      else return null;
+
+      // Try common Chrome/Firefox formats: "at func (file:line:col)" or "file:line:col"
+      const lines = stack.split("\n");
+      for (const ln of lines) {
+        // parentheses form
+        let m = ln.match(/\(([^)]+):(\d+):(\d+)\)/);
+        if (m) return { file: m[1], line: Number(m[2]), col: Number(m[3]) };
+        // bare form
+        m = ln.match(/([^\s()]+):(\d+):(\d+)/);
+        if (m) return { file: m[1], line: Number(m[2]), col: Number(m[3]) };
+      }
+      return null;
+    },
+
+    logError(err, context) {
+      try {
+        const name = (err && err.name) ? err.name : "Error";
+        const msg = (err && err.message) ? err.message : String(err);
+        const frame = this._extractFrame(err);
+        const where = frame ? `${frame.file}:${frame.line}:${frame.col}` : (context || "");
+        const text = where ? `${name}: ${msg} @ ${where}` : `${name}: ${msg}`;
+        this.log(text, "bad");
+      } catch (_) {
+        // fall back
+        this.log(String(err), "bad");
+      }
+    },
+
+    captureGlobalErrors() {
+      // Synchronous errors
+      try {
+        window.addEventListener("error", (ev) => {
+          const baseMsg = (ev && ev.message) ? ev.message : "Unhandled error";
+          const file = (ev && ev.filename) || "";
+          const line = (ev && typeof ev.lineno === "number") ? ev.lineno : null;
+          const col = (ev && typeof ev.colno === "number") ? ev.colno : null;
+          const where = (file || line != null || col != null)
+            ? `${file}${line != null ? ":" + line : ""}${col != null ? ":" + col : ""}`
+            : "";
+          // Prefer error.stack when available
+          const err = (ev && ev.error) ? ev.error : null;
+          if (err) {
+            this.logError(err, where);
+          } else {
+            const text = where ? `${baseMsg} @ ${where}` : baseMsg;
+            this.log(text, "bad");
+          }
+        });
+      } catch (_) {}
+
+      // Unhandled Promise rejections
+      try {
+        window.addEventListener("unhandledrejection", (ev) => {
+          const reason = ev && ev.reason;
+          if (reason && typeof reason === "object") {
+            this.logError(reason, "unhandledrejection");
+          } else {
+            this.log(`Unhandled rejection: ${String(reason)}`, "bad");
+          }
+        });
+      } catch (_) {}
     }
   };
 
   // Auto-init on load, best-effort
   try { Logger.init(); } catch (e) { /* ignore */ }
+  try { Logger.captureGlobalErrors(); } catch (_) {}
 
   window.Logger = Logger;
 })();
