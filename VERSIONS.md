@@ -1,5 +1,5 @@
 # Game Version History
-Last updated: 2025-09-26 00:00 UTC
+Last updated: 2025-10-02 00:00 UTC
 
 This file tracks notable changes to the game across iterations. Versions here reflect functional milestones rather than semantic releases.
 
@@ -9,6 +9,30 @@ Conventions
 - Fixed: bug fixes
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
+
+v1.5 — TownAI Performance, Staggered Departures, and Pathing Fixes
+- Changed: A* pathfinding performance in towns
+  - Reduced visit cap from 12,000 to 6,000 to limit worst-case CPU in dense maps.
+  - Optimized open list handling: sort only when the queue grows large (instead of every iteration).
+- Added: Per-NPC path planning throttling and reuse
+  - Introduced _homePlanCooldown to back off recomputation after failures or recent plans.
+  - Reused existing home plans when the goal remains the same.
+  - Memoized each NPC’s home building door (_homeDoor) to avoid repeated nearest-door searches.
+- Added: Staggered evening departures (18:00–21:00)
+  - Each NPC gets a personalized _homeDepartMin (random within 1080–1260 minutes).
+  - Daily reset at dawn; reassign departure windows in the morning.
+  - Shopkeepers and residents linger at work/plaza until their assigned departure time, then route home.
+- Changed: Home routing behavior
+  - ensureHomePlan() builds a two-stage plan (to door, then interior), waits if blocked.
+  - followHomePlan() consumes the plan deterministically with small waits and cooldowns when obstructed.
+  - routeIntoBuilding() falls back to stepping inside and routing to free interior targets adjacent to props (e.g., beds).
+- Fixed: Syntax issues and malformed blocks in town_ai.js
+  - Corrected missing/misplaced braces and object literals (sleepTarget, homeTarget) in shopkeeper/resident routines.
+  - Replaced non-JS operators (“or”, “and”) with proper JS (||, &&) and cleaned up conditional logic.
+- Dev: Debug path visualization flags left off by default
+  - DEBUG_TOWN_HOME_PATHS and DEBUG_TOWN_ROUTE_PATHS can be enabled for path overlays; off by default to limit overhead.
+- Notes:
+  - Blocked third-party tracking scripts and CORS/401 errors observed during testing are environmental and unrelated to game code.
 
 v1.4 — Tavern, Barkeeper, and Shopkeepers
 - Added: Guaranteed Tavern in town (chooses a large building near the plaza).
@@ -167,3 +191,4 @@ Planned / Ideas
 - Shop UI (buy/sell) and currency
 - District themes (market/residential/temple) and signage
 - Movement costs or effects per biome (swamp slow, snow visibility, desert hazard)
+- 
