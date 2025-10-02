@@ -591,13 +591,14 @@
       }
 
       if (plan && plan.length >= 2) {
+        // Save actual movement plan to home (runtime occupancy)
         n._homePlan = plan.slice(0);
+        n._homePlanFull = plan.slice(0);
         n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
         n._homeWait = 0;
-      } else {
-        n._homePlan = null;
-        n._homePlanGoal = null;
-      }
+        // Expose for GOD \"Paths\" toggle to draw the route that will be followed
+        if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
+          n}
     }
 
     function followHomePlan(ctx, occ, n) {

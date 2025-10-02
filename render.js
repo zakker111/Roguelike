@@ -463,13 +463,14 @@
       }
 
       // Optional: draw planned paths for NPCs when debug paths enabled
+      // Prefer showing the actual home route (runtime plan) if present, so \"Paths\" reflects the route NPCs will follow to get home.
       if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS && Array.isArray(npcs)) {
         try {
           ctx2d.save();
           ctx2d.strokeStyle = "rgba(0, 200, 255, 0.85)";
           ctx2d.lineWidth = 2;
           for (const n of npcs) {
-            const path = n._debugPath || n._fullPlan;
+            const path = n._homePlanFull || n._debugPath || n._fullPlan;
             if (!path || path.length < 2) continue;
             ctx2d.beginPath();
             for (let i = 0; i < path.length; i++) {
