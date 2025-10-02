@@ -296,7 +296,7 @@
       if (!Array.isArray(shops) || shops.length === 0) return;
       const keeperLines = ["We open on schedule.","Welcome in!","Back soon."];
       for (const s of shops) {
-        addSignNear(ctx, s.x, s.y, s.name or "Shop");
+        addSignNear(ctx, s.x, s.y, s.name || "Shop");
         // choose spawn near door
         let spot = { x: s.x, y: s.y };
         const neigh = [
@@ -701,7 +701,7 @@
             }
           } else {
             if (phaseNow === "morning") return n._home ? { x: n._home.x, y: n._home.y } : null;
-            else if (phaseNow === "day") return (n._work or ctx.townPlaza);
+            else if (phaseNow === "day") return (n._work || ctx.townPlaza);
             else return n._home ? { x: n._home.x, y: n._home.y } : null;
           }
         }
