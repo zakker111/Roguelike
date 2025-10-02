@@ -62,6 +62,8 @@
       this.els.godApplySeedBtn = document.getElementById("god-apply-seed-btn");
       this.els.godRerollSeedBtn = document.getElementById("god-reroll-seed-btn");
       this.els.godSeedHelp = document.getElementById("god-seed-help");
+      // Check Home Routes button
+      this.els.godCheckHomeBtn = document.getElementById("god-check-home-btn");
 
       // transient hand-chooser element
       this.els.handChooser = document.createElement("div");
@@ -168,7 +170,8 @@
       this.els.godSpawnStairsBtn?.addEventListener("click", () => {
         if (typeof this.handlers.onGodSpawnStairs === "function") this.handlers.onGodSpawnStairs();
       });
-      if (this.els.godFov) {
+      this.els.godCheckHomeBtn?.addEventListener("click", () => {
+        if (typeof this.handlers      if (this.els.godFov) {
         const updateFov = () => {
           const val = parseInt(this.els.godFov.value, 10);
           this.setGodFov(val);
@@ -431,7 +434,7 @@
       if (this.els.townExitBtn) this.els.townExitBtn.style.display = "none";
     },
 
-    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onWait, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSpawnStairs, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed, onTownExit } = {}) {
+    setHandlers({ onEquip, onEquipHand, onUnequip, onDrink, onRestart, onWait, onGodHeal, onGodSpawn, onGodSetFov, onGodSpawnEnemy, onGodSpawnStairs, onGodSetAlwaysCrit, onGodSetCritPart, onGodApplySeed, onGodRerollSeed, onTownExit, onGodCheckHomes } = {}) {
       if (typeof onEquip === "function") this.handlers.onEquip = onEquip;
       if (typeof onEquipHand === "function") this.handlers.onEquipHand = onEquipHand;
       if (typeof onUnequip === "function") this.handlers.onUnequip = onUnequip;
@@ -448,6 +451,7 @@
       if (typeof onGodApplySeed === "function") this.handlers.onGodApplySeed = onGodApplySeed;
       if (typeof onGodRerollSeed === "function") this.handlers.onGodRerollSeed = onGodRerollSeed;
       if (typeof onTownExit === "function") this.handlers.onTownExit = onTownExit;
+      if (typeof onGodCheckHomes === "function") this.handlers.onGodCheckHomes = onGodCheckHomes;
     },
 
     updateStats(player, floor, getAtk, getDef, time) {

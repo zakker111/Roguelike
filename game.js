@@ -2601,6 +2601,28 @@
           onGodApplySeed: (seed) => applySeed(seed),
           onGodRerollSeed: () => rerollSeed(),
           onTownExit: () => requestLeaveTown(),
+          onGodCheckHomes: () => {
+            const ctx = getCtx();
+            if (ctx.mode !== "town") {
+              log("Home route check is available in town mode only.", "warn");
+              requestDraw();
+              return;
+            }
+            if (window.TownAI && typeof TownAI.checkHomeRoutes === "function") {
+              const res = TownAI.checkHomeRoutes(ctx);
+              log(`Home route check: ${res.reachable}/${res.total} reachable, ${res.unreachable} unreachable.`, res.unreachable ? "warn" : "good");
+              if (res.unreachable && Array.isArray(res.details)) {
+                res.details.slice(0, 8).forEach(d => {
+                  log(`- ${d.name}: ${d.reason}`, "warn");
+                });
+                if (res.details.length > 8) log(`...and ${res.details.length - 8} more.`, "warn");
+              }
+              // Request draw to show updated debug paths (if enabled)
+              requestDraw();
+            } else {
+              log("TownAI.checkHomeRoutes not available.", "warn");
+            }
+          },
         });
       }
     }

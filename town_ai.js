@@ -833,8 +833,87 @@
     }
   }
 
+  function checkHomeRoutes(ctx) {
+    const res = { total: 0, reachable: 0, unreachable: 0, details: [] };
+    const npcs = Array.isArray(ctx.npcs) ? ctx.npcs : [];
+    res.total = npcs.length;
+
+    // relaxed occupancy: block furniture only
+    const relaxedOcc = new Set();
+    if (Array.isArray(ctx.townProps)) {
+      for (const p of ctx.townProps) {
+        if (propBlocks(p.type)) relaxedOcc.add(`${p.x},${p.y}`);
+      }
+    }
+
+    function computeHomePathStandalone(ctx, n) {
+      if (!n._home || !n._home.building) return null;
+      const B = n._home.building;
+      let targetInside = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+      targetInside = adjustInteriorTarget(ctx, B, targetInside);
+
+      const insideNow = insideBuilding(B, n.x, n.y);
+      if (!insideNow) {
+        const door = B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null);
+        if (!door) return null;
+        const p1 = computePath(ctx, relaxedOcc, n.x, n.y, door.x, door.y);
+        // pick a spot just inside the building for stage 2
+        let inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B);
+        if (!inSpot) {
+          // deterministic fallback: first free interior spot
+          for (let y = B.y + 1; y < B.y + B.h - 1 && !inSpot; y++) {
+            for (let x = B.x + 1; x < B.x + B.w - 1 && !inSpot; x++) {
+              if (ctx.map[y][x] !== ctx.TILES.FLOOR) continue;
+              if ((ctx.townProps || []).some(p => p.x === x && p.y === y && propBlocks(p.type))) continue;
+              inSpot = { x, y };
+            }
+          }
+        }
+        inSpot = inSpot || targetInside || { x: door.x, y: door.y };
+        const p2 = computePath(ctx, relaxedOcc, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
+        // concat without duplicating the connecting node
+        const path = (function concatPaths(a, b) {
+          if (!a || !b) return a || b || null;
+          if (a.length === 0) return b.slice(0);
+          if (b.length === 0) return a.slice(0);
+          const res = a.slice(0);
+          const firstB = b[0];
+          const lastA = a[a.length - 1];
+          const skipFirst = (firstB.x === lastA.x && firstB.y === lastA.y);
+          for (let i = skipFirst ? 1 : 0; i < b.length; i++) res.push(b[i]);
+          return res;
+        })(p1, p2);
+        return (path && path.length >= 2) ? path : null;
+      } else {
+        const path = computePath(ctx, relaxedOcc, n.x, n.y, targetInside.x, targetInside.y);
+        return (path && path.length >= 2) ? path : null;
+      }
+    }
+
+    for (let i = 0; i < npcs.length; i++) {
+      const n = npcs[i];
+      const path = computeHomePathStandalone(ctx, n);
+      if (path && path.length >= 2) {
+        res.reachable++;
+        // store for render if desired
+        n._homeDebugPath = path.slice(0);
+      } else {
+        res.unreachable++;
+        n._homeDebugPath = null;
+        res.details.push({
+          index: i,
+          name: typeof n.name === "string" ? n.name : `NPC ${i + 1}`,
+          reason: (!n._home || !n._home.building) ? "no-home" : "no-path",
+        });
+      }
+    }
+
+    return res;
+  }
+
   window.TownAI = {
     populateTown,
     townNPCsAct,
+    checkHomeRoutes,
   };
 })();
