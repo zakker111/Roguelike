@@ -481,6 +481,15 @@
                 : (t && t.phase === "dusk") ? "evening"
                 : "day";
 
+    // Staggered home-start window (18:00–21:00)
+    function ensureHomeStart(n) {
+      if (typeof n._homeStartMin !== "number") {
+        const base = 18 * 60;
+        const spread = 3 * 60; // 3 hours
+        n._homeStartMin = base + Math.floor(ctx.rng() * spread);
+      }
+    }
+
     // Build a relaxed occupancy for debug visualization:
     // - Ignore other NPCs and the player so we show the "theoretical" full path
     // - Keep blocking furniture and map boundaries
@@ -747,6 +756,7 @@
     for (const idx of order) {
       const n = npcs[idx];
       ensureHome(ctx, n);
+      ensureHomeStart(n);
 
       // Decay any per-NPC cooldown counters each turn
       if (n._homePlanCooldown && n._homePlanCooldown > 0) {
@@ -778,15 +788,19 @@
             handled = stepTowards(ctx, occ, n, n._work.x, n._work.y);
           }
         } else if (n._home && n._home.building) {
-          // Off hours: go home strictly along a planned path; wait if blocked
-          const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-          if (!n._homePlan || !n._homePlanGoal) {
-            ensureHomePlan(ctx, occ, n);
-          }
-          handled = followHomePlan(ctx, occ, n);
-          if (!handled) {
-            // Fallback: route via door
-            handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
+          // Staggered off hours: only start heading home once past personal threshold
+          if (typeof n._homeStartMin === "number" && minutes >= n._homeStartMin) {
+            const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+            if (!n._homePlan || !n._homePlanGoal) {
+              ensureHomePlan(ctx, occ, n);
+            }
+            handled = followHomePlan(ctx, occ, n);
+            if (!handled) {
+              // Fallback: route via door
+              handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
+            }
+          } else {
+            handled = false; // not time to go home yet; idle
           }
         }
 
@@ -796,14 +810,21 @@
         if (ctx.rng() < 0.9) continue;
       }
 
-      // Residents: sleep system
+      // Residents: sleep system with staggered start
       if (n.isResident) {
-        const eveKickIn = minutes >= 17 * 60 + 30; // start pushing home a bit before dusk
+        const eveKickIn = minutes >= 17 * 60 + 30; // slight pre-evening push
         if (n._sleeping) {
           if (phase === "morning") n._sleeping = false;
           else continue;
         }
         if (phase === "evening" || eveKickIn) {
+          // Only begin heading home once past personal threshold within 18:00–21:00
+          if (typeof n._homeStartMin === "number" && minutes < n._homeStartMin) {
+            // not time yet: minimal wandering
+            if (ctx.rng() < 0.8) continue;
+            stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+            continue;
+          }
           if (n._home && n._home.building) {
             const bedSpot = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : null;
             const sleepTarget = bedSpot ? bedSpot : { x: n._home.x, y: n._home.y };
