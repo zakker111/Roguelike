@@ -201,6 +201,14 @@
     const wantTowns = 8 + ((rng() * 4) | 0);
     const wantDungeons = 10 + ((rng() * 6) | 0);
 
+    // Decide town size distribution: small ~60%, big ~30%, city ~10%
+    function pickTownSize() {
+      const r = rng();
+      if (r < 0.60) return "small";
+      if (r < 0.90) return "big";
+      return "city";
+    }
+
     function placeWithPredicate(n, predicate, write) {
       let placed = 0, attempts = 0, maxAttempts = n * 400;
       while (placed < n && attempts++ < maxAttempts) {
@@ -231,7 +239,11 @@
         }
         return rng() < 0.08; // small chance elsewhere
       },
-      (x, y) => { map[y][x] = TILES.TOWN; towns.push({ x, y }); }
+      (x, y) => {
+        map[y][x] = TILES.TOWN;
+        const size = pickTownSize();
+        towns.push({ x, y, size });
+      }
     );
 
     // Helper: pick dungeon size with probabilities influenced by terrain

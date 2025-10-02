@@ -99,7 +99,19 @@
 
           // Overlay glyphs for special overworld tiles
           if (WT && t === WT.TOWN) {
-            drawGlyphScreen(ctx2d, screenX, screenY, "T", "#d7ba7d", TILE);
+            // Use town size to vary glyph: small 't', big 'T', city 'C'
+            let glyph = "T";
+            try {
+              if (world && Array.isArray(world.towns)) {
+                const info = world.towns.find(tt => tt.x === x && tt.y === y);
+                if (info && info.size) {
+                  if (info.size === "small") glyph = "t";
+                  else if (info.size === "city") glyph = "C";
+                  else glyph = "T";
+                }
+              }
+            } catch (_) {}
+            drawGlyphScreen(ctx2d, screenX, screenY, glyph, "#d7ba7d", TILE);
           } else if (WT && t === WT.DUNGEON) {
             drawGlyphScreen(ctx2d, screenX, screenY, "D", "#c586c0", TILE);
           }
