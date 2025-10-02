@@ -70,7 +70,9 @@
           e.preventDefault();
           _handlers.onHideGod && _handlers.onHideGod();
         } else {
-return;
+          e.preventDefault();
+        }
+        return;
       }
 
       
