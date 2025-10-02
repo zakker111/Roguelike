@@ -1521,14 +1521,13 @@
       for (const b of candidates) {
         if (created >= desiredCount) break;
         // Skip very tiny interiors
-        if (b.w * b.h < 40) continue; // require larger than a house
+        if (b.w * b. << 24) continue; // require larger than a house (reduced threshold to ensure presence)
         // If an inn shop already exists here, skip
         const hasInnShop = shops.some(s => s.name === "Inn" && s.building && s.building.x === b.x && s.building.y === b.y && s.building.w === b.w && s.building.h === b.h);
         if (hasInnShop) continue;
         makeInnTavernIn(b);
         created++;
-      }
-
+     
       // If not enough, create new larger buildings near plaza edges
       const need = desiredCount - created;
       const tryPositions = [
@@ -1540,7 +1539,7 @@
       let pi = 0;
       for (let k = 0; k < need; k++) {
         let placedB = null;
-        for (let tries = 0; tries < 60 && !placedB; tries++) {
+        for (let tries = 0; tries < 80 && !placedB; tries++) {
           const pos = tryPositions[pi++ % tryPositions.length];
           // Choose a bigger size with at least 6x5 interior
           const bw = randInt(9, 12);
@@ -1562,6 +1561,12 @@
           makeInnTavernIn(placedB);
         }
       }
+
+      // Log summary for visibility
+      try {
+        const innCount = shops.filter(s => (s.name || "").toLowerCase().includes("inn")).length;
+        log(`Town has ${innCount} inn(s).`, innCount ? "info" : "warn");
+      } catch (_) {}
     })();
 
     // Plaza fixtures
