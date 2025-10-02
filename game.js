@@ -896,10 +896,6 @@
 
   function generateTown() {
     // Structured town: walls with a gate, main road to a central plaza, secondary roads, buildings aligned to blocks, shops near plaza
-    const W = MAP_COLS, H = MAP_ROWS;
-    map = Array.from({ length: H }, () => Array(W).fill(TILES.FLOOR));
-
-    const clampXY = (x, y) => ({ x: Math.max(1, Math.min(W - 2, x)), y: Math.max(1, Math.min(H - 2, y)) });
 
     // Determine current town size from overworld (default 'big')
     let townSize = "big";
@@ -912,6 +908,20 @@
         if (info && info.size) townSize = info.size;
       }
     } catch (_) {}
+
+    // Size the town map according to town size to remove excessive empty space
+    // small: 60x40, big: 90x60, city: 120x80 (fallback to MAP_* caps)
+    const dims = (function () {
+      if (townSize === "small") return { W: Math.min(MAP_COLS, 60), H: Math.min(MAP_ROWS, 40) };
+      if (townSize === "city") return { W: Math.min(MAP_COLS, 120), H: Math.min(MAP_ROWS, 80) };
+      return { W: Math.min(MAP_COLS, 90), H: Math.min(MAP_ROWS, 60) }; // big
+    })();
+    const W = dims.W, H = dims.H;
+
+    // Initialize a compact map for this town size
+    map = Array.from({ length: H }, () => Array(W).fill(TILES.FLOOR));
+
+    const clampXY = (x, y) => ({ x: Math.max(1, Math.min(W - 2, x)), y: Math.max(1, Math.min(H - 2, y)) });
 
     // Target building count ranges
     const buildingTargetMin = townSize === "small" ? 10 : townSize === "city" ? 60 : 20;
@@ -959,10 +969,15 @@
     };
     townName = makeTownName();
 
-    // Central plaza (rectangle)
+    // Central plaza (rectangle) scaled by town size
     const plaza = { x: (W / 2) | 0, y: (H / 2) | 0 };
     townPlaza = { x: plaza.x, y: plaza.y };
-    const plazaW = 14, plazaH = 12;
+    const plazaDims = (function () {
+      if (townSize === "small") return { w: 10, h: 8 };
+      if (townSize === "city") return { w: 18, h: 14 };
+      return { w: 14, h: 12 }; // big
+    })();
+    const plazaW = plazaDims.w, plazaH = plazaDims.h;
     for (let yy = (plaza.y - (plazaH / 2)) | 0; yy <= (plaza.y + (plazaH / 2)) | 0; yy++) {
       for (let xx = (plaza.x - (plazaW / 2)) | 0; xx <= (plaza.x + (plazaW / 2)) | 0; xx++) {
         if (yy <= 0 || xx <= 0 || yy >= H - 1 || xx >= W - 1) continue;
