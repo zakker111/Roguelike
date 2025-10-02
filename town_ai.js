@@ -598,7 +598,9 @@
         n._homeWait = 0;
         // Expose for GOD \"Paths\" toggle to draw the route that will be followed
         if (typeof window !== "undefined" && window.DEBUG_TOWN_PATHS) {
-          n}
+          n._fullPlan = plan.slice(0);
+          n._debugPath = plan.slice(0);
+        }
     }
 
     function followHomePlan(ctx, occ, n) {
