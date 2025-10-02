@@ -230,6 +230,9 @@
       showLoot: (list) => showLootPanel(list),
       hideLoot: () => hideLootPanel(),
       turn: () => turn(),
+      // World/dungeon generation
+      initWorld: () => initWorld(),
+      generateLevel: (depth) => generateLevel(depth),
       // Combat helpers
       rollHitLocation,
       critMultiplier,
