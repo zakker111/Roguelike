@@ -2610,7 +2610,12 @@
             }
             if (window.TownAI && typeof TownAI.checkHomeRoutes === "function") {
               const res = TownAI.checkHomeRoutes(ctx);
-              log(`Home route check: ${res.reachable}/${res.total} reachable, ${res.unreachable} unreachable.`, res.unreachable ? "warn" : "good");
+              const totalChecked = (typeof res.total === "number") ? res.total : (res.reachable + res.unreachable);
+              const skippedStr = res.skipped ? `, ${res.skipped} skipped` : "";
+              log(`Home route check: ${res.reachable}/${totalChecked} reachable, ${res.unreachable} unreachable${skippedStr}.`, res.unreachable ? "warn" : "good");
+              if (res.skipped) {
+                log(`Skipped ${res.skipped} NPCs not expected to have homes (e.g., pets).`, "info");
+              }
               if (res.unreachable && Array.isArray(res.details)) {
                 res.details.slice(0, 8).forEach(d => {
                   log(`- ${d.name}: ${d.reason}`, "warn");

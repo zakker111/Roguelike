@@ -833,18 +833,17 @@
     }
   }
 
-  function checkHomeRoutes(ctx) {
-    const res = { total: 0, reachable: 0, unreachable: 0, details: [] };
+  function checkHomeRoutes(ctx, opts = {}) {
+    const res = { total: 0, reachable: 0, unreachable: 0, skipped: 0, details: [] };
     const npcs = Array.isArray(ctx.npcs) ? ctx.npcs : [];
-    res.total = npcs.length;
 
-    // relaxed occupancy: block furniture only
-    const relaxedOcc = new Set();
-    if (Array.isArray(ctx.townProps)) {
-      for (const p of ctx.townProps) {
-        if (propBlocks(p.type)) relaxedOcc.add(`${p.x},${p.y}`);
-      }
+    // Helper: skip NPCs that are not expected to have homes (e.g., pets)
+    function shouldSkip(n) {
+      return !!n.isPet;
     }
+
+    // Occupancy for theoretical pathing: ignore props entirely so we only test map geometry (walls/doors)
+    const emptyOcc = new Set();
 
     function computeHomePathStandalone(ctx, n) {
       if (!n._home || !n._home.building) return null;
@@ -856,7 +855,8 @@
       if (!insideNow) {
         const door = B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null);
         if (!door) return null;
-        const p1 = computePath(ctx, relaxedOcc, n.x, n.y, door.x, door.y);
+        const p1 = computePath(ctx, emptyOcc, n.x, n.y, door.x, door.y);
+
         // pick a spot just inside the building for stage 2
         let inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B);
         if (!inSpot) {
@@ -864,34 +864,53 @@
           for (let y = B.y + 1; y < B.y + B.h - 1 && !inSpot; y++) {
             for (let x = B.x + 1; x < B.x + B.w - 1 && !inSpot; x++) {
               if (ctx.map[y][x] !== ctx.TILES.FLOOR) continue;
-              if ((ctx.townProps || []).some(p => p.x === x && p.y === y && propBlocks(p.type))) continue;
               inSpot = { x, y };
             }
           }
         }
         inSpot = inSpot || targetInside || { x: door.x, y: door.y };
-        const p2 = computePath(ctx, relaxedOcc, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
+        const p2 = computePath(ctx, emptyOcc, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
+
         // concat without duplicating the connecting node
         const path = (function concatPaths(a, b) {
           if (!a || !b) return a || b || null;
           if (a.length === 0) return b.slice(0);
           if (b.length === 0) return a.slice(0);
-          const res = a.slice(0);
+          const res0 = a.slice(0);
           const firstB = b[0];
           const lastA = a[a.length - 1];
           const skipFirst = (firstB.x === lastA.x && firstB.y === lastA.y);
-          for (let i = skipFirst ? 1 : 0; i < b.length; i++) res.push(b[i]);
-          return res;
+          for (let i = skipFirst ? 1 : 0; i < b.length; i++) res0.push(b[i]);
+          return res0;
         })(p1, p2);
         return (path && path.length >= 2) ? path : null;
       } else {
-        const path = computePath(ctx, relaxedOcc, n.x, n.y, targetInside.x, targetInside.y);
+        const path = computePath(ctx, emptyOcc, n.x, n.y, targetInside.x, targetInside.y);
         return (path && path.length >= 2) ? path : null;
       }
     }
 
     for (let i = 0; i < npcs.length; i++) {
       const n = npcs[i];
+
+      if (shouldSkip(n)) {
+        res.skipped++;
+        continue;
+      }
+
+      // Ensure each NPC has a home before checking
+      try { ensureHome(ctx, n); } catch (_) {}
+
+      if (!n._home || !n._home.building) {
+        res.unreachable++;
+        res.details.push({
+          index: i,
+          name: typeof n.name === "string" ? n.name : `NPC ${i + 1}`,
+          reason: "no-home",
+        });
+        continue;
+      }
+
       const path = computeHomePathStandalone(ctx, n);
       if (path && path.length >= 2) {
         res.reachable++;
@@ -903,11 +922,13 @@
         res.details.push({
           index: i,
           name: typeof n.name === "string" ? n.name : `NPC ${i + 1}`,
-          reason: (!n._home || !n._home.building) ? "no-home" : "no-path",
+          reason: "no-path",
         });
       }
     }
 
+    // total = checked NPCs (excluding skipped like pets)
+    res.total = Math.max(0, npcs.length - res.skipped);
     return res;
   }
 
