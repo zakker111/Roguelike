@@ -2939,11 +2939,13 @@
               return;
             }
             if (window.TownAI && typeof TownAI.checkHomeRoutes === "function") {
-              const res = TownAI.checkHomeRoutes(ctx);
-              const totalChecked = (typeof res.total === "number") ? res.total : (res.reachable + res.unreachable);
+              const res = TownAI.checkHomeRoutes(ctx) || {};
+              const totalChecked = (typeof res.total === "number")
+                ? res.total
+                : ((res.reachable || 0) + (res.unreachable || 0));
               const skippedStr = res.skipped ? `, ${res.skipped} skipped` : "";
-              const summaryLine = `Home route check: ${res.reachable}/${totalChecked} reachable, ${res.unreachable} unreachable${skippedStr}.`;
-              log(summaryLine, res.unreachable ? "warn" : "good");
+              const summaryLine = `Home route check: ${(res.reachable || 0)}/${totalChecked} reachable, ${(res.unreachable || 0)} unreachable${skippedStr}.`;
+              log(summaryLine, (res.unreachable || 0) ? "warn" : "good");
               let extraLines = [];
               if (res.residents && typeof res.residents.total === "number") {
                 const r = res.residents;
@@ -2951,7 +2953,7 @@
               }
               // Per-resident list of late-night away residents
               if (Array.isArray(res.residentsAwayLate) && res.residentsAwayLate.length) {
-                extraLines.push(`Late-night (02:00–05:00): ${res.reses.residentsAwayLate.length} resident(s) away from home and tavern:`);
+                extraLines.push(`Late-night (02:00–05:00): ${res.residentsAwayLate.length} resident(s) away from home and inn:`);
                 res.residentsAwayLate.slice(0, 10).forEach(d => {
                   extraLines.push(`- ${d.name} at (${d.x},${d.y})`);
                 });
