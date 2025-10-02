@@ -2675,6 +2675,16 @@
                 const r = res.residents;
                 log(`Residents: ${r.atHome}/${r.total} at home, ${r.atTavern}/${r.total} at tavern.`, "info");
               }
+              // Per-resident list of late-night away residents
+              if (Array.isArray(res.residentsAwayLate) && res.residentsAwayLate.length) {
+                log(`Late-night (02:00–05:00): ${res.residentsAwayLate.length} resident(s) away from home and tavern:`, "warn");
+                res.residentsAwayLate.slice(0, 10).forEach(d => {
+                  log(`- ${d.name} at (${d.x},${d.y})`, "warn");
+                });
+                if (res.residentsAwayLate.length > 10) {
+                  log(`...and ${res.residentsAwayLate.length - 10} more.`, "warn");
+                }
+              }
               if (res.skipped) {
                 log(`Skipped ${res.skipped} NPCs not expected to have homes (e.g., pets).`, "info");
               }

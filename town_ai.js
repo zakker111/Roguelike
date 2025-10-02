@@ -1041,6 +1041,13 @@
     let residentsTotal = 0, residentsAtHome = 0, residentsAtTavern = 0;
     const tavernB = (ctx.tavern && ctx.tavern.building) ? ctx.tavern.building : null;
 
+    // Late-night window determination (02:00–05:00)
+    const t = ctx.time;
+    const minutes = t ? (t.hours * 60 + t.minutes) : 12 * 60;
+    const LATE_START = 2 * 60, LATE_END = 5 * 60;
+    const inLateWindow = minutes >= LATE_START && minutes < LATE_END;
+    const residentsAwayLate = [];
+
     // Helper: skip NPCs that are not expected to have homes (e.g., pets)
     function shouldSkip(n) {
       return !!n.isPet;
@@ -1100,10 +1107,17 @@
       // Count residents' current locations
       if (n.isResident) {
         residentsTotal++;
-        if (n._home && n._home.building && insideBuilding(n._home.building, n.x, n.y)) {
-          residentsAtHome++;
-        } else if (tavernB && insideBuilding(tavernB, n.x, n.y)) {
-          residentsAtTavern++;
+        const atHomeNow = n._home && n._home.building && insideBuilding(n._home.building, n.x, n.y);
+        const atTavernNow = tavernB && insideBuilding(tavernB, n.x, n.y);
+        if (atHomeNow) residentsAtHome++;
+        else if (atTavernNow) residentsAtTavern++;
+        // Late-night away list
+        if (inLateWindow && !atHomeNow && !atTavernNow) {
+          residentsAwayLate.push({
+            index: i,
+            name: typeof n.name === "string" ? n.name : `Resident ${i + 1}`,
+            x: n.x, y: n.y
+          });
         }
       }
 
@@ -1144,6 +1158,7 @@
     // total = checked NPCs (excluding skipped like pets)
     res.total = Math.max(0, npcs.length - res.skipped);
     res.residents = { total: residentsTotal, atHome: residentsAtHome, atTavern: residentsAtTavern };
+    res.residentsAwayLate = residentsAwayLate;
     return res;
   }
 
