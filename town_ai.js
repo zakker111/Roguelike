@@ -520,9 +520,10 @@
       const B = n._home.building;
       const relaxedOcc = makeRelaxedOcc();
 
-      // Adjust target inside the building to a free interior tile
-      let targetInside = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-      targetInside = adjustInteriorTarget(ctx, B, targetInside);
+      // Prefer exact bed tile for visualization if present
+      let targetInside = n._home.bed
+        ? { x: n._home.bed.x, y: n._home.bed.y }
+        : adjustInteriorTarget(ctx, B, { x: n._home.x, y: n._home.y });
 
       const insideNow = insideBuilding(B, n.x, n.y);
       let path = null;
@@ -565,8 +566,10 @@
     function ensureHomePlan(ctx, occ, n) {
       if (!n._home || !n._home.building) { n._homePlan = null; n._homePlanGoal = null; return; }
       const B = n._home.building;
-      let targetInside = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-      targetInside = adjustInteriorTarget(ctx, B, targetInside);
+      // Prefer exact bed tile if present; otherwise adjust home spot to a free interior tile
+      let targetInside = n._home.bed
+        ? { x: n._home.bed.x, y: n._home.bed.y }
+        : adjustInteriorTarget(ctx, B, { x: n._home.x, y: n._home.y });
 
       const insideNow = insideBuilding(B, n.x, n.y);
       let plan = null;
@@ -597,6 +600,16 @@
       }
     }
 
+      if (plan && plan.length >= 2) {
+        n._homePlan = plan.slice(0);
+        n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
+        n._homeWait = 0;
+      } else {
+        n._homePlan = null;
+        n._homePlanGoal = null;
+      }
+    }
+
     function followHomePlan(ctx, occ, n) {
       if (!n._homePlan || n._homePlan.length < 2) return false;
       // Re-sync plan to current position
@@ -612,6 +625,17 @@
       if (!n._homePlan || n._homePlan.length < 2) return false;
       const next = n._homePlan[1];
       const keyNext = `${next.x},${next.y}`;
+
+      // Special-case: allow stepping onto the NPC's own bed tile even if a blocking prop occupies it
+      const bed = (n._home && n._home.bed) ? n._home.bed : null;
+      if (bed && next.x === bed.x && next.y === bed.y) {
+        occ.delete(`${n.x},${n.y}`); n.x = next.x; n.y = next.y; occ.add(`${n.x},${n.y}`);
+        n._homePlan = []; // reached goal
+        n._homeWait = 0;
+        n._sleeping = true;
+        return true;
+      }
+
       // If next step blocked, wait a bit, then recompute
       if (occ.has(keyNext) || !isWalkTown(ctx, next.x, next.y)) {
         n._homeWait = (n._homeWait || 0) + 1;

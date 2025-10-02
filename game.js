@@ -1269,6 +1269,80 @@
       // Plants/rugs for variety
       if (rng() < 0.5) placeRandom("plant", "Plant");
       if (rng() < 0.5) placeRandom("rug", "Rug");
+
+      // Ensure a clear walkway from the building door to the nearest bed:
+      // - Find the building door and a tile just inside
+      // - Find nearest bed inside the building
+      // - Compute a simple BFS path along FLOOR tiles (ignoring furniture)
+      // - Remove blocking props (everything except signs/rugs/bed) along that path
+      (function clearWalkwayToBed() {
+        // Find door
+        const d = getExistingDoor(b);
+        const inward = [
+          { dx: 0, dy: 1 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }
+        ];
+        let entry = null;
+        for (const dxy of inward) {
+          const ix = d.x + dxy.dx, iy = d.y + dxy.dy;
+          if (insideFloor(ix, iy)) { entry = { x: ix, y: iy }; break; }
+        }
+        if (!entry) {
+          // Fallback: near center just inside the building bounds
+          const cx = Math.max(b.x + 1, Math.min(b.x + b.w - 2, Math.floor(b.x + b.w / 2)));
+          const cy = Math.max(b.y + 1, Math.min(b.y + b.h - 2, Math.floor(b.y + b.h / 2)));
+          entry = { x: cx, y: cy };
+        }
+
+        // Collect bed tiles in this building
+        const beds = [];
+        for (const p of townProps) {
+          if (p.type === "bed" && p.x > b.x && p.x < b.x + b.w - 1 && p.y > b.y && p.y < b.y + b.h - 1) {
+            beds.push({ x: p.x, y: p.y });
+          }
+        }
+        if (!beds.length) return;
+
+        // Pick nearest bed by Manhattan distance from door
+        const manhattan = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
+        const goal = beds.slice().sort((a, c) => manhattan(d.x, d.y, a.x, a.y) - manhattan(d.x, d.y, c.x, c.y))[0];
+
+        // BFS on interior floor tiles
+        const key = (x, y) => `${x},${y}`;
+        const seenB = new Set();
+        const q = [];
+        q.push({ x: entry.x, y: entry.y, prev: null });
+        seenB.add(key(entry.x, entry.y));
+        let end = null;
+        const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+        while (q.length) {
+          const cur = q.shift();
+          if (cur.x === goal.x && cur.y === goal.y) { end = cur; break; }
+          for (const dxy of dirs4) {
+            const nx = cur.x + dxy.dx, ny = cur.y + dxy.dy;
+            const k = key(nx, ny);
+            if (seenB.has(k)) continue;
+            if (!insideFloor(nx, ny)) continue;
+            seenB.add(k);
+            q.push({ x: nx, y: ny, prev: cur });
+          }
+        }
+        if (!end) return;
+
+        // Reconstruct path and clear blocking props along it (keep bed/sign/rug intact)
+        const pathSet = new Set();
+        let cur = end;
+        while (cur) {
+          pathSet.add(key(cur.x, cur.y));
+          cur = cur.prev;
+        }
+        townProps = townProps.filter(p => {
+          if (p.type === "bed" || p.type === "sign" || p.type === "rug") return true;
+          // Only consider props inside this building
+          if (!(p.x > b.x && p.x < b.x + b.w - 1 && p.y > b.y && p.y < b.y + b.h - 1)) return true;
+          // Remove if it lies on the walkway
+          return !pathSet.has(key(p.x, p.y));
+        });
+      })();
     }
     for (const b of buildings) fillBuildingInterior(b);
 
