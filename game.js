@@ -117,11 +117,49 @@
   let corpses = [];
   // Visual decals like blood stains on the floor; array of { x, y, a (alpha 0..1), r (radius px) }
   let decals = [];
+  // Occupancy Grid (entities on tiles)
+  let occupancy = null;
+  function rebuildOccupancy() {
+    if (typeof window !== "undefined" && window.OccupancyGrid && typeof OccupancyGrid.build === "function") {
+      occupancy = OccupancyGrid.build({ map, enemies, npcs, props: townProps, player });
+    }
+  }
   let floor = 1;
   window.floor = floor;
-  // RNG: allow persisted seed for reproducibility; default to time-based if none
-  let currentSeed = (typeof localStorage !== "undefined" && localStorage.getItem("SEED")) ? Number(localStorage.getItem("SEED")) >>> 0 : null;
-  let rng = mulberry32((currentSeed == null ? (Date.now() % 0xffffffff) : currentSeed) >>> 0);
+  // RNG: centralized via RNG service; allow persisted seed for reproducibility
+  let currentSeed = null;
+  if (typeof window !== "undefined" && window.RNG && typeof RNG.autoInit === "function") {
+    try {
+      currentSeed = RNG.autoInit();
+      // RNG.autoInit returns the seed value
+    } catch (_) {
+      try {
+        const sRaw = (typeof localStorage !== "undefined") ? localStorage.getItem("SEED") : null;
+        currentSeed = sRaw != null ? (Number(sRaw) >>> 0) : null;
+      } catch (_) { currentSeed = null; }
+    }
+  } else {
+    try {
+      const sRaw = (typeof localStorage !== "undefined") ? localStorage.getItem("SEED") : null;
+      currentSeed = sRaw != null ? (Number(sRaw) >>> 0) : null;
+    } catch (_) { currentSeed = null; }
+  }
+  let rng = (typeof window !== "undefined" && window.RNG && typeof RNG.rng === "function")
+    ? RNG.rng
+    : (function () {
+        // minimal fallback mulberry32 if RNG service not available
+        function mulberry32(a) {
+          return function() {
+            let t = a += 0x6D2B79F5;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+        const seed = (currentSeed == null ? (Date.now() % 0xffffffff) : currentSeed) >>> 0;
+        const _rng = mulberry32(seed);
+        return function () { return _rng(); };
+      })();
   let isDead = false;
   let startRoomRect = null;
   // GOD toggles
@@ -133,7 +171,7 @@
     const base = {
       rng,
       ROWS, COLS, MAP_ROWS, MAP_COLS, TILE, TILES,
-      player, enemies, corpses, decals, map, seen, visible,
+      player, enemies, corpses, decals, map, seen, visible, occupancy,
       floor, depth: floor,
       fovRadius,
       // world/overworld
@@ -225,16 +263,15 @@
     return base;
   }
 
-  function mulberry32(a) {
-    return function() {
-      let t = a += 0x6D2B79F5;
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-  const randInt = (min, max) => Math.floor(rng() * (max - min + 1)) + min;
-  const chance = (p) => rng() < p;
+  // Use RNG service if available for helpers
+  const randInt = (min, max) => {
+    if (typeof window !== "undefined" && window.RNG && typeof RNG.int === "function") return RNG.int(min, max);
+    return Math.floor(rng() * (max - min + 1)) + min;
+  };
+  const chance = (p) => {
+    if (typeof window !== "undefined" && window.RNG && typeof RNG.chance === "function") return RNG.chance(p);
+    return rng() < p;
+  };
   const capitalize = (window.PlayerUtils && typeof PlayerUtils.capitalize === "function")
     ? PlayerUtils.capitalize
     : (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
@@ -245,6 +282,7 @@
     return COLORS.enemy;
   };
   const randFloat = (min, max, decimals = 1) => {
+    if (typeof window !== "undefined" && window.RNG && typeof RNG.float === "function") return RNG.float(min, max, decimals);
     const v = min + rng() * (max - min);
     const p = Math.pow(10, decimals);
     return Math.round(v * p) / p;
@@ -2168,7 +2206,8 @@
       const nx = player.x + dx;
       const ny = player.y + dy;
       if (!inBounds(nx, ny)) return;
-      if (npcs.some(n => n.x === nx && n.y === ny)) {
+      const npcBlocked = (occupancy && typeof occupancy.hasNPC === "function") ? occupancy.hasNPC(nx, ny) : npcs.some(n => n.x === nx && n.y === ny);
+      if (npcBlocked) {
         // Treat bumping into an NPC as a "hit"/interaction: they respond with a line
         const npc = npcs.find(n => n.x === nx && n.y === ny);
         if (npc) {
@@ -2264,7 +2303,9 @@
       return;
     }
 
-    if (isWalkable(nx, ny) && !enemies.some(e => e.x === nx && e.y === ny)) {
+    // Prefer occupancy grid if available to avoid linear scans
+    const blockedByEnemy = (occupancy && typeof occupancy.hasEnemy === "function") ? occupancy.hasEnemy(nx, ny) : enemies.some(e => e.x === nx && e.y === ny);
+    if (isWalkable(nx, ny) && !blockedByEnemy) {
       player.x = nx;
       player.y = ny;
       updateCamera();
@@ -2753,7 +2794,22 @@
     const s = (Number(seedUint32) >>> 0);
     currentSeed = s;
     try { localStorage.setItem("SEED", String(s)); } catch (_) {}
-    rng = mulberry32(s);
+    if (typeof window !== "undefined" && window.RNG && typeof RNG.applySeed === "function") {
+      RNG.applySeed(s);
+      rng = RNG.rng;
+    } else {
+      // fallback
+      function mulberry32(a) {
+        return function() {
+          let t = a += 0x6D2B79F5;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+      const _rng = mulberry32(s);
+      rng = function () { return _rng(); };
+    }
     if (mode === "world") {
       log(`GOD: Applied seed ${s}. Regenerating overworld...`, "notice");
       initWorld();
@@ -2876,6 +2932,7 @@
 
     if (mode === "dungeon") {
       enemiesAct();
+      rebuildOccupancy();
       // Status effects tick (bleed, dazed, etc.)
       try {
         if (window.Status && typeof Status.tick === "function") {
@@ -2897,6 +2954,7 @@
     } else if (mode === "town") {
       townTick = (townTick + 1) | 0;
       townNPCsAct();
+      rebuildOccupancy();
     }
 
     recomputeFOV();

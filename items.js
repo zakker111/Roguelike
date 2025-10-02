@@ -25,6 +25,16 @@
   }
   function getRng(rng) {
     if (typeof rng === "function") return rng;
+    // Prefer centralized RNG service if available
+    try {
+      if (typeof window !== "undefined" && window.RNG && typeof RNG.rng === "function") {
+        // Ensure it is initialized
+        if (typeof RNG.getSeed !== "function" || RNG.getSeed() == null) {
+          if (typeof RNG.autoInit === "function") RNG.autoInit();
+        }
+        return RNG.rng;
+      }
+    } catch (_) {}
     // Prefer saved SEED for deterministic behavior if available
     try {
       const sRaw = (typeof localStorage !== "undefined") ? localStorage.getItem("SEED") : null;

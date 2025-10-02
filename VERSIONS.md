@@ -1,5 +1,5 @@
-wn# Game Version History
-Last updated: 2025-10-02 00:00 UTC
+# Game Version History
+Last updated: 2025-10-02 00:10 UTC
 
 This file tracks notable changes to the game across iterations. Versions here reflect functional milestones rather than semantic releases.
 
@@ -9,6 +9,25 @@ Conventions
 - Fixed: bug fixes
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
+
+
+
+v1.7 — Mode Managers and Occupancy Grid
+- Added: occupancy_grid.js — shared OccupancyGrid with enemy/NPC/prop sets and isFree(x,y). Exposed via ctx.occupancy.
+- Changed: ai.js — prefers ctx.occupancy when available for fast isFree checks; falls back to per-turn set.
+- Changed: game.js — uses OccupancyGrid in tryMovePlayer (town: NPC blocking, dungeon: enemy blocking) and rebuilds occupancy after enemy/NPC turns.
+- Added: mode_manager.js — pluggable ModeManager skeleton (doAction/tryMove/onTurn) for routing per-mode behaviors.
+- Added: managers/world_manager.js, managers/town_manager.js, managers/dungeon_manager.js — initial facades preparing migration of mode-specific logic out of game.js.
+- Dev: Wiring is incremental to avoid regressions; legacy functions remain while managers are introduced.
+
+v1.6 — Core Services (RNG/Time/Combat/Decay) scaffolding + minimal RNG integration
+- Added: rng_service.js — centralized deterministic RNG helpers over mulberry32 (create/int/float/chance).
+- Added: rng_compat.js — compatibility shim exposing window.RNG (autoInit, rng, int, float, chance, applySeed) using rng_service under the hood.
+- Added: time_service.js — central time-of-day math (getClock, minutesUntil, advanceMinutes, tick). Not yet wired into game.js.
+- Added: combat_engine.js — centralized combat helpers (rollHitLocation, critMultiplier, getPlayerBlockChance, enemyDamageAfterDefense, enemyBlockChance). Ready for phased adoption.
+- Added: equipment_decay.js — centralized item wear/decay helpers (initialDecay, decayEquipped, decayAttackHands, decayBlockingHands). Ready for phased adoption.
+- Changed: game.js uses window.RNG when present for rng(), and uses RNG.applySeed in GOD seed workflow; safe fallback remains when RNG shim isn’t available.
+- Dev: Kept behavior identical; no gameplay changes from wiring yet except RNG centralization.
 
 v1.5 — TownAI Performance, Staggered Departures, and Pathing Fixes
 - Changed: A* pathfinding performance in towns
@@ -191,4 +210,8 @@ Planned / Ideas
 - Shop UI (buy/sell) and currency
 - District themes (market/residential/temple) and signage
 - Movement costs or effects per biome (swamp slow, snow visibility, desert hazard)
-- More optimization for town ai town ai game lags and is kinda slow for one trun for player
+
+Bugs
+- chek there is not sleep walkers some npc have z top of them dont sure is thiss still existing
+- when inn god panel in routes it shows unendifid/17 it is not correct
+- inns dont have invidual rooms and not enought beds
