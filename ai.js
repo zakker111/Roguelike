@@ -63,11 +63,29 @@
 
     const senseRange = 8;
 
+    // Use shared OccupancyGrid if available for movement updates
+    const occ = (ctx.occupancy && typeof ctx.occupancy.clearEnemy === "function" && typeof ctx.occupancy.setEnemy === "function" && typeof ctx.occupancy.isFree === "function")
+      ? ctx.occupancy
+      : {
+          // Lightweight shim so movement code can call delete/add without errors.
+          delete() {},
+          add() {},
+          isFree(x, y, opts) {
+            const ignorePlayer = !!(opts && opts.ignorePlayer);
+            const blocked = !ctx.isWalkable(x, y) || (!ignorePlayer && player.x === x && player.y === y);
+            if (blocked) return false;
+            const key = occKey(x, y);
+            for (const en of enemies) {
+              if (occKey(en.x, en.y) === key) return false;
+            }
+            return true;
+          }
+        };
+
     // Prefer shared OccupancyGrid if provided in ctx; fallback to per-turn set
     let isFree = (x, y) => {
       const blocked = !ctx.isWalkable(x, y) || (player.x === x && player.y === y);
       if (blocked) return false;
-      const occ = ctx.occupancy || null;
       if (occ && typeof occ.isFree === "function") {
         return occ.isFree(x, y, { ignorePlayer: true });
       }
@@ -111,9 +129,9 @@
         for (const d of tryDirs) {
           const nx = e.x + d.x, ny = e.y + d.y;
           if (isFree(nx, ny)) {
-            occ.delete(occKey(e.x, e.y));
+            if (occ) occ.clearEnemy(e.x, e.y);
             e.x = nx; e.y = ny;
-            occ.add(occKey(e.x, e.y));
+            if (occ) occ.setEnemy(e.x, e.y);
             fled = true;
             break;
           }
