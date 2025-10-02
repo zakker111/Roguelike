@@ -442,12 +442,151 @@
     // Welcome sign
     addSignNear(gate.x, gate.y, `Welcome to ${ctx.townName}`);
 
+    // Windows along building walls (limited and spaced out)
+    (function placeWindowsOnAll() {
+      function sidePoints(b) {
+        return [
+          Array.from({ length: Math.max(0, b.w - 2) }, (_, i) => ({ x: b.x + 1 + i, y: b.y })),              // top
+          Array.from({ length: Math.max(0, b.w - 2) }, (_, i) => ({ x: b.x + 1 + i, y: b.y + b.h - 1 })),    // bottom
+          Array.from({ length: Math.max(0, b.h - 2) }, (_, i) => ({ x: b.x, y: b.y + 1 + i })),              // left
+          Array.from({ length: Math.max(0, b.h - 2) }, (_, i) => ({ x: b.x + b.w - 1, y: b.y + 1 + i })),    // right
+        ];
+      }
+      function isAdjacent(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) <= 1; }
+      for (const b of buildings) {
+        let candidates = [];
+        const sides = sidePoints(b);
+        for (const pts of sides) {
+          for (const p of pts) {
+            if (!inBounds(ctx, p.x, p.y)) continue;
+            const t = ctx.map[p.y][p.x];
+            if (t !== ctx.TILES.WALL) continue;
+            candidates.push(p);
+          }
+        }
+        if (!candidates.length) continue;
+        const limit = Math.min(3, Math.max(1, Math.floor((b.w + b.h) / 10)));
+        const placed = [];
+        let attempts = 0;
+        while (placed.length < limit && candidates.length > 0 && attempts++ < candidates.length * 2) {
+          const idx = Math.floor(ctx.rng() * candidates.length);
+          const p = candidates[idx];
+          if (placed.some(q => isAdjacent(p, q))) {
+            candidates.splice(idx, 1);
+            continue;
+          }
+          ctx.map[p.y][p.x] = ctx.TILES.WINDOW;
+          placed.push(p);
+          candidates = candidates.filter(c => !isAdjacent(c, p));
+        }
+      }
+    })();
+
     // Plaza fixtures
     addProp(plaza.x, plaza.y, "well", "Town Well");
     addProp(plaza.x - 6, plaza.y - 4, "lamp", "Lamp Post");
     addProp(plaza.x + 6, plaza.y - 4, "lamp", "Lamp Post");
     addProp(plaza.x - 6, plaza.y + 4, "lamp", "Lamp Post");
     addProp(plaza.x + 6, plaza.y + 4, "lamp", "Lamp Post");
+
+    // Furnish building interiors for variety (beds, tables, chairs, fireplace, storage, shelves, plants, rugs)
+    (function furnishInteriors() {
+      function insideFloor(b, x, y) { return x > b.x && x < b.x + b.w - 1 && y > b.y && y < b.y + b.h - 1 && ctx.map[y][x] === ctx.TILES.FLOOR; }
+      function occupiedTile(x, y) { return ctx.townProps.some(p => p.x === x && p.y === y); }
+      for (const b of buildings) {
+        // fireplace spots near inner walls
+        const borderAdj = [];
+        for (let yy = b.y + 1; yy < b.y + b.h - 1; yy++) {
+          for (let xx = b.x + 1; xx < b.x + b.w - 1; xx++) {
+            if (!insideFloor(b, xx, yy)) continue;
+            if (ctx.map[yy - 1][xx] === ctx.TILES.WALL || ctx.map[yy + 1][xx] === ctx.TILES.WALL || ctx.map[yy][xx - 1] === ctx.TILES.WALL || ctx.map[yy][xx + 1] === ctx.TILES.WALL) {
+              borderAdj.push({ x: xx, y: yy });
+            }
+          }
+        }
+        if (borderAdj.length && ctx.rng() < 0.9) {
+          const f = borderAdj[Math.floor(ctx.rng() * borderAdj.length)];
+          if (!occupiedTile(f.x, f.y)) addProp(f.x, f.y, "fireplace", "Fireplace");
+        }
+
+        // Beds scaled by area
+        const area = b.w * b.h;
+        let bedTarget = Math.max(1, Math.min(3, Math.floor(area / 24)));
+        let bedsPlaced = 0, triesBed = 0;
+        while (bedsPlaced < bedTarget && triesBed++ < 120) {
+          const xx = Math.floor(ctx.rng() * (b.w - 2)) + b.x + 1;
+          const yy = Math.floor(ctx.rng() * (b.h - 2)) + b.y + 1;
+          if (!insideFloor(b, xx, yy)) continue;
+          if (occupiedTile(xx, yy)) continue;
+          addProp(xx, yy, "bed", "Bed"); bedsPlaced++;
+        }
+
+        // Tables and chairs
+        if (ctx.rng() < 0.8) {
+          let placedT = false, triesT = 0;
+          while (!placedT && triesT++ < 60) {
+            const tx = Math.floor(ctx.rng() * (b.w - 2)) + b.x + 1;
+            const ty = Math.floor(ctx.rng() * (b.h - 2)) + b.y + 1;
+            if (!insideFloor(b, tx, ty) || occupiedTile(tx, ty)) continue;
+            addProp(tx, ty, "table", "Table"); placedT = true;
+          }
+        }
+        let chairCount = ctx.rng() < 0.5 ? 2 : 1;
+        let triesC = 0;
+        while (chairCount > 0 && triesC++ < 80) {
+          const cx = Math.floor(ctx.rng() * (b.w - 2)) + b.x + 1;
+          const cy = Math.floor(ctx.rng() * (b.h - 2)) + b.y + 1;
+          if (!insideFloor(b, cx, cy) || occupiedTile(cx, cy)) continue;
+          addProp(cx, cy, "chair", "Chair"); chairCount--;
+        }
+
+        // Storage: chests, crates, barrels
+        let chestCount = ctx.rng() < 0.5 ? 2 : 1;
+        let placedC = 0, triesChest = 0;
+        while (placedC < chestCount && triesChest++ < 80) {
+          const xx = Math.floor(ctx.rng() * (b.w - 2)) + b.x + 1;
+          const yy = Math.floor(ctx.rng() * (b.h - 2)) + b.y + 1;
+          if (!insideFloor(b, xx, yy) || occupiedTile(xx, yy)) continue;
+          addProp(xx, yy, "chest", "Chest"); placedC++;
+        }
+        let crates = ctx.rng() < 0.6 ? 2 : 1;
+        let triesCr = 0;
+        while (crates > 0 && triesCr++ < 120) {
+          const xx = Math.floor(ctx.rng() * (b.w - 2)) + b.x + 1;
+          const yy = Math.floor(ctx.rng() * (b.h - 2)) + b.y + 1;
+          if (!insideFloor(b, xx, yy) || occupiedTile(xx, yy)) continue;
+          addProp(xx, yy, "crate", "Crate"); crates--;
+        }
+        let barrels = ctx.rng() < 0.6 ? 2 : 1;
+        let triesBrl = 0;
+        while (barrels > 0 && triesBrl++ < 120) {
+          const xx = Math.floor(ctx.rng() * (b.w - 2)) + b.x + 1;
+          const yy = Math.floor(ctx.rng() * (b.h - 2)) + b.y + 1;
+          if (!insideFloor(b, xx, yy) || occupiedTile(xx, yy)) continue;
+          addProp(xx, yy, "barrel", "Barrel"); barrels--;
+        }
+
+        // Shelves against inner walls
+        let shelves = Math.min(2, Math.floor(area / 30));
+        const shelfSpots = borderAdj.slice();
+        while (shelves-- > 0 && shelfSpots.length) {
+          const s = shelfSpots.splice(Math.floor(ctx.rng() * shelfSpots.length), 1)[0];
+          if (!occupiedTile(s.x, s.y)) addProp(s.x, s.y, "shelf", "Shelf");
+        }
+
+        // Plants/rugs for variety
+        if (ctx.rng() < 0.5) {
+          const px = Math.floor(ctx.rng() * (b.w - 2)) + b.x + 1;
+          const py = Math.floor(ctx.rng() * (b.h - 2)) + b.y + 1;
+          if (insideFloor(b, px, py) && !occupiedTile(px, py)) addProp(px, py, "plant", "Plant");
+        }
+        if (ctx.rng() < 0.5) {
+          const rx = Math.floor(ctx.rng() * (b.w - 2)) + b.x + 1;
+          const ry = Math.floor(ctx.rng() * (b.h - 2)) + b.y + 1;
+          if (insideFloor(b, rx, ry) && !occupiedTile(rx, ry)) addProp(rx, ry, "rug", "Rug");
+        }
+      }
+    })();
 
     // NPCs via TownAI if present
     ctx.npcs = [];
