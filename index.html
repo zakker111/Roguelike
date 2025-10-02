@@ -127,7 +127,7 @@
   <script src="core/ctx.js"></script>
   <script src="world/world.js"></script>
   <script src="world/los.js"></script>
-  <script src="enemies.js"></script>
+  <script src="entities/enemies.js"></script>
   <script src="world/fov.js"></script>
   <script src="dungeon.js"></script>
   <script src="ui/logger.js"></script>
@@ -137,31 +137,31 @@
     }
   </script>
   <script src="ui/ui.js"></script>
-  <script src="tileset.js"></script>
-  <script src="render.js"></script>
-  <script src="player_utils.js"></script>
-  <script src="player_equip.js"></script>
-  <script src="player.js"></script>
+  <script src="ui/tileset.js"></script>
+  <script src="ui/render.js"></script>
+  <script src="entities/player_utils.js"></script>
+  <script src="entities/player_equip.js"></script>
+  <script src="entities/player.js"></script>
   <!-- Central RNG service must load before items/game to avoid duplicate PRNG implementations -->
-  <script src="rng_service.js"></script>
-  <script src="items.js"></script>
-  <script src="dungeon_items.js"></script>
-  <script src="loot.js"></script>
-  <script src="combat_utils.js"></script>
-  <script src="combat.js"></script>
-  <script src="stats.js"></script>
-  <script src="status_effects.js"></script>
-  <script src="flavor.js"></script>
-  <script src="utils.js"></script>
-  <script src="ai.js"></script>
-  <script src="input.js"></script>
-  <script src="town_ai.js"></script>
+  <script src="core/rng_service.js"></script>
+  <script src="entities/items.js"></script>
+  <script src="dungeon/dungeon_items.js"></script>
+  <script src="entities/loot.js"></script>
+  <script src="combat/combat_utils.js"></script>
+  <script src="combat/combat.js"></script>
+  <script src="systems/stats.js"></script>
+  <script src="combat/status_effects.js"></script>
+  <script src="systems/flavor.js"></script>
+  <script src="utils/utils.js"></script>
+  <script src="systems/ai.js"></script>
+  <script src="core/input.js"></script>
+  <script src="town/town_ai.js"></script>
   <!-- New modularized helpers -->
-  <script src="decals.js"></script>
-  <script src="dungeon_state.js"></script>
-  <script src="god.js"></script>
-  <script src="actions.js"></script>
-  <script src="town_gen.js"></script>
-  <script src="game.js"></script>
+  <script src="systems/decals.js"></script>
+  <script src="dungeon/dungeon_state.js"></script>
+  <script src="systems/god.js"></script>
+  <script src="systems/actions.js"></script>
+  <script src="town/town_gen.js"></script>
+  <script src="core/game.js"></script>
 </body>
 </html>
