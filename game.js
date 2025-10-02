@@ -1344,7 +1344,7 @@
 
       // Benches: create a few along the inner area
       let benchesPlaced = 0, triesB = 0;
-      while (benchesPlaced < 6 && triesB++ < 200) {
+      while (benchesPlaced < 8 && triesB++ < 300) {
         const bx = randInt(best.x + 1, best.x + best.w - 2);
         const by = randInt(best.y + 1, best.y + best.h - 2);
         if (map[by][bx] !== TILES.FLOOR) continue;
@@ -1353,10 +1353,71 @@
         benchesPlaced++;
       }
 
-      // Beds: ensure the tavern has a modest dorm area (6–10 beds)
+      // Add cozy interior: fireplace near inner wall, a few rugs, barrels, and tables
+      (function addCozyInterior() {
+        // fireplace against inner wall
+        const borderAdj = [];
+        for (let yy = best.y + 1; yy < best.y + best.h - 1; yy++) {
+          for (let xx = best.x + 1; xx < best.x + best.w - 1; xx++) {
+            if (map[yy][xx] !== TILES.FLOOR) continue;
+            if (map[yy - 1][xx] === TILES.WALL || map[yy + 1][xx] === TILES.WALL || map[yy][xx - 1] === TILES.WALL || map[yy][xx + 1] === TILES.WALL) {
+              borderAdj.push({ x: xx, y: yy });
+            }
+          }
+        }
+        if (borderAdj.length) {
+          const f = borderAdj[randInt(0, borderAdj.length - 1)];
+          if (!townProps.some(p => p.x === f.x && p.y === f.y)) addProp(f.x, f.y, "fireplace", "Fireplace");
+        }
+        // extra tables and chairs
+        let tables = 0, triesT = 0;
+        const tableTarget = 2;
+        while (tables < tableTarget && triesT++ < 120) {
+          const tx = randInt(best.x + 1, best.x + best.w - 2);
+          const ty = randInt(best.y + 1, best.y + best.h - 2);
+          if (map[ty][tx] !== TILES.FLOOR) continue;
+          if (townProps.some(p => p.x === tx && p.y === ty)) continue;
+          addProp(tx, ty, "table", "Table");
+          tables++;
+        }
+        let chairs = 0, triesC = 0;
+        const chairTarget = 4;
+        while (chairs < chairTarget && triesC++ < 160) {
+          const cx = randInt(best.x + 1, best.x + best.w - 2);
+          const cy = randInt(best.y + 1, best.y + best.h - 2);
+          if (map[cy][cx] !== TILES.FLOOR) continue;
+          if (townProps.some(p => p.x === cx && p.y === cy)) continue;
+          addProp(cx, cy, "chair", "Chair");
+          chairs++;
+        }
+        // rugs
+        let rugs = 0, triesR = 0;
+        const rugTarget = 3;
+        while (rugs < rugTarget && triesR++ < 120) {
+          const rx = randInt(best.x + 1, best.x + best.w - 2);
+          const ry = randInt(best.y + 1, best.y + best.h - 2);
+          if (map[ry][rx] !== TILES.FLOOR) continue;
+          if (townProps.some(p => p.x === rx && p.y === ry)) continue;
+          addProp(rx, ry, "rug", "Rug");
+          rugs++;
+        }
+        // barrels near walls
+        let barrels = 0, triesBrl = 0;
+        const barrelTarget = 4;
+        while (barrels < barrelTarget && triesBrl++ < 200) {
+          const bx = randInt(best.x + 1, best.x + best.w - 2);
+          const by = randInt(best.y + 1, best.y + best.h - 2);
+          if (map[by][bx] !== TILES.FLOOR) continue;
+          if (townProps.some(p => p.x === bx && p.y === by)) continue;
+          addProp(bx, by, "barrel", "Barrel");
+          barrels++;
+        }
+      })();
+
+      // Beds: ensure the tavern has 5–10 beds
       let bedsPlaced = 0, triesBed = 0;
-      const bedTarget = Math.min(10, Math.max(6, Math.floor((best.w * best.h) / 18)));
-      while (bedsPlaced < bedTarget && triesBed++ < 600) {
+      const bedTarget = randInt(5, 10);
+      while (bedsPlaced < bedTarget && triesBed++ < 800) {
         const bx = randInt(best.x + 1, best.x + best.w - 2);
         const by = randInt(best.y + 1, best.y + best.h - 2);
         if (map[by][bx] !== TILES.FLOOR) continue;
@@ -1396,6 +1457,39 @@
       const tx = plaza.x + randInt(-10, 10);
       const ty = plaza.y + randInt(-8, 8);
       addProp(tx, ty, "tree", "Tree");
+    }
+
+    // Extra city lights: add more lamps around roads and plaza for "city" size
+    if (townSize === "city") {
+      const addLampIfFree = (x, y) => {
+        if (x <= 0 || y <= 0 || x >= W - 1 || y >= H - 1) return false;
+        if (map[y][x] !== TILES.FLOOR) return false;
+        if (townProps.some(p => p.x === x && p.y === y)) return false;
+        addProp(x, y, "lamp", "Lamp Post");
+        return true;
+      };
+      // Lamps around plaza ring
+      for (let radius = 5; radius <= 9; radius += 2) {
+        addLampIfFree(plaza.x - radius, plaza.y);
+        addLampIfFree(plaza.x + radius, plaza.y);
+        addLampIfFree(plaza.x, plaza.y - radius);
+        addLampIfFree(plaza.x, plaza.y + radius);
+      }
+      // Lamps along main road (horizontal and vertical)
+      for (let x = 2; x < W - 2; x += 6) addLampIfFree(x, gate.y);
+      for (let y = 2; y < H - 2; y += 6) addLampIfFree(plaza.x, y);
+      // Random scatter near roads
+      let extra = 18, attempts = 0;
+      while (extra > 0 && attempts++ < 400) {
+        const x = randInt(2, W - 3);
+        const y = randInt(2, H - 3);
+        // Prefer tiles near roads: check if same row as a road or same column
+        const nearMain = (y === gate.y) || (x === plaza.x);
+        const nearGrid = (y % 8 === 6) || (x % 10 === 6);
+        if ((nearMain || nearGrid) && addLampIfFree(x, y)) {
+          extra--;
+        }
+      }
     }
 
     // Town NPCs around plaza and along main road, avoid player adjacency
