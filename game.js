@@ -686,8 +686,25 @@
   }
 
   function saveCurrentDungeonState() {
+    const ctx = getCtx();
     if (window.DungeonState && typeof DungeonState.save === "function") {
-      DungeonState.save(getCtx());
+      // Persist via module (in-memory and localStorage)
+      DungeonState.save(ctx);
+      // Also persist to local in-memory store for redundancy
+      if (mode === "dungeon" && currentDungeon && dungeonExitAt) {
+        const key = dungeonKeyFromWorldPos(currentDungeon.x, currentDungeon.y);
+        dungeonStates[key] = {
+          map,
+          seen,
+          visible,
+          enemies,
+          corpses,
+          decals,
+          dungeonExitAt: { x: dungeonExitAt.x, y: dungeonExitAt.y },
+          info: currentDungeon,
+          level: floor
+        };
+      }
       return;
     }
     if (mode !== "dungeon" || !currentDungeon || !dungeonExitAt) return;
