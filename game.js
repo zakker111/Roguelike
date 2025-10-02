@@ -2603,10 +2603,21 @@
         corpses = [];
         decals = [];
         map = world.map;
-        if (worldReturnPos) {
-          player.x = worldReturnPos.x;
-          player.y = worldReturnPos.y;
+        // Restore exact overworld position:
+        let rx = (worldReturnPos && typeof worldReturnPos.x === "number") ? worldReturnPos.x : null;
+        let ry = (worldReturnPos && typeof worldReturnPos.y === "number") ? worldReturnPos.y : null;
+        if (rx == null || ry == null) {
+          const info = currentDungeon;
+          if (info && typeof info.x === "number" && typeof info.y === "number") {
+            rx = info.x; ry = info.y;
+          }
         }
+        if (rx == null || ry == null) {
+          rx = Math.max(0, Math.min(world.map[0].length - 1, player.x));
+          ry = Math.max(0, Math.min(world.map.length - 1, player.y));
+        }
+        player.x = rx; player.y = ry;
+
         recomputeFOV();
         updateCamera();
         updateUI();

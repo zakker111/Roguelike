@@ -179,10 +179,23 @@
         ctx.corpses.length = 0;
         ctx.decals.length = 0;
         ctx.map = ctx.world.map;
-        if (ctx.worldReturnPos) {
-          ctx.player.x = ctx.worldReturnPos.x;
-          ctx.player.y = ctx.worldReturnPos.y;
+        // Restore exact overworld position:
+        // Prefer stored worldReturnPos; otherwise fall back to known dungeon entrance coords.
+        let rx = (ctx.worldReturnPos && typeof ctx.worldReturnPos.x === "number") ? ctx.worldReturnPos.x : null;
+        let ry = (ctx.worldReturnPos && typeof ctx.worldReturnPos.y === "number") ? ctx.worldReturnPos.y : null;
+        if (rx == null || ry == null) {
+          const info = ctx.dungeon || ctx.dungeonInfo;
+          if (info && typeof info.x === "number" && typeof info.y === "number") {
+            rx = info.x; ry = info.y;
+          }
         }
+        // Final safety: clamp to map bounds
+        if (rx == null || ry == null) {
+          rx = Math.max(0, Math.min(ctx.world.map[0].length - 1, ctx.player.x));
+          ry = Math.max(0, Math.min(ctx.world.map.length - 1, ctx.player.y));
+        }
+        ctx.player.x = rx; ctx.player.y = ry;
+
         if (ctx.FOV && typeof FOV.recomputeFOV === "function") {
           FOV.recomputeFOV(ctx);
         }
