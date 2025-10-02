@@ -10,6 +10,10 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v1.7.1 — Checkpoint 1
+- Established a baseline checkpoint capturing the current architecture state (services, mode managers, occupancy grid).
+- Refer to CHECKPOINTS.md for a snapshot summary of modules and integration status.
+
 v1.7 — Mode Managers and Occupancy Grid
 - Added: occupancy_grid.js — shared OccupancyGrid with enemy/NPC/prop sets and isFree(x,y). Exposed via ctx.occupancy.
 - Changed: ai.js — prefers ctx.occupancy when available for fast isFree checks; falls back to per-turn set.
