@@ -1312,51 +1312,81 @@
         return bx > b.x && bx < b.x + b.w - 1 && by > b.y && by < b.y + b.h - 1;
       }
 
-      function makeTavernIn(b) {
+      // Create a combined Inn/Tavern: large open bar area plus 4–10 small rooms with beds.
+      function makeInnTavernIn(b) {
         const door = getExistingDoor(b);
-        // First tavern becomes global shelter
-        if (!tavern) tavern = { building: b, door };
+        // First inn/tavern becomes global shelter
+        if (!tavern) tavern = { building: b, door, beds: [] };
 
-        // Bar desk just inside the door
+        // Make double-door for inns: add a second adjacent door tile on the same wall side
+        (function addDoubleDoor() {
+          const isTop = (door.y === b.y);
+          const isBottom = (door.y === b.y + b.h - 1);
+          const isLeft = (door.x === b.x);
+          const isRight = (door.x === b.x + b.w - 1);
+          let nx = door.x, ny = door.y;
+          if (isTop || isBottom) {
+            // Horizontal neighbor on border
+            if (door.x + 1 < b.x + b.w - 1) { nx = door.x + 1; ny = door.y; }
+            else if (door.x - 1 > b.x) { nx = door.x - 1; ny = door.y; }
+          } else if (isLeft || isRight) {
+            // Vertical neighbor on border
+            if (door.y + 1 < b.y + b.h - 1) { nx = door.x; ny = door.y + 1; }
+            else if (door.y - 1 > b.y) { nx = door.x; ny = door.y - 1; }
+          }
+          if (inBounds(nx, ny) && map[ny][nx] === TILES.WALL) {
+            map[ny][nx] = TILES.DOOR;
+          }
+        })();
+
+        // Determine bar open area: near door, carve a rectangular open space
+        const innerMinX = b.x + 1, innerMaxX = b.x + b.w - 2;
+        const innerMinY = b.y + 1, innerMaxY = b.y + b.h - 2;
+
+        // Shop marker (always open) with building reference, named "Inn" to represent combined inn/tavern.
         const inward = [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }];
         let deskPos = null;
-
-        // Shop marker (always open) with building reference
-        shops.push({
-          x: door.x, y: door.y, type: "shop", name: "Tavern",
-          openMin: 0, closeMin: 0, alwaysOpen: true,
-          building: { x: b.x, y: b.y, w: b.w, h: b.h, door: { x: door.x, y: door.y } },
-          inside: deskPos || { x: Math.max(b.x + 1, Math.min(b.x + b.w - 2, door.x)), y: Math.max(b.y + 1, Math.min(b.y + b.h - 2, door.y)) }
-        });
-        addSignNear(door.x, door.y, "Tavern");
         for (const dxy of inward) {
           const ix = door.x + dxy.dx, iy = door.y + dxy.dy;
           if (isInside(ix, iy, b) && map[iy][ix] === TILES.FLOOR) { deskPos = { x: ix, y: iy }; break; }
         }
         if (!deskPos) {
-          deskPos = { x: Math.max(b.x + 1, Math.min(b.x + b.w - 2, door.x)), y: Math.max(b.y + 1, Math.min(b.y + b.h - 2, door.y)) };
+          deskPos = { x: Math.max(innerMinX, Math.min(innerMaxX, door.x)), y: Math.max(innerMinY, Math.min(innerMaxY, door.y)) };
         }
-        addProp(deskPos.x, deskPos.y, "table", "Bar Desk");
+        shops.push({
+          x: door.x, y: door.y, type: "shop", name: "Inn",
+          openMin: 0, closeMin: 0, alwaysOpen: true,
+          building: { x: b.x, y: b.y, w: b.w, h: b.h, door: { x: door.x, y: door.y } },
+          inside: deskPos
+        });
+        addSignNear(door.x, door.y, "Inn");
 
-        // Benches
-        let benchesPlaced = 0, triesB = 0;
-        while (benchesPlaced < 8 && triesB++ < 300) {
-          const bx = randInt(b.x + 1, b.x + b.w - 2);
-          const by = randInt(b.y + 1, b.y + b.h - 2);
-          if (map[by][bx] !== TILES.FLOOR) continue;
-          if (townProps.some(p => p.x === bx && p.y === by)) continue;
-          addProp(bx, by, "bench", "Bench");
-          benchesPlaced++;
+        // Bar counter
+        addProp(deskPos.x, deskPos.y, "table", "Bar Counter");
+
+        // Define bar area size proportional to building
+        const barW = Math.max(8, Math.min(16, Math.floor(b.w * 0.6)));
+        const barH = Math.max(6, Math.min(10, Math.floor(b.h * 0.5)));
+        const barX1 = Math.max(innerMinX, Math.min(innerMaxX - barW + 1, deskPos.x - Math.floor(barW / 2)));
+        const barY1 = Math.max(innerMinY, Math.min(innerMaxY - barH + 1, deskPos.y - Math.floor(barH / 2)));
+        for (let yy = barY1; yy < barY1 + barH; yy++) {
+          for (let xx = barX1; xx < barX1 + barW; xx++) {
+            if (!isInside(xx, yy, b)) continue;
+            // ensure floor open space
+            if (map[yy][xx] === TILES.WALL) map[yy][xx] = TILES.FLOOR;
+          }
         }
 
-        // Cozy interior: fireplace, tables/chairs, rugs, barrels
-        (function addCozyInterior() {
-          // fireplace against inner wall
+        // Furnish bar area: benches, tables, chairs, rugs, barrels, fireplace on inner wall
+        (function furnishBar() {
+          // fireplace against inner wall near bar
           const borderAdj = [];
-          for (let yy = b.y + 1; yy < b.y + b.h - 1; yy++) {
-            for (let xx = b.x + 1; xx < b.x + b.w - 1; xx++) {
+          for (let yy = innerMinY; yy <= innerMaxY; yy++) {
+            for (let xx = innerMinX; xx <= innerMaxX; xx++) {
+              const inBar = (yy >= barY1 && yy < barY1 + barH && xx >= barX1 && xx < barX1 + barW);
+              if (!inBar) continue;
               if (map[yy][xx] !== TILES.FLOOR) continue;
-              if (map[yy - 1][xx] === TILES.WALL || map[yy + 1][xx] === TILES.WALL || map[yy][xx - 1] === TILES.WALL || map[yy][xx + 1] === TILES.WALL) {
+              if (map[yy - 1]?.[xx] === TILES.WALL || map[yy + 1]?.[xx] === TILES.WALL || map[yy]?.[xx - 1] === TILES.WALL || map[yy]?.[xx + 1] === TILES.WALL) {
                 borderAdj.push({ x: xx, y: yy });
               }
             }
@@ -1365,22 +1395,33 @@
             const f = borderAdj[randInt(0, borderAdj.length - 1)];
             if (!townProps.some(p => p.x === f.x && p.y === f.y)) addProp(f.x, f.y, "fireplace", "Fireplace");
           }
-          // extra tables and chairs
+
+          let benchesPlaced = 0, triesB = 0;
+          const benchTarget = Math.min(10, Math.max(6, Math.floor((barW * barH) / 12)));
+          while (benchesPlaced < benchTarget && triesB++ < 300) {
+            const bx = randInt(barX1, barX1 + barW - 1);
+            const by = randInt(barY1, barY1 + barH - 1);
+            if (map[by][bx] !== TILES.FLOOR) continue;
+            if (townProps.some(p => p.x === bx && p.y === by)) continue;
+            addProp(bx, by, "bench", "Bench");
+            benchesPlaced++;
+          }
+          // tables and chairs
           let tables = 0, triesT = 0;
-          const tableTarget = 2;
-          while (tables < tableTarget && triesT++ < 120) {
-            const tx = randInt(b.x + 1, b.x + b.w - 2);
-            const ty = randInt(b.y + 1, b.y + b.h - 2);
+          const tableTarget = Math.min(5, Math.max(2, Math.floor(barW / 4)));
+          while (tables < tableTarget && triesT++ < 160) {
+            const tx = randInt(barX1, barX1 + barW - 1);
+            const ty = randInt(barY1, barY1 + barH - 1);
             if (map[ty][tx] !== TILES.FLOOR) continue;
             if (townProps.some(p => p.x === tx && p.y === ty)) continue;
             addProp(tx, ty, "table", "Table");
             tables++;
           }
           let chairs = 0, triesC = 0;
-          const chairTarget = 4;
-          while (chairs < chairTarget && triesC++ < 160) {
-            const cx = randInt(b.x + 1, b.x + b.w - 2);
-            const cy = randInt(b.y + 1, b.y + b.h - 2);
+          const chairTarget = tableTarget * 2;
+          while (chairs < chairTarget && triesC++ < 200) {
+            const cx = randInt(barX1, barX1 + barW - 1);
+            const cy = randInt(barY1, barY1 + barH - 1);
             if (map[cy][cx] !== TILES.FLOOR) continue;
             if (townProps.some(p => p.x === cx && p.y === cy)) continue;
             addProp(cx, cy, "chair", "Chair");
@@ -1388,21 +1429,21 @@
           }
           // rugs
           let rugs = 0, triesR = 0;
-          const rugTarget = 3;
+          const rugTarget = Math.min(4, Math.max(2, Math.floor(barW / 6)));
           while (rugs < rugTarget && triesR++ < 120) {
-            const rx = randInt(b.x + 1, b.x + b.w - 2);
-            const ry = randInt(b.y + 1, b.y + b.h - 2);
+            const rx = randInt(barX1, barX1 + barW - 1);
+            const ry = randInt(barY1, barY1 + barH - 1);
             if (map[ry][rx] !== TILES.FLOOR) continue;
             if (townProps.some(p => p.x === rx && p.y === ry)) continue;
             addProp(rx, ry, "rug", "Rug");
             rugs++;
           }
-          // barrels near walls
+          // barrels near walls in bar area
           let barrels = 0, triesBrl = 0;
-          const barrelTarget = 4;
-          while (barrels < barrelTarget && triesBrl++ < 200) {
-            const bx = randInt(b.x + 1, b.x + b.w - 2);
-            const by = randInt(b.y + 1, b.y + b.h - 2);
+          const barrelTarget = Math.min(6, Math.max(3, Math.floor(barW / 5)));
+          while (barrels < barrelTarget && triesBrl++ < 220) {
+            const bx = randInt(barX1, barX1 + barW - 1);
+            const by = randInt(barY1, barY1 + barH - 1);
             if (map[by][bx] !== TILES.FLOOR) continue;
             if (townProps.some(p => p.x === bx && p.y === by)) continue;
             addProp(bx, by, "barrel", "Barrel");
@@ -1410,34 +1451,86 @@
           }
         })();
 
-        // Beds: 5–10
-        let bedsPlaced = 0, triesBed = 0;
-        const bedTarget = randInt(5, 10);
-        while (bedsPlaced < bedTarget && triesBed++ < 800) {
-          const bx = randInt(b.x + 1, b.x + b.w - 2);
-          const by = randInt(b.y + 1, b.y + b.h - 2);
-          if (map[by][bx] !== TILES.FLOOR) continue;
-          if (townProps.some(p => p.x === bx && p.y === by)) continue;
-          addProp(bx, by, "bed", "Tavern Bed");
-          bedsPlaced++;
+        // Create rooms grid along one side (prefer opposite side from bar)
+        const rooms = randInt(6, 12);
+        // Choose corridor position and orientation
+        const corridorOnTop = (deskPos.y < (b.y + b.h / 2));
+        const corrY = corridorOnTop ? innerMinY + 1 : innerMaxY - 2;
+        for (let xx = innerMinX; xx <= innerMaxX; xx++) {
+          // Carve corridor line
+          if (map[corrY][xx] === TILES.WALL) map[corrY][xx] = TILES.FLOOR;
+        }
+
+        // Rooms below (if corridor on top) or above (if corridor on bottom)
+        const roomBandY1 = corridorOnTop ? corrY + 1 : innerMinY;
+        const roomBandY2 = corridorOnTop ? innerMaxY : corrY - 1;
+
+        // Partition horizontally into rooms
+        const bandHeight = roomBandY2 - roomBandY1 + 1;
+        const minRoomW = 4, maxRoomW = 6, roomH = Math.max(3, Math.min(5, bandHeight));
+        let xCursor = innerMinX;
+        let createdRooms = 0;
+        while (xCursor + minRoomW - 1 <= innerMaxX && createdRooms < rooms) {
+          const w = Math.min(maxRoomW, Math.max(minRoomW, randInt(minRoomW, maxRoomW)));
+          const rx1 = xCursor;
+          const rx2 = Math.min(innerMaxX, rx1 + w - 1);
+          xCursor = rx2 + 1;
+          // Skip overlap with bar area significantly
+          const overlapsBar = !(rx2 < barX1 || rx1 > (barX1 + barW - 1));
+          if (overlapsBar && rng() < 0.7) continue;
+
+          const ry1 = roomBandY1;
+          const ry2 = Math.min(roomBandY1 + roomH - 1, roomBandY2);
+          if (ry2 - ry1 < 2) continue;
+
+          // Build room walls (hollow)
+          for (let yy = ry1; yy <= ry2; yy++) {
+            for (let xx = rx1; xx <= rx2; xx++) {
+              if (!isInside(xx, yy, b)) continue;
+              const isBorder = (yy === ry1 || yy === ry2 || xx === rx1 || xx === rx2);
+              map[yy][xx] = isBorder ? TILES.WALL : TILES.FLOOR;
+            }
+          }
+          // Door from corridor
+          const doorX = randInt(rx1 + 1, rx2 - 1);
+          const doorY = corridorOnTop ? ry1 : ry2;
+          if (isInside(doorX, doorY, b)) map[doorY][doorX] = TILES.DOOR;
+
+          // Bed inside room
+          let bedPlaced = false, attempts = 0;
+          while (!bedPlaced && attempts++ < 60) {
+            const bx = randInt(rx1 + 1, rx2 - 1);
+            const by = randInt(ry1 + 1, ry2 - 1);
+            if (map[by][bx] !== TILES.FLOOR) continue;
+            if (townProps.some(p => p.x === bx && p.y === by)) continue;
+            addProp(bx, by, "bed", "Inn Bed");
+            tavern.beds.push({ x: bx, y: by });
+            bedPlaced = true;
+          }
+
+          createdRooms++;
         }
 
         // Barkeeper NPC
-        const kp = deskPosFor(b, door) || door;
+        const kp = deskPosFor(b, door, corridorOnTop, corrY) || door;
         npcs.push({
           x: kp.x, y: kp.y,
           name: "Barkeep",
-          lines: ["Welcome to the tavern.", "Grab a seat.", "Ale's fresh today."],
+          lines: ["Welcome to the inn.", "Grab a seat.", "Beds upstairs are ready."],
           isBarkeeper: true,
           _work: { x: kp.x, y: kp.y },
         });
 
-        function deskPosFor(b, door) {
+        function deskPosFor(b, door, top, cy) {
           const dirs = [{dx:0,dy:1},{dx:0,dy:-1},{dx:1,dy:0},{dx:-1,dy:0}];
           for (const d of dirs) {
             const ix = door.x + d.dx, iy = door.y + d.dy;
             if (isInside(ix, iy, b) && map[iy][ix] === TILES.FLOOR) return { x: ix, y: iy };
           }
+          // fallback near corridor
+          const ix = Math.max(innerMinX, Math.min(innerMaxX, door.x));
+          const iy = cy;
+          if (isInside(ix, iy, b) && map[iy][ix] === TILES.FLOOR) return { x: ix, y: iy };
           return null;
         }
       }
@@ -1448,16 +1541,16 @@
       // Use existing buildings first
       for (const b of candidates) {
         if (created >= desiredCount) break;
-        // Skip very tiny interiors
-        if (b.w * b.h < 20) continue;
-        // If a tavern shop already exists here, skip
-        const hasTavernShop = shops.some(s => s.name === "Tavern" && s.building && s.building.x === b.x && s.building.y === b.y && s.building.w === b.w && s.building.h === b.h);
-        if (hasTavernShop) continue;
-        makeTavernIn(b);
+        // Require larger than a typical house for inns
+        if ((b.w * b.h) < 60) continue;
+        // If an inn shop already exists here, skip
+        const hasInnShop = shops.some(s => s.name === "Inn" && s.building && s.building.x === b.x && s.building.y === b.y && s.building.w === b.w && s.building.h === b.h);
+        if (hasInnShop) continue;
+        makeInnTavernIn(b);
         created++;
       }
 
-      // If not enough, create new compact buildings near plaza edges
+      // If not enough, create new larger buildings near plaza edges
       const need = desiredCount - created;
       const tryPositions = [
         { x: plaza.x - 12, y: plaza.y - 6 },
@@ -1468,11 +1561,11 @@
       let pi = 0;
       for (let k = 0; k < need; k++) {
         let placedB = null;
-        for (let tries = 0; tries < 40 && !placedB; tries++) {
+        for (let tries = 0; tries < 80 && !placedB; tries++) {
           const pos = tryPositions[pi++ % tryPositions.length];
-          // Choose a modest size with at least 4x3 interior
-          const bw = randInt(7, 9);
-          const bh = randInt(5, 7);
+          // Choose a bigger size with at least 8x6 interior
+          const bw = randInt(12, 16);
+          const bh = randInt(10, 14);
           const bx = Math.max(2, Math.min(W - bw - 2, pos.x + randInt(-2, 2)));
           const by = Math.max(2, Math.min(H - bh - 2, pos.y + randInt(-2, 2)));
           // Check area clear (avoid roads/windows/doors)
@@ -1487,9 +1580,15 @@
           placedB = newB;
         }
         if (placedB) {
-          makeTavernIn(placedB);
+          makeInnTavernIn(placedB);
         }
       }
+
+      // Log summary for visibility
+      try {
+        const innCount = shops.filter(s => (s.name || "").toLowerCase().includes("inn")).length;
+        log(`Town has ${innCount} inn(s).`, innCount ? "info" : "warn");
+      } catch (_) {}
     })();
 
     // Plaza fixtures
@@ -1754,9 +1853,9 @@
             // Pets: keep behavior light, let some stay outside
             if (n.isPet) continue;
 
-            // Some NPCs stay at tavern/plaza
+            // Some NPCs stay at inn/tavern or plaza
             if (keepOut.has(i)) {
-              // Prefer tavern door if present; else near plaza
+              // Prefer inn/tavern door if present; else near plaza
               if (tavern && tavern.door && isFreeTownFloor(tavern.door.x, tavern.door.y)) {
                 n.x = tavern.door.x; n.y = tavern.door.y;
                 occupied.add(occKey(n.x, n.y));
@@ -1796,6 +1895,30 @@
             // If no home/building info, leave as-is but ensure visibility if near the player
             if (visible[n.y] && typeof visible[n.y][n.x] !== "undefined") visible[n.y][n.x] = true;
             if (seen[n.y] && typeof seen[n.y][n.x] !== "undefined") seen[n.y][n.x] = true;
+          }
+
+          // Occasionally, 1–2 NPCs choose to sleep at the inn/tavern
+          if (tavern && Array.isArray(tavern.beds) && tavern.beds.length) {
+            const sleepers = rng() < 0.8 ? randInt(1, 2) : 1;
+            const candidates = npcs.filter(n => !n.isPet && !n.isBarkeeper && !n._sleeping);
+            // pick unique random indices
+            for (let s = 0; s < sleepers && candidates.length; s++) {
+              const idx = randInt(0, candidates.length - 1);
+              const npc = candidates.splice(idx, 1)[0];
+              // find a free bed
+              let bedSpot = null;
+              for (const bpos of tavern.beds) {
+                const k = occKey(bpos.x, bpos.y);
+                if (!occupied.has(k) && isFreeTownFloor(bpos.x, bpos.y)) { bedSpot = bpos; break; }
+              }
+              if (bedSpot) {
+                npc.x = bedSpot.x; npc.y = bedSpot.y;
+                npc._sleeping = true;
+                occupied.add(occKey(npc.x, npc.y));
+                if (visible[npc.y] && typeof visible[npc.y][npc.x] !== "undefined") visible[npc.y][npc.x] = true;
+                if (seen[npc.y] && typeof seen[npc.y][npc.x] !== "undefined") seen[npc.y][npc.x] = true;
+              }
+            }
           }
         } catch (_) {}
       })();
@@ -2816,19 +2939,21 @@
               return;
             }
             if (window.TownAI && typeof TownAI.checkHomeRoutes === "function") {
-              const res = TownAI.checkHomeRoutes(ctx);
-              const totalChecked = (typeof res.total === "number") ? res.total : (res.reachable + res.unreachable);
+              const res = TownAI.checkHomeRoutes(ctx) || {};
+              const totalChecked = (typeof res.total === "number")
+                ? res.total
+                : ((res.reachable || 0) + (res.unreachable || 0));
               const skippedStr = res.skipped ? `, ${res.skipped} skipped` : "";
-              const summaryLine = `Home route check: ${res.reachable}/${totalChecked} reachable, ${res.unreachable} unreachable${skippedStr}.`;
-              log(summaryLine, res.unreachable ? "warn" : "good");
+              const summaryLine = `Home route check: ${(res.reachable || 0)}/${totalChecked} reachable, ${(res.unreachable || 0)} unreachable${skippedStr}.`;
+              log(summaryLine, (res.unreachable || 0) ? "warn" : "good");
               let extraLines = [];
               if (res.residents && typeof res.residents.total === "number") {
                 const r = res.residents;
-                extraLines.push(`Residents: ${r.atHome}/${r.total} at home, ${r.atTavern}/${r.total} at tavern.`);
+                extraLines.push(`Residents: ${r.atHome}/${r.total} at home, ${r.atInn}/${r.total} at inn.`);
               }
               // Per-resident list of late-night away residents
               if (Array.isArray(res.residentsAwayLate) && res.residentsAwayLate.length) {
-                extraLines.push(`Late-night (02:00–05:00): ${res.residentsAwayLate.length} resident(s) away from home and tavern:`);
+                extraLines.push(`Late-night (02:00–05:00): ${res.residentsAwayLate.length} resident(s) away from home and inn:`);
                 res.residentsAwayLate.slice(0, 10).forEach(d => {
                   extraLines.push(`- ${d.name} at (${d.x},${d.y})`);
                 });
@@ -2864,19 +2989,15 @@
           onGodCheckInnTavern: () => {
             const ctx = getCtx();
             if (ctx.mode !== "town") {
-              log("Inn/Tavern check is available in town mode only.", "warn");
+              log("Inn check is available in town mode only.", "warn");
               requestDraw();
               return;
             }
             const list = Array.isArray(shops) ? shops : [];
             const inns = list.filter(s => (s.name || "").toLowerCase().includes("inn"));
-            const taverns = list.filter(s => (s.name || "").toLowerCase().includes("tavern"));
-            const line = `Inn/Tavern: ${taverns.length} tavern(s), ${inns.length} inn(s).`;
-            log(line, (taverns.length || inns.length) ? "info" : "warn");
+            const line = `Inn: ${inns.length} inn(s).`;
+            log(line, inns.length ? "info" : "warn");
             const lines = [];
-            taverns.slice(0, 6).forEach((s, i) => {
-              lines.push(`- Tavern ${i + 1} at door (${s.x},${s.y})`);
-            });
             inns.slice(0, 6).forEach((s, i) => {
               lines.push(`- Inn ${i + 1} at door (${s.x},${s.y})`);
             });
