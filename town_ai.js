@@ -833,8 +833,108 @@
     }
   }
 
+  function checkHomeRoutes(ctx, opts = {}) {
+    const res = { total: 0, reachable: 0, unreachable: 0, skipped: 0, details: [] };
+    const npcs = Array.isArray(ctx.npcs) ? ctx.npcs : [];
+
+    // Helper: skip NPCs that are not expected to have homes (e.g., pets)
+    function shouldSkip(n) {
+      return !!n.isPet;
+    }
+
+    // Occupancy for theoretical pathing: ignore props entirely so we only test map geometry (walls/doors)
+    const emptyOcc = new Set();
+
+    function computeHomePathStandalone(ctx, n) {
+      if (!n._home || !n._home.building) return null;
+      const B = n._home.building;
+      let targetInside = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+      targetInside = adjustInteriorTarget(ctx, B, targetInside);
+
+      const insideNow = insideBuilding(B, n.x, n.y);
+      if (!insideNow) {
+        const door = B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null);
+        if (!door) return null;
+        const p1 = computePath(ctx, emptyOcc, n.x, n.y, door.x, door.y);
+
+        // pick a spot just inside the building for stage 2
+        let inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B);
+        if (!inSpot) {
+          // deterministic fallback: first free interior spot
+          for (let y = B.y + 1; y < B.y + B.h - 1 && !inSpot; y++) {
+            for (let x = B.x + 1; x < B.x + B.w - 1 && !inSpot; x++) {
+              if (ctx.map[y][x] !== ctx.TILES.FLOOR) continue;
+              inSpot = { x, y };
+            }
+          }
+        }
+        inSpot = inSpot || targetInside || { x: door.x, y: door.y };
+        const p2 = computePath(ctx, emptyOcc, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
+
+        // concat without duplicating the connecting node
+        const path = (function concatPaths(a, b) {
+          if (!a || !b) return a || b || null;
+          if (a.length === 0) return b.slice(0);
+          if (b.length === 0) return a.slice(0);
+          const res0 = a.slice(0);
+          const firstB = b[0];
+          const lastA = a[a.length - 1];
+          const skipFirst = (firstB.x === lastA.x && firstB.y === lastA.y);
+          for (let i = skipFirst ? 1 : 0; i < b.length; i++) res0.push(b[i]);
+          return res0;
+        })(p1, p2);
+        return (path && path.length >= 2) ? path : null;
+      } else {
+        const path = computePath(ctx, emptyOcc, n.x, n.y, targetInside.x, targetInside.y);
+        return (path && path.length >= 2) ? path : null;
+      }
+    }
+
+    for (let i = 0; i < npcs.length; i++) {
+      const n = npcs[i];
+
+      if (shouldSkip(n)) {
+        res.skipped++;
+        continue;
+      }
+
+      // Ensure each NPC has a home before checking
+      try { ensureHome(ctx, n); } catch (_) {}
+
+      if (!n._home || !n._home.building) {
+        res.unreachable++;
+        res.details.push({
+          index: i,
+          name: typeof n.name === "string" ? n.name : `NPC ${i + 1}`,
+          reason: "no-home",
+        });
+        continue;
+      }
+
+      const path = computeHomePathStandalone(ctx, n);
+      if (path && path.length >= 2) {
+        res.reachable++;
+        // store for render if desired
+        n._homeDebugPath = path.slice(0);
+      } else {
+        res.unreachable++;
+        n._homeDebugPath = null;
+        res.details.push({
+          index: i,
+          name: typeof n.name === "string" ? n.name : `NPC ${i + 1}`,
+          reason: "no-path",
+        });
+      }
+    }
+
+    // total = checked NPCs (excluding skipped like pets)
+    res.total = Math.max(0, npcs.length - res.skipped);
+    return res;
+  }
+
   window.TownAI = {
     populateTown,
     townNPCsAct,
+    checkHomeRoutes,
   };
 })();
