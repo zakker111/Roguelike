@@ -459,7 +459,9 @@
     }
     // Assign a personalized home-depart minute within 18:00-21:00 to stagger returns
     if (typeof n._homeDepartMin !== "number") {
-      n._homeDepartMin = randInt(ctx, 18 * 60, 21 * 60); // 1080..126
+      n._homeDepartMin = randInt(ctx, 18 * 60, 21 * 60); // 1080..1260
+    }
+  }
 
   function townNPCsAct(ctx) {
     const { npcs, player, townProps } = ctx;
@@ -814,33 +816,13 @@
             }
           } else {
             // Go home strictly along a planned path; wait if blocked
-            const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-            if (!n._homePlan || !n._homePlanGoal) {
-              ensureHomePlan(ctx, occ, n);
-            }
-            handled = followHomePlan(ctx, occ, n);
-            if (!handled) {
-              // Fallback: route via door
-              handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
-            }
-          }
-        }
+            const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y 
 
         if (handled) continue;
 
         // idle jiggle
         if (ctx.rng() < 0.9) continue;
-      }
-          } else {
-            handled = false; // not time to go home yet; idle
-          }
-        }
-
-        if (handled) continue;
-
-        // idle jiggle
-        if (ctx.rng() < 0.9) continue;
-      }
+      
 
       // Residents: sleep system
       if (n.isResident) {
@@ -899,17 +881,7 @@
           }
         } else if (phase === "morning") {
           if (n._home && n._home.building) {
-            const homeTarget = { x: n._home.x, y: n._home.y };
-            if (!n._homePlan || !n._homePlanGoal) {
-              ensureHomePlan(ctx, occ, n);
-            }
-            if (followHomePlan(ctx, occ, n)) continue;
-            if (routeIntoBuilding(ctx, occ, n, n._home.building, homeTarget)) continue;
-          }
-        }
-        stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
-        continue;
-      };
+            const homeTarget = { x: n._home.x, y: n._home.y ;
             if (!n._homePlan || !n._homePlanGoal) {
               ensureHomePlan(ctx, occ, n);
             }
