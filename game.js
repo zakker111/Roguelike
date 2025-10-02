@@ -702,7 +702,27 @@
 
   function loadDungeonStateFor(x, y) {
     if (window.DungeonState && typeof DungeonState.load === "function") {
-      return DungeonState.load(getCtx(), x, y);
+      const ctx = getCtx();
+      const handled = DungeonState.load(ctx, x, y);
+      if (handled) {
+        // Sync mutated ctx back into local state
+        mode = ctx.mode || mode;
+        map = ctx.map || map;
+        seen = ctx.seen || seen;
+        visible = ctx.visible || visible;
+        enemies = Array.isArray(ctx.enemies) ? ctx.enemies : enemies;
+        corpses = Array.isArray(ctx.corpses) ? ctx.corpses : corpses;
+        decals = Array.isArray(ctx.decals) ? ctx.decals : decals;
+        dungeonExitAt = ctx.dungeonExitAt || dungeonExitAt;
+        currentDungeon = ctx.dungeonInfo || currentDungeon;
+        if (typeof ctx.floor === "number") { floor = ctx.floor | 0; window.floor = floor; }
+        updateCamera();
+        recomputeFOV();
+        updateUI();
+        requestDraw();
+        return true;
+      }
+      // If module did not handle, fall through to local memory
     }
     const key = dungeonKeyFromWorldPos(x, y);
     const st = dungeonStates[key];
