@@ -457,7 +457,9 @@
         y: Math.max(1, Math.min(ctx.map.length - 2, townPlaza.y + randInt(ctx, -2, 2))),
       };
     }
-  }
+    // Assign a personalized home-depart minute within 18:00-21:00 to stagger returns
+    if (typeof n._homeDepartMin !== "number") {
+      n._homeDepartMin = randInt(ctx, 18 * 60, 21 * 60); // 1080..126
 
   function townNPCsAct(ctx) {
     const { npcs, player, townProps } = ctx;
@@ -756,7 +758,15 @@
     for (const idx of order) {
       const n = npcs[idx];
       ensureHome(ctx, n);
-      ensureHomeStart(n);
+
+      // Daily scheduling: reset stagger assignment at dawn, assign in morning if missing
+      if (t && t.phase === "dawn") {
+        n._departAssignedForDay = false;
+      }
+      if (t && t.phase === "morning" && !n._departAssignedForDay) {
+        n._homeDepartMin = randInt(ctx, 18 * 60, 21 * 60); // 18:00..21:00
+        n._departAssignedForDay = true;
+      }
 
       // Decay any per-NPC cooldown counters each turn
       if (n._homePlanCooldown && n._homePlanCooldown > 0) {
@@ -788,8 +798,22 @@
             handled = stepTowards(ctx, occ, n, n._work.x, n._work.y);
           }
         } else if (n._home && n._home.building) {
-          // Staggered off hours: only start heading home once past personal threshold
-          if (typeof n._homeStartMin === "number" && minutes >= n._homeStartMin) {
+          // Off hours: stagger departure between 18:00-21:00
+          const departReady = typeof n._homeDepartMin === "number" ? (minutes >= n._homeDepartMin) : true;
+          if (!departReady) {
+            // Not yet time: linger around shop door or nearby plaza
+            const linger = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
+            if (linger) {
+              if (n.x === linger.x && n.y === linger.y) {
+                if (ctx.rng() < 0.9) continue;
+                stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+              } else {
+                stepTowards(ctx, occ, n, linger.x, linger.y);
+              }
+              handled = true;
+            }
+          } else {
+            // Go home strictly along a planned path; wait if blocked
             const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
             if (!n._homePlan || !n._homePlanGoal) {
               ensureHomePlan(ctx, occ, n);
@@ -799,6 +823,14 @@
               // Fallback: route via door
               handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
             }
+          }
+        }
+
+        if (handled) continue;
+
+        // idle jiggle
+        if (ctx.rng() < 0.9) continue;
+      }
           } else {
             handled = false; // not time to go home yet; idle
           }
@@ -810,22 +842,31 @@
         if (ctx.rng() < 0.9) continue;
       }
 
-      // Residents: sleep system with staggered start
+      // Residents: sleep system
       if (n.isResident) {
-        const eveKickIn = minutes >= 17 * 60 + 30; // slight pre-evening push
+        const eveKickIn = minutes >= 17 * 60 + 30; // start pushing home a bit before dusk
         if (n._sleeping) {
           if (phase === "morning") n._sleeping = false;
           else continue;
         }
         if (phase === "evening" || eveKickIn) {
-          // Only begin heading home once past personal threshold within 18:00–21:00
-          if (typeof n._homeStartMin === "number" && minutes < n._homeStartMin) {
-            // not time yet: minimal wandering
+          // Stagger: only start going home after personal departure minute (18:00..21:00)
+          const departReady = typeof n._homeDepartMin === "number" ? (minutes >= n._homeDepartMin) : true;
+          if (!departReady) {
+            // Not yet time to head home: keep day behavior (work/plaza/idle)
+            const targetLate = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
+            if (targetLate) {
+              if (n.x === targetLate.x && n.y === targetLate.y) {
+                if (ctx.rng() < 0.9) continue;
+                stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+                continue;
+              }
+              stepTowards(ctx, occ, n, targetLate.x, targetLate.y);
+              continue;
+            }
+            // gentle idle
             if (ctx.rng() < 0.8) continue;
-            stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
-            continue;
-          }
-          if (n._home && n._home.building) {
+          } else if (n._home && n._home.building) {
             const bedSpot = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : null;
             const sleepTarget = bedSpot ? bedSpot : { x: n._home.x, y: n._home.y };
             // If at, or adjacent to, the bed spot (or home spot if no bed), go to sleep
@@ -859,6 +900,16 @@
         } else if (phase === "morning") {
           if (n._home && n._home.building) {
             const homeTarget = { x: n._home.x, y: n._home.y };
+            if (!n._homePlan || !n._homePlanGoal) {
+              ensureHomePlan(ctx, occ, n);
+            }
+            if (followHomePlan(ctx, occ, n)) continue;
+            if (routeIntoBuilding(ctx, occ, n, n._home.building, homeTarget)) continue;
+          }
+        }
+        stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+        continue;
+      };
             if (!n._homePlan || !n._homePlanGoal) {
               ensureHomePlan(ctx, occ, n);
             }
