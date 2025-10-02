@@ -162,9 +162,13 @@
     }
 
     if (ctx.mode === "dungeon") {
-      // Using G on the entrance hole returns to the overworld
-      if (ctx.cameFromWorld && ctx.world && ctx.dungeonExitAt &&
-          ctx.player.x === ctx.dungeonExitAt.x && ctx.player.y === ctx.dungeonExitAt.y) {
+      // Return to overworld when on the entrance tile (">") or stairs tile,
+      // regardless of cameFromWorld flag.
+      const onExit =
+        (ctx.dungeonExitAt && ctx.player.x === ctx.dungeonExitAt.x && ctx.player.y === ctx.dungeonExitAt.y) ||
+        (inBounds(ctx, ctx.player.x, ctx.player.y) && ctx.map[ctx.player.y][ctx.player.x] === ctx.TILES.STAIRS);
+
+      if (ctx.world && onExit) {
         // Persist current dungeon state before leaving
         if (ctx.DungeonState && typeof DungeonState.save === "function") {
           DungeonState.save(ctx);
@@ -187,12 +191,15 @@
         ctx.requestDraw();
         return true;
       }
+
       // Dungeon loot via Loot module
       if (ctx.Loot && typeof Loot.lootHere === "function") {
         Loot.lootHere(ctx);
         return true;
       }
-      return false;
+      // Guidance if not at exit
+      ctx.log("Return to the entrance (the hole '>') and press G to leave.", "info");
+      return true;
     }
 
     return false;
