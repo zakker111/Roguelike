@@ -2671,6 +2671,10 @@
               const totalChecked = (typeof res.total === "number") ? res.total : (res.reachable + res.unreachable);
               const skippedStr = res.skipped ? `, ${res.skipped} skipped` : "";
               log(`Home route check: ${res.reachable}/${totalChecked} reachable, ${res.unreachable} unreachable${skippedStr}.`, res.unreachable ? "warn" : "good");
+              if (res.residents && typeof res.residents.total === "number") {
+                const r = res.residents;
+                log(`Residents: ${r.atHome}/${r.total} at home, ${r.atTavern}/${r.total} at tavern.`, "info");
+              }
               if (res.skipped) {
                 log(`Skipped ${res.skipped} NPCs not expected to have homes (e.g., pets).`, "info");
               }

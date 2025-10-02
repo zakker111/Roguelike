@@ -1037,6 +1037,10 @@
     const res = { total: 0, reachable: 0, unreachable: 0, skipped: 0, details: [] };
     const npcs = Array.isArray(ctx.npcs) ? ctx.npcs : [];
 
+    // Track resident presence
+    let residentsTotal = 0, residentsAtHome = 0, residentsAtTavern = 0;
+    const tavernB = (ctx.tavern && ctx.tavern.building) ? ctx.tavern.building : null;
+
     // Helper: skip NPCs that are not expected to have homes (e.g., pets)
     function shouldSkip(n) {
       return !!n.isPet;
@@ -1093,6 +1097,16 @@
     for (let i = 0; i < npcs.length; i++) {
       const n = npcs[i];
 
+      // Count residents' current locations
+      if (n.isResident) {
+        residentsTotal++;
+        if (n._home && n._home.building && insideBuilding(n._home.building, n.x, n.y)) {
+          residentsAtHome++;
+        } else if (tavernB && insideBuilding(tavernB, n.x, n.y)) {
+          residentsAtTavern++;
+        }
+      }
+
       if (shouldSkip(n)) {
         res.skipped++;
         continue;
@@ -1129,6 +1143,7 @@
 
     // total = checked NPCs (excluding skipped like pets)
     res.total = Math.max(0, npcs.length - res.skipped);
+    res.residents = { total: residentsTotal, atHome: residentsAtHome, atTavern: residentsAtTavern };
     return res;
   }
 
