@@ -723,6 +723,7 @@
   }
 
   function loadDungeonStateFor(x, y) {
+    // Try module first
     if (window.DungeonState && typeof DungeonState.load === "function") {
       const ctx = getCtx();
       const handled = DungeonState.load(ctx, x, y);
@@ -744,10 +745,26 @@
         requestDraw();
         return true;
       }
-      // If module did not handle, fall through to local memory
+      // fall through to local memory/LS
     }
+
+    // In-memory fallback
     const key = dungeonKeyFromWorldPos(x, y);
-    const st = dungeonStates[key];
+    let st = dungeonStates[key];
+
+    // LocalStorage fallback (in case module not present or in-memory cleared)
+    if (!st) {
+      try {
+        const raw = localStorage.getItem("DUNGEON_STATES_V1");
+        if (raw) {
+          const obj = JSON.parse(raw);
+          const ls = (obj && typeof obj === "object") ? obj : {};
+          st = ls[key] || null;
+        }
+      } catch (_) {
+        st = null;
+      }
+    }
     if (!st) return false;
 
     mode = "dungeon";
@@ -758,9 +775,9 @@
     map = st.map;
     seen = st.seen;
     visible = st.visible;
-    enemies = st.enemies;
-    corpses = st.corpses;
-    decals = st.decals || [];
+    enemies = Array.isArray(st.enemies) ? st.enemies : [];
+    corpses = Array.isArray(st.corpses) ? st.corpses : [];
+    decals = Array.isArray(st.decals) ? st.decals : [];
     dungeonExitAt = st.dungeonExitAt || { x, y };
 
     // Place player at the entrance hole
