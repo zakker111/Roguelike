@@ -1,4 +1,4 @@
-# Game Version History
+wn# Game Version History
 Last updated: 2025-10-02 00:00 UTC
 
 This file tracks notable changes to the game across iterations. Versions here reflect functional milestones rather than semantic releases.
@@ -191,4 +191,4 @@ Planned / Ideas
 - Shop UI (buy/sell) and currency
 - District themes (market/residential/temple) and signage
 - Movement costs or effects per biome (swamp slow, snow visibility, desert hazard)
-- 
+- More optimization for town ai town ai game lags and is kinda slow for one trun for player
