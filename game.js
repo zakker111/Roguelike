@@ -2154,8 +2154,28 @@
     hideLootPanel();
     // Prefer module
     if (window.Actions && typeof Actions.doAction === "function") {
-      const handled = Actions.doAction(getCtx());
-      if (handled) return;
+      const ctxMod = getCtx();
+      const handled = Actions.doAction(ctxMod);
+      if (handled) {
+        // Sync mutated ctx back into local state to ensure mode/map changes take effect
+        mode = ctxMod.mode || mode;
+        map = ctxMod.map || map;
+        seen = ctxMod.seen || seen;
+        visible = ctxMod.visible || visible;
+        enemies = Array.isArray(ctxMod.enemies) ? ctxMod.enemies : enemies;
+        corpses = Array.isArray(ctxMod.corpses) ? ctxMod.corpses : corpses;
+        decals = Array.isArray(ctxMod.decals) ? ctxMod.decals : decals;
+        worldReturnPos = ctxMod.worldReturnPos || worldReturnPos;
+        townExitAt = ctxMod.townExitAt || townExitAt;
+        dungeonExitAt = ctxMod.dungeonExitAt || dungeonExitAt;
+        currentDungeon = ctxMod.dungeon || ctxMod.dungeonInfo || currentDungeon;
+        if (typeof ctxMod.floor === "number") { floor = ctxMod.floor | 0; window.floor = floor; }
+        updateCamera();
+        recomputeFOV();
+        updateUI();
+        requestDraw();
+        return;
+      }
     }
 
     if (mode === "world") {
@@ -2500,6 +2520,32 @@
 
   function lootCorpse() {
     if (isDead) return;
+    // Prefer module first
+    if (window.Actions && typeof Actions.loot === "function") {
+      const ctxMod = getCtx();
+      const handled = Actions.loot(ctxMod);
+      if (handled) {
+        // Sync mutated ctx back into local state
+        mode = ctxMod.mode || mode;
+        map = ctxMod.map || map;
+        seen = ctxMod.seen || seen;
+        visible = ctxMod.visible || visible;
+        enemies = Array.isArray(ctxMod.enemies) ? ctxMod.enemies : enemies;
+        corpses = Array.isArray(ctxMod.corpses) ? ctxMod.corpses : corpses;
+        decals = Array.isArray(ctxMod.decals) ? ctxMod.decals : decals;
+        worldReturnPos = ctxMod.worldReturnPos || worldReturnPos;
+        townExitAt = ctxMod.townExitAt || townExitAt;
+        dungeonExitAt = ctxMod.dungeonExitAt || dungeonExitAt;
+        currentDungeon = ctxMod.dungeon || ctxMod.dungeonInfo || currentDungeon;
+        if (typeof ctxMod.floor === "number") { floor = ctxMod.floor | 0; window.floor = floor; }
+        updateCamera();
+        recomputeFOV();
+        updateUI();
+        requestDraw();
+        return;
+      }
+    }
+
     if (mode === "town") {
       // Interact with shop if standing on a shop door
       const s = shopAt(player.x, player.y);
@@ -2548,11 +2594,10 @@
       return;
     }
     if (mode === "dungeon") {
-      // Using G on the entrance hole returns to the overworld
-      if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y && cameFromWorld && world) {
-        // Save current dungeon state before leaving
+      // Using G on the entrance hole returns to the overworld (module covers robust cases).
+      // Keep fallback in case module absent.
+      if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y && world) {
         saveCurrentDungeonState();
-        // Return to world immediately
         mode = "world";
         enemies = [];
         corpses = [];
