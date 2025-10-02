@@ -816,7 +816,16 @@
             }
           } else {
             // Go home strictly along a planned path; wait if blocked
-            const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y 
+            const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+            if (!n._homePlan || !n._homePlanGoal) {
+              ensureHomePlan(ctx, occ, n);
+            }
+            handled = followHomePlan(ctx, occ, n);
+            if (!handled) {
+              // Fallback: route via door
+              handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
+            }
+          } 
 
         if (handled) continue;
 
@@ -881,7 +890,7 @@
           }
         } else if (phase === "morning") {
           if (n._home && n._home.building) {
-            const homeTarget = { x: n._home.x, y: n._home.y ;
+            const homeTarget = { x: n._home.x, y: n._home.y };
             if (!n._homePlan || !n._homePlanGoal) {
               ensureHomePlan(ctx, occ, n);
             }
