@@ -1503,7 +1503,6 @@
 
       // If entering at night, place NPCs at homes; allow a small number in tavern or at plaza
       (function setNightState() {
-        try {
           const t = getClock();
           if (!t || t.phase !== "night") return;
           const occupied = new Set();
@@ -1592,8 +1591,7 @@
             if (visible[n.y] && typeof visible[n.y][n.x] !== "undefined") visible[n.y][n.x] = true;
             if (seen[n.y] && typeof seen[n.y][n.x] !== "undefined") seen[n.y][n.x] = true;
           }
-        } catch (_) {}
-      })();
+        })();
 
       log(`You enter ${townName ? "the town of " + townName : "the town"}. Shops are marked with 'S'. Press G next to an NPC to talk. Press Enter on the gate to leave.`, "notice");
       if (window.UI && typeof UI.showTownExitButton === "function") UI.showTownExitButton();
