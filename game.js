@@ -32,6 +32,7 @@
   let townProps = [];        // interactive town props: [{x,y,type,name}]
   let townBuildings = [];    // town buildings: [{x,y,w,h,door:{x,y}}]
   let townPlaza = null;      // central plaza coordinates {x,y}
+  let townRoads = null;      // Set of "x,y" for road tiles (preferred paths outdoors)
   let tavern = null;         // tavern info: { building:{x,y,w,h,door}, door:{x,y} }
   let townTick = 0;          // simple turn counter for town routines
   let townName = null;       // current town's generated name
@@ -144,6 +145,7 @@
       townProps,
       townBuildings,
       townPlaza,
+      townRoads,
       tavern,
       dungeon: currentDungeon,
       dungeonInfo: currentDungeon,
@@ -971,18 +973,29 @@
     }
 
     // Main road from gate to plaza (L-shape)
+    // Track road tiles for NPC routing preference
+    const roadSet = new Set();
+    const markRoad = (x, y) => {
+      if (x <= 0 || y <= 0 || x >= W - 1 || y >= H - 1) return;
+      roadSet.add(`${x},${y}`);
+    };
+
     const carveRoad = (x1, y1, x2, y2) => {
       let x = x1, y = y1;
-      while (x !== x2) { map[y][x] = TILES.FLOOR; x += Math.sign(x2 - x); }
-      while (y !== y2) { map[y][x] = TILES.FLOOR; y += Math.sign(y2 - y); }
-      map[y][x] = TILES.FLOOR;
+      while (x !== x2) { map[y][x] = TILES.FLOOR; markRoad(x, y); x += Math.sign(x2 - x); }
+      while (y !== y2) { map[y][x] = TILES.FLOOR; markRoad(x, y); y += Math.sign(y2 - y); }
+      map[y][x] = TILES.FLOOR; markRoad(x, y);
     };
     carveRoad(gate.x, gate.y, plaza.x, gate.y);
     carveRoad(plaza.x, gate.y, plaza.x, plaza.y);
 
     // Secondary roads (grid) aligned around plaza
-    for (let y = 6; y < H - 6; y += 8) for (let x = 1; x < W - 1; x++) map[y][x] = TILES.FLOOR;
-    for (let x = 6; x < W - 6; x += 10) for (let y = 1; y < H - 1; y++) map[y][x] = TILES.FLOOR;
+    for (let y = 6; y < H - 6; y += 8) {
+      for (let x = 1; x < W - 1; x++) { map[y][x] = TILES.FLOOR; markRoad(x, y); }
+    }
+    for (let x = 6; x < W - 6; x += 10) {
+      for (let y = 1; y < H - 1; y++) { map[y][x] = TILES.FLOOR; markRoad(x, y); }
+    }
 
     // Blocks: place buildings aligned with blocks, leaving 1-tile sidewalk
     const buildings = [];
@@ -1175,7 +1188,8 @@
       const door = getExistingDoor(b);
       return { x: b.x, y: b.y, w: b.w, h: b.h, door };
     });
-
+    // Expose road set to modules via ctx
+    townRoads = road
     // Props in plaza and parks + building interiors
     townProps = [];
     const addProp = (x, y, type, name) => {

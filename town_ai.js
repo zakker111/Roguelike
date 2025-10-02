@@ -69,12 +69,21 @@
 
   // Pre-planning A* used for path debug and stable routing
   function computePath(ctx, occ, sx, sy, tx, ty, opts = {}) {
-    const { map } = ctx;
+    const { map, townRoads } = ctx;
     const rows = map.length, cols = map[0] ? map[0].length : 0;
     const inB = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows;
     const dirs4 = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
     const startKey = (x, y) => `${x},${y}`;
     const h = (x, y) => Math.abs(x - tx) + Math.abs(y - ty);
+
+    // Optional road preference: reduce movement cost on road tiles when outdoors
+    const preferRoads = !!opts.preferRoads && townRoads instanceof Set;
+    const roadCost = (x, y) => {
+      if (!preferRoads) return 1;
+      const k = `${x},${y}`;
+      // Roads get base cost 1; non-road outdoor floor slightly penalized
+      return townRoads.has(k) ? 1 : 1.4;
+    };
 
     const open = []; // min-heap substitute: small graphs, array+sort is fine
     const gScore = new Map();
@@ -118,7 +127,8 @@
         // Allow goal even if currently occupied; otherwise avoid occupied nodes
         if (occ.has(nk) && !(nx === tx && ny === ty)) continue;
 
-        const tentativeG = (gScore.get(ck) ?? Infinity) + 1;
+        const stepCost = roadCost(nx, ny);
+        const tentativeG = (gScore.get(ck) ?? Infinity) + stepCost;
         if (tentativeG < (gScore.get(nk) ?? Infinity)) {
           cameFrom.set(nk, { x: cur.x, y: cur.y });
           gScore.set(nk, tentativeG);
@@ -559,8 +569,8 @@
         const door = B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null);
         if (!door) return null;
 
-        // Stage 1: path to door (outside)
-        const p1 = computePath(ctx, relaxedOcc, n.x, n.y, door.x, door.y, { ignorePlayer: true });
+        // Stage 1: path to door (outside) with road preference
+        const p1 = computePath(ctx, relaxedOcc, n.x, n.y, door.x, door.y, { ignorePlayer: true, preferRoads: true });
 
         // Stage 2: step just inside, then path to targetInterior
         let inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B);
@@ -620,8 +630,10 @@
         // Memoize door for future calls
         n._homeDoor = { x: door.x, y: door.y };
 
-        const p1 = computePathBudgeted(ctx, occ, n.x, n.y, door.x, door.y);
+        // Stage 1: prefer outdoor roads to reach home door
+        const p1 = computePathBudgeted(ctx, occ, n.x, n.y, door.x, door.y, { preferRoads: true });
         const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B) || targetInside || { x: door.x, y: door.y };
+        // Stage 2: inside building, normal pathing
         const p2 = computePathBudgeted(ctx, occ, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
         plan = concatPaths(p1, p2);
       } else {
