@@ -684,6 +684,40 @@
           }
         }
 
+        // If already inside the building and stuck for several turns, advance along the theoretical home path to the next free tile.
+        if (B && insideBuilding(B, n.x, n.y) && n._homeWait >= 4) {
+          const dbg = (n._homeDebugPath && n._homeDebugPath.length >= 2) ? n._homeDebugPath : computeHomePath(ctx, n);
+          if (dbg && dbg.length >= 2) {
+            // Find current index or nearest point on the debug path
+            let idx = dbg.findIndex(p => p.x === n.x && p.y === n.y);
+            if (idx < 0) {
+              let bestIdx = 0, bestDist = Infinity;
+              for (let i = 0; i < dbg.length; i++) {
+                const p = dbg[i];
+                const d = Math.abs(p.x - n.x) + Math.abs(p.y - n.y);
+                if (d < bestDist) { bestDist = d; bestIdx = i; }
+              }
+              idx = bestIdx;
+            }
+            // Scan forward for the first free tile inside the building
+            let target = null;
+            for (let i = Math.max(idx + 1, 1); i < dbg.length; i++) {
+              const p = dbg[i];
+              if (!insideBuilding(B, p.x, p.y)) continue;
+              if (isWalkTown(ctx, p.x, p.y) && !occ.has(`${p.x},${p.y}`)) {
+                target = { x: p.x, y: p.y };
+                break;
+              }
+            }
+            if (target) {
+              occ.delete(`${n.x},${n.y}`); n.x = target.x; n.y = target.y; occ.add(`${n.x},${n.y}`);
+              n._homePlan = null; n._homePlanGoal = null;
+              n._homeWait = 0;
+              return true;
+            }
+          }
+        }
+
         if (n._homeWait >= 3) {
           ensureHomePlan(ctx, occ, n);
         }
