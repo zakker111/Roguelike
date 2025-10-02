@@ -46,27 +46,53 @@
   const dungeonStates = Object.create(null);
 
   // Global time-of-day cycle (shared across modes)
-  // We model a 24h day (1440 minutes). One full day spans CYCLE_TURNS turns.
-  const DAY_MINUTES = 24 * 60;    // 1440
-  const CYCLE_TURNS = 360;        // 360 turns per day -> 4 minutes/turn
-  const MINUTES_PER_TURN = DAY_MINUTES / CYCLE_TURNS; // 4.0
+  // Centralized via TimeService to avoid duplication and keep math consistent.
+  const TS = (window.TimeService && typeof TimeService.create === "function")
+    ? TimeService.create({ dayMinutes: 24 * 60, cycleTurns: 360 })
+    : (function () {
+        const DAY_MINUTES = 24 * 60;
+        const CYCLE_TURNS = 360;
+        const MINUTES_PER_TURN = DAY_MINUTES / CYCLE_TURNS;
+        function getClock(tc) {
+          const totalMinutes = Math.floor((tc | 0) * MINUTES_PER_TURN) % DAY_MINUTES;
+          const h = Math.floor(totalMinutes / 60);
+          const m = totalMinutes % 60;
+          const hh = String(h).padStart(2, "0");
+          const mm = String(m).padStart(2, "0");
+          const phase = (h >= 20 || h < 6) ? "night" : (h < 8 ? "dawn" : (h < 18 ? "day" : "dusk"));
+          return { hours: h, minutes: m, hhmm: `${hh}:${mm}`, phase, totalMinutes, minutesPerTurn: MINUTES_PER_TURN, cycleTurns: CYCLE_TURNS, turnCounter: (tc | 0) };
+        }
+        function minutesUntil(tc, hourTarget, minuteTarget = 0) {
+          const clock = getClock(tc);
+          const cur = clock.hours * 60 + clock.minutes;
+          const goal = ((hourTarget | 0) * 60 + (minuteTarget | 0) + DAY_MINUTES) % DAY_MINUTES;
+          let delta = goal - cur;
+          if (delta <= 0) delta += DAY_MINUTES;
+          return delta;
+        }
+        function advanceMinutes(tc, mins) {
+          const turns = Math.ceil((mins | 0) / MINUTES_PER_TURN);
+          return (tc | 0) + turns;
+        }
+        function tick(tc) { return (tc | 0) + 1; }
+        return {
+          DAY_MINUTES,
+          CYCLE_TURNS,
+          MINUTES_PER_TURN,
+          getClock,
+          minutesUntil,
+          advanceMinutes,
+          tick,
+        };
+      })();
+  const DAY_MINUTES = TS.DAY_MINUTES;
+  const CYCLE_TURNS = TS.CYCLE_TURNS;
+  const MINUTES_PER_TURN = TS.MINUTES_PER_TURN;
   let turnCounter = 0;            // total turns elapsed since start
 
-  // Compute in-game clock and phase from turnCounter
+  // Compute in-game clock and phase from turnCounter (delegates to TimeService)
   function getClock() {
-    const totalMinutes = Math.floor(turnCounter * MINUTES_PER_TURN) % DAY_MINUTES;
-    const h = Math.floor(totalMinutes / 60);
-    const m = totalMinutes % 60;
-    const hh = String(h).padStart(2, "0");
-    const mm = String(m).padStart(2, "0");
-    // Day phases (rough cut)
-    // Night: 20:00-05:59, Dawn: 06:00-07:59, Day: 08:00-17:59, Dusk: 18:00-19:59
-    let phase = "day";
-    if (h >= 20 || h < 6) phase = "night";
-    else if (h < 8) phase = "dawn";
-    else if (h < 18) phase = "day";
-    else phase = "dusk";
-    return { hours: h, minutes: m, hhmm: `${hh}:${mm}`, phase, totalMinutes, minutesPerTurn: MINUTES_PER_TURN, cycleTurns: CYCLE_TURNS, turnCounter };
+    return TS.getClock(turnCounter);
   }
 
   
@@ -204,6 +230,9 @@
       showLoot: (list) => showLootPanel(list),
       hideLoot: () => hideLootPanel(),
       turn: () => turn(),
+      // World/dungeon generation
+      initWorld: () => initWorld(),
+      generateLevel: (depth) => generateLevel(depth),
       // Combat helpers
       rollHitLocation,
       critMultiplier,
@@ -645,10 +674,17 @@
 
   // --------- Dungeon persistence helpers ---------
   function dungeonKeyFromWorldPos(x, y) {
+    if (window.DungeonState && typeof DungeonState.key === "function") {
+      return DungeonState.key(x, y);
+    }
     return `${x},${y}`;
   }
 
   function saveCurrentDungeonState() {
+    if (window.DungeonState && typeof DungeonState.save === "function") {
+      DungeonState.save(getCtx());
+      return;
+    }
     if (mode !== "dungeon" || !currentDungeon || !dungeonExitAt) return;
     const key = dungeonKeyFromWorldPos(currentDungeon.x, currentDungeon.y);
     dungeonStates[key] = {
@@ -665,6 +701,9 @@
   }
 
   function loadDungeonStateFor(x, y) {
+    if (window.DungeonState && typeof DungeonState.load === "function") {
+      return DungeonState.load(getCtx(), x, y);
+    }
     const key = dungeonKeyFromWorldPos(x, y);
     const st = dungeonStates[key];
     if (!st) return false;
@@ -906,16 +945,10 @@
     return `Opens ${h2(shop.openMin)}:00, closes ${h2(shop.closeMin)}:00`;
   }
   function minutesUntil(hourTarget /*0-23*/, minuteTarget = 0) {
-    const t = getClock();
-    const cur = t.hours * 60 + t.minutes;
-    const goal = (hourTarget * 60 + minuteTarget + DAY_MINUTES) % DAY_MINUTES;
-    let delta = goal - cur;
-    if (delta <= 0) delta += DAY_MINUTES;
-    return delta;
+    return TS.minutesUntil(turnCounter, hourTarget, minuteTarget);
   }
   function advanceTimeMinutes(mins) {
-    const turns = Math.ceil(mins / MINUTES_PER_TURN);
-    turnCounter = (turnCounter + turns) | 0;
+    turnCounter = TS.advanceMinutes(turnCounter, mins);
   }
   function restUntilMorning(healFraction = 0.25) {
     const mins = minutesUntil(6, 0); // rest until 06:00 dawn
@@ -938,6 +971,21 @@
   }
 
   function generateTown() {
+    // Prefer Town module (facade). If it handled generation, sync references and return.
+    if (window.Town && typeof Town.generate === "function") {
+      const ctx = getCtx();
+      const handled = Town.generate(ctx);
+      if (handled) {
+        map = ctx.map; seen = ctx.seen; visible = ctx.visible;
+        enemies = ctx.enemies; corpses = ctx.corpses; decals = ctx.decals || [];
+        npcs = ctx.npcs || npcs; shops = ctx.shops || shops;
+        townProps = ctx.townProps || townProps; townBuildings = ctx.townBuildings || townBuildings;
+        townPlaza = ctx.townPlaza || townPlaza; tavern = ctx.tavern || tavern;
+        townExitAt = ctx.townExitAt || townExitAt; townName = ctx.townName || townName;
+        updateCamera(); recomputeFOV(); updateUI(); requestDraw();
+        return;
+      }
+    }
     // Structured town: walls with a gate, main road to a central plaza, secondary roads, buildings aligned to blocks, shops near plaza
 
     // Determine current town size from overworld (default 'big')
@@ -1739,6 +1787,10 @@
   }
 
   function ensureTownSpawnClear() {
+    if (window.Town && typeof Town.ensureSpawnClear === "function") {
+      const handled = Town.ensureSpawnClear(getCtx());
+      if (handled) return;
+    }
     // Make sure the player isn't inside a building (WALL).
     // If current tile is not walkable, move to the nearest FLOOR/DOOR tile.
     const H = map.length;
@@ -1774,6 +1826,10 @@
   }
 
   function isFreeTownFloor(x, y) {
+    // Prefer shared Utils module
+    if (window.Utils && typeof Utils.isFreeTownFloor === "function") {
+      return Utils.isFreeTownFloor(getCtx(), x, y);
+    }
     if (!inBounds(x, y)) return false;
     if (map[y][x] !== TILES.FLOOR && map[y][x] !== TILES.DOOR) return false;
     if (x === player.x && y === player.y) return false;
@@ -1782,7 +1838,12 @@
     return true;
   }
 
-  function manhattan(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
+  function manhattan(ax, ay, bx, by) {
+    if (window.Utils && typeof Utils.manhattan === "function") {
+      return Utils.manhattan(ax, ay, bx, by);
+    }
+    return Math.abs(ax - bx) + Math.abs(ay - by);
+  }
 
   function clearAdjacentNPCsAroundPlayer() {
     // Ensure the four cardinal neighbors around the player are not all occupied by NPCs
@@ -1802,6 +1863,10 @@
   }
 
   function spawnGateGreeters(count = 4) {
+    if (window.Town && typeof Town.spawnGateGreeters === "function") {
+      const handled = Town.spawnGateGreeters(getCtx(), count);
+      if (handled) return;
+    }
     if (!townExitAt) return;
     const dirs = [
       { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
@@ -2058,6 +2123,9 @@
   }
 
   function returnToWorldIfAtExit() {
+    if (window.DungeonState && typeof DungeonState.returnToWorldIfAtExit === "function") {
+      return DungeonState.returnToWorldIfAtExit(getCtx());
+    }
     if (mode !== "dungeon" || !cameFromWorld || !world) return false;
     if (floor !== 1) return false;
     if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y) {
@@ -2066,7 +2134,6 @@
       corpses = [];
       decals = [];
       map = world.map;
-      // restore world position (either returnPos or keep)
       if (worldReturnPos) {
         player.x = worldReturnPos.x;
         player.y = worldReturnPos.y;
@@ -2085,9 +2152,33 @@
   // Context-sensitive action button (G): enter/exit/interact depending on mode/state
   function doAction() {
     hideLootPanel();
+    // Prefer module
+    if (window.Actions && typeof Actions.doAction === "function") {
+      const ctxMod = getCtx();
+      const handled = Actions.doAction(ctxMod);
+      if (handled) {
+        // Sync mutated ctx back into local state to ensure mode/map changes take effect
+        mode = ctxMod.mode || mode;
+        map = ctxMod.map || map;
+        seen = ctxMod.seen || seen;
+        visible = ctxMod.visible || visible;
+        enemies = Array.isArray(ctxMod.enemies) ? ctxMod.enemies : enemies;
+        corpses = Array.isArray(ctxMod.corpses) ? ctxMod.corpses : corpses;
+        decals = Array.isArray(ctxMod.decals) ? ctxMod.decals : decals;
+        worldReturnPos = ctxMod.worldReturnPos || worldReturnPos;
+        townExitAt = ctxMod.townExitAt || townExitAt;
+        dungeonExitAt = ctxMod.dungeonExitAt || dungeonExitAt;
+        currentDungeon = ctxMod.dungeon || ctxMod.dungeonInfo || currentDungeon;
+        if (typeof ctxMod.floor === "number") { floor = ctxMod.floor | 0; window.floor = floor; }
+        updateCamera();
+        recomputeFOV();
+        updateUI();
+        requestDraw();
+        return;
+      }
+    }
 
     if (mode === "world") {
-      // Try entering town first, else dungeon
       if (!enterTownIfOnTile()) {
         enterDungeonIfOnEntrance();
       }
@@ -2095,38 +2186,33 @@
     }
 
     if (mode === "town") {
-      // Exit town if at gate; otherwise interact/talk/shop
       if (returnToWorldFromTown()) return;
-      // fall back to town interactions
-      lootCorpse(); // already handles shop/props/NPC talk
+      lootCorpse();
       return;
     }
 
     if (mode === "dungeon") {
-      // If at entrance hole, leave to overworld; else loot/interact here
-      lootCorpse(); // already handles exit on hole and normal looting
+      lootCorpse();
       return;
     }
 
-    // Fallback
     lootCorpse();
   }
 
   function descendIfPossible() {
-    // Keep Enter/N behavior, but delegate to doAction for world/town, and show hint in dungeon
+    if (window.Actions && typeof Actions.descend === "function") {
+      const handled = Actions.descend(getCtx());
+      if (handled) return;
+    }
     if (mode === "world" || mode === "town") {
       doAction();
       return;
     }
-
     if (mode === "dungeon") {
-      // No multi-level dungeons anymore
       log("This dungeon has no deeper levels. Return to the entrance (the hole '>') and press G to leave.", "info");
       return;
     }
-
     const here = map[player.y][player.x];
-    // Restrict descending to STAIRS tile only for clarity (world-only use removed)
     if (here === TILES.STAIRS) {
       log("There is nowhere to go down from here.", "info");
     } else {
@@ -2167,17 +2253,20 @@
   
   // Visual: add or strengthen a blood decal at tile (x,y)
   function addBloodDecal(x, y, mult = 1.0) {
+    // Prefer Decals module
+    if (window.Decals && typeof Decals.add === "function") {
+      Decals.add(getCtx(), x, y, mult);
+      return;
+    }
     if (!inBounds(x, y)) return;
-    // Merge on same tile
     const d = decals.find(d => d.x === x && d.y === y);
-    const baseA = 0.16 + rng() * 0.18; // 0.16..0.34
-    const baseR = Math.floor(TILE * (0.32 + rng() * 0.20)); // radius px
+    const baseA = 0.16 + rng() * 0.18;
+    const baseR = Math.floor(TILE * (0.32 + rng() * 0.20));
     if (d) {
       d.a = Math.min(0.9, d.a + baseA * mult);
       d.r = Math.max(d.r, baseR);
     } else {
       decals.push({ x, y, a: Math.min(0.9, baseA * mult), r: baseR });
-      // Cap total decals to avoid unbounded growth
       if (decals.length > 240) decals.splice(0, decals.length - 240);
     }
   }
@@ -2323,6 +2412,10 @@
 
   
   function interactTownProps() {
+    if (window.Town && typeof Town.interactProps === "function") {
+      const handled = Town.interactProps(getCtx());
+      if (handled) return true;
+    }
     if (mode !== "town") return false;
     const candidates = [];
     const coords = [
@@ -2427,6 +2520,32 @@
 
   function lootCorpse() {
     if (isDead) return;
+    // Prefer module first
+    if (window.Actions && typeof Actions.loot === "function") {
+      const ctxMod = getCtx();
+      const handled = Actions.loot(ctxMod);
+      if (handled) {
+        // Sync mutated ctx back into local state
+        mode = ctxMod.mode || mode;
+        map = ctxMod.map || map;
+        seen = ctxMod.seen || seen;
+        visible = ctxMod.visible || visible;
+        enemies = Array.isArray(ctxMod.enemies) ? ctxMod.enemies : enemies;
+        corpses = Array.isArray(ctxMod.corpses) ? ctxMod.corpses : corpses;
+        decals = Array.isArray(ctxMod.decals) ? ctxMod.decals : decals;
+        worldReturnPos = ctxMod.worldReturnPos || worldReturnPos;
+        townExitAt = ctxMod.townExitAt || townExitAt;
+        dungeonExitAt = ctxMod.dungeonExitAt || dungeonExitAt;
+        currentDungeon = ctxMod.dungeon || ctxMod.dungeonInfo || currentDungeon;
+        if (typeof ctxMod.floor === "number") { floor = ctxMod.floor | 0; window.floor = floor; }
+        updateCamera();
+        recomputeFOV();
+        updateUI();
+        requestDraw();
+        return;
+      }
+    }
+
     if (mode === "town") {
       // Interact with shop if standing on a shop door
       const s = shopAt(player.x, player.y);
@@ -2475,20 +2594,30 @@
       return;
     }
     if (mode === "dungeon") {
-      // Using G on the entrance hole returns to the overworld
-      if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y && cameFromWorld && world) {
-        // Save current dungeon state before leaving
+      // Using G on the entrance hole returns to the overworld (module covers robust cases).
+      // Keep fallback in case module absent.
+      if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y && world) {
         saveCurrentDungeonState();
-        // Return to world immediately
         mode = "world";
         enemies = [];
         corpses = [];
         decals = [];
         map = world.map;
-        if (worldReturnPos) {
-          player.x = worldReturnPos.x;
-          player.y = worldReturnPos.y;
+        // Restore exact overworld position:
+        let rx = (worldReturnPos && typeof worldReturnPos.x === "number") ? worldReturnPos.x : null;
+        let ry = (worldReturnPos && typeof worldReturnPos.y === "number") ? worldReturnPos.y : null;
+        if (rx == null || ry == null) {
+          const info = currentDungeon;
+          if (info && typeof info.x === "number" && typeof info.y === "number") {
+            rx = info.x; ry = info.y;
+          }
         }
+        if (rx == null || ry == null) {
+          rx = Math.max(0, Math.min(world.map[0].length - 1, player.x));
+          ry = Math.max(0, Math.min(world.map.length - 1, player.y));
+        }
+        player.x = rx; player.y = ry;
+
         recomputeFOV();
         updateCamera();
         updateUI();
@@ -2524,6 +2653,7 @@
 
   // GOD mode actions
   function godHeal() {
+    if (window.God && typeof God.heal === "function") { God.heal(getCtx()); return; }
     const prev = player.hp;
     player.hp = player.maxHp;
     if (player.hp > prev) {
@@ -2536,6 +2666,7 @@
   }
 
   function godSpawnStairsHere() {
+    if (window.God && typeof God.spawnStairsHere === "function") { God.spawnStairsHere(getCtx()); return; }
     if (!inBounds(player.x, player.y)) {
       log("GOD: Cannot place stairs out of bounds.", "warn");
       return;
@@ -2548,15 +2679,14 @@
   }
 
   function godSpawnItems(count = 3) {
+    if (window.God && typeof God.spawnItems === "function") { God.spawnItems(getCtx(), count); return; }
     const created = [];
     for (let i = 0; i < count; i++) {
       let it = null;
-      
       if (window.Items && typeof Items.createEquipment === "function") {
         const tier = Math.min(3, Math.max(1, Math.floor((floor + 1) / 2)));
         it = Items.createEquipment(tier, rng);
       } else if (window.DungeonItems && DungeonItems.lootFactories && typeof DungeonItems.lootFactories === "object") {
-        
         const keys = Object.keys(DungeonItems.lootFactories);
         if (keys.length > 0) {
           const k = keys[randInt(0, keys.length - 1)];
@@ -2564,7 +2694,6 @@
         }
       }
       if (!it) {
-        
         if (rng() < 0.5) it = { kind: "equip", slot: "hand", name: "debug sword", atk: 1.5, tier: 2, decay: initialDecay(2) };
         else it = { kind: "equip", slot: "torso", name: "debug armor", def: 1.0, tier: 2, decay: initialDecay(2) };
       }
@@ -2587,6 +2716,7 @@
    * - Applies small randomized jitters to hp/atk for variety (deterministic via rng).
    */
   function godSpawnEnemyNearby(count = 1) {
+    if (window.God && typeof God.spawnEnemyNearby === "function") { God.spawnEnemyNearby(getCtx(), count); return; }
     const isFreeFloor = (x, y) => {
       if (!inBounds(x, y)) return false;
       if (map[y][x] !== TILES.FLOOR) return false;
@@ -2604,7 +2734,6 @@
         const y = player.y + dy;
         if (isFreeFloor(x, y)) return { x, y };
       }
-      // fallback: any free floor
       const free = [];
       for (let y = 0; y < map.length; y++) {
         for (let x = 0; x < (map[0] ? map[0].length : 0); x++) {
@@ -2623,9 +2752,8 @@
       const makeEnemy = (ctx.enemyFactory || ((x, y, depth) => createEnemyAt(x, y, depth)));
       const e = makeEnemy(spot.x, spot.y, floor);
 
-      // Jitter stats a bit for flavor
       if (typeof e.hp === "number" && rng() < 0.7) {
-        const mult = 0.85 + rng() * 0.5; // 0.85..1.35
+        const mult = 0.85 + rng() * 0.5;
         e.hp = Math.max(1, Math.round(e.hp * mult));
       }
       if (typeof e.atk === "number" && rng() < 0.7) {
@@ -2770,6 +2898,7 @@
 
   // GOD: always-crit toggle
   function setAlwaysCrit(v) {
+    if (window.God && typeof God.setAlwaysCrit === "function") { God.setAlwaysCrit(getCtx(), v); return; }
     alwaysCrit = !!v;
     try { window.ALWAYS_CRIT = alwaysCrit; localStorage.setItem("ALWAYS_CRIT", alwaysCrit ? "1" : "0"); } catch (_) {}
     log(`GOD: Always Crit ${alwaysCrit ? "enabled" : "disabled"}.`, alwaysCrit ? "good" : "warn");
@@ -2777,6 +2906,7 @@
 
   // GOD: set forced crit body part for player attacks
   function setCritPart(part) {
+    if (window.God && typeof God.setCritPart === "function") { God.setCritPart(getCtx(), part); return; }
     const valid = new Set(["torso","head","hands","legs",""]);
     const p = valid.has(part) ? part : "";
     forcedCritPart = p;
@@ -2791,6 +2921,7 @@
 
   // GOD: apply a deterministic RNG seed and regenerate current map
   function applySeed(seedUint32) {
+    if (window.God && typeof God.applySeed === "function") { God.applySeed(getCtx(), seedUint32); return; }
     const s = (Number(seedUint32) >>> 0);
     currentSeed = s;
     try { localStorage.setItem("SEED", String(s)); } catch (_) {}
@@ -2798,7 +2929,6 @@
       RNG.applySeed(s);
       rng = RNG.rng;
     } else {
-      // fallback
       function mulberry32(a) {
         return function() {
           let t = a += 0x6D2B79F5;
@@ -2819,18 +2949,16 @@
     }
     requestDraw();
     try {
-      if (window.UI && typeof UI.updateStats === "function" && typeof UI.init === "function") {
-        // Update the GOD seed UI helper text
-        const el = document.getElementById("god-seed-help");
-        if (el) el.textContent = `Current seed: ${s}`;
-        const input = document.getElementById("god-seed-input");
-        if (input) input.value = String(s);
-      }
+      const el = document.getElementById("god-seed-help");
+      if (el) el.textContent = `Current seed: ${s}`;
+      const input = document.getElementById("god-seed-input");
+      if (input) input.value = String(s);
     } catch (_) {}
   }
 
   // GOD: reroll seed using current time
   function rerollSeed() {
+    if (window.God && typeof God.rerollSeed === "function") { God.rerollSeed(getCtx()); return; }
     const s = (Date.now() % 0xffffffff) >>> 0;
     applySeed(s);
   }
@@ -2925,8 +3053,8 @@
   function turn() {
     if (isDead) return;
 
-    // Advance global time
-    turnCounter = (turnCounter + 1) | 0;
+    // Advance global time (centralized via TimeService)
+    turnCounter = TS.tick(turnCounter);
 
     
 
@@ -2939,10 +3067,12 @@
           Status.tick(getCtx());
         }
       } catch (_) {}
-      // Visual: decals fade each turn (keep deterministic, no randomness here)
-      if (decals && decals.length) {
+      // Visual: decals fade each turn
+      if (window.Decals && typeof Decals.tick === "function") {
+        Decals.tick(getCtx());
+      } else if (decals && decals.length) {
         for (let i = 0; i < decals.length; i++) {
-          decals[i].a *= 0.92; // exponential fade
+          decals[i].a *= 0.92;
         }
         decals = decals.filter(d => d.a > 0.04);
       }

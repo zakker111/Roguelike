@@ -63,11 +63,47 @@
 
     const senseRange = 8;
 
+    // Use shared OccupancyGrid if available for movement updates
+    const occ = (ctx.occupancy && typeof ctx.occupancy.clearEnemy === "function" && typeof ctx.occupancy.setEnemy === "function" && typeof ctx.occupancy.isFree === "function")
+      ? ctx.occupancy
+      : {
+          // Lightweight shim so movement code can call delete/add without errors.
+          delete() {},
+          add() {},
+          isFree(x, y, opts) {
+            const ignorePlayer = !!(opts && opts.ignorePlayer);
+            const blocked = !ctx.isWalkable(x, y) || (!ignorePlayer && player.x === x && player.y === y);
+            if (blocked) return false;
+            const key = occKey(x, y);
+            for (const en of enemies) {
+              if (occKey(en.x, en.y) === key) return false;
+            }
+            return true;
+          }
+        };
+
+    // Occ helpers to update occupancy across implementations (grid or simple Set)
+    function occClearEnemy(occRef, x, y) {
+      if (!occRef) return;
+      if (typeof occRef.clearEnemy === "function") {
+        occRef.clearEnemy(x, y);
+      } else if (typeof occRef.delete === "function") {
+        try { occRef.delete(occKey(x, y)); } catch (_) {}
+      }
+    }
+    function occSetEnemy(occRef, x, y) {
+      if (!occRef) return;
+      if (typeof occRef.setEnemy === "function") {
+        occRef.setEnemy(x, y);
+      } else if (typeof occRef.add === "function") {
+        try { occRef.add(occKey(x, y)); } catch (_) {}
+      }
+    }
+
     // Prefer shared OccupancyGrid if provided in ctx; fallback to per-turn set
     let isFree = (x, y) => {
       const blocked = !ctx.isWalkable(x, y) || (player.x === x && player.y === y);
       if (blocked) return false;
-      const occ = ctx.occupancy || null;
       if (occ && typeof occ.isFree === "function") {
         return occ.isFree(x, y, { ignorePlayer: true });
       }
@@ -111,9 +147,9 @@
         for (const d of tryDirs) {
           const nx = e.x + d.x, ny = e.y + d.y;
           if (isFree(nx, ny)) {
-            occ.delete(occKey(e.x, e.y));
+            occClearEnemy(occ, e.x, e.y);
             e.x = nx; e.y = ny;
-            occ.add(occKey(e.x, e.y));
+            occSetEnemy(occ, e.x, e.y);
             fled = true;
             break;
           }
@@ -139,9 +175,9 @@
             for (const d of primaryAway) {
               const nx = e.x + d.x, ny = e.y + d.y;
               if (isFree(nx, ny)) {
-                occ.delete(occKey(e.x, e.y));
+                occClearEnemy(occ, e.x, e.y);
                 e.x = nx; e.y = ny;
-                occ.add(occKey(e.x, e.y));
+                occSetEnemy(occ, e.x, e.y);
                 moved = true;
                 break;
               }
@@ -168,9 +204,9 @@
             for (const d of primaryAway) {
               const nx = e.x + d.x, ny = e.y + d.y;
               if (isFree(nx, ny)) {
-                occ.delete(occKey(e.x, e.y));
+                occClearEnemy(occ, e.x, e.y);
                 e.x = nx; e.y = ny;
-                occ.add(occKey(e.x, e.y));
+                occSetEnemy(occ, e.x, e.y);
                 moved = true;
                 break;
               }
@@ -286,11 +322,11 @@
             const nx = e.x + d.x;
             const ny = e.y + d.y;
             if (isFree(nx, ny)) {
-              occ.delete(occKey(e.x, e.y));
-              e.x = nx; e.y = ny;
-              occ.add(occKey(e.x, e.y));
-              break;
-            }
+                occClearEnemy(occ, e.x, e.y);
+                e.x = nx; e.y = ny;
+                occSetEnemy(occ, e.x, e.y);
+                break;
+              }
           }
         }
       } else if (chance(0.4)) {
@@ -298,7 +334,7 @@
         const d = WANDER_DIRS[randInt(0, WANDER_DIRS.length - 1)];
         const nx = e.x + d.x, ny = e.y + d.y;
         if (isFree(nx, ny)) {
-          occ.delete(occKey(e.x, e.y));
+          occClearEnemy(occ, e.x, e.y);
           e.x = nx; e.y = ny;
           occ.add(occKey(e.x, e.y));
         }
