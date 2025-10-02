@@ -142,6 +142,8 @@
   <script src="player_utils.js"></script>
   <script src="player_equip.js"></script>
   <script src="player.js"></script>
+  <!-- Central RNG service must load before items/game to avoid duplicate PRNG implementations -->
+  <script src="rng_service.js"></script>
   <script src="items.js"></script>
   <script src="dungeon_items.js"></script>
   <script src="loot.js"></script>
