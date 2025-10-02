@@ -1520,14 +1520,15 @@
       // Use existing buildings first
       for (const b of candidates) {
         if (created >= desiredCount) break;
-        // Skip very tiny interiors
-        if (b.w * b. << 24) continue; // require larger than a house (reduced threshold to ensure presence)
+        // Skip very tiny interiors; require larger than a typical house
+        if ((b.w * b.h) < 40) continue;
         // If an inn shop already exists here, skip
         const hasInnShop = shops.some(s => s.name === "Inn" && s.building && s.building.x === b.x && s.building.y === b.y && s.building.w === b.w && s.building.h === b.h);
         if (hasInnShop) continue;
         makeInnTavernIn(b);
         created++;
-     
+      }
+
       // If not enough, create new larger buildings near plaza edges
       const need = desiredCount - created;
       const tryPositions = [
