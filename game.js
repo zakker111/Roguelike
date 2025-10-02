@@ -1318,6 +1318,27 @@
         // First inn/tavern becomes global shelter
         if (!tavern) tavern = { building: b, door, beds: [] };
 
+        // Make double-door for inns: add a second adjacent door tile on the same wall side
+        (function addDoubleDoor() {
+          const isTop = (door.y === b.y);
+          const isBottom = (door.y === b.y + b.h - 1);
+          const isLeft = (door.x === b.x);
+          const isRight = (door.x === b.x + b.w - 1);
+          let nx = door.x, ny = door.y;
+          if (isTop || isBottom) {
+            // Horizontal neighbor on border
+            if (door.x + 1 < b.x + b.w - 1) { nx = door.x + 1; ny = door.y; }
+            else if (door.x - 1 > b.x) { nx = door.x - 1; ny = door.y; }
+          } else if (isLeft || isRight) {
+            // Vertical neighbor on border
+            if (door.y + 1 < b.y + b.h - 1) { nx = door.x; ny = door.y + 1; }
+            else if (door.y - 1 > b.y) { nx = door.x; ny = door.y - 1; }
+          }
+          if (inBounds(nx, ny) && map[ny][nx] === TILES.WALL) {
+            map[ny][nx] = TILES.DOOR;
+          }
+        })();
+
         // Determine bar open area: near door, carve a rectangular open space
         const innerMinX = b.x + 1, innerMaxX = b.x + b.w - 2;
         const innerMinY = b.y + 1, innerMaxY = b.y + b.h - 2;
