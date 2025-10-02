@@ -600,16 +600,6 @@
       }
     }
 
-      if (plan && plan.length >= 2) {
-        n._homePlan = plan.slice(0);
-        n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
-        n._homeWait = 0;
-      } else {
-        n._homePlan = null;
-        n._homePlanGoal = null;
-      }
-    }
-
     function followHomePlan(ctx, occ, n) {
       if (!n._homePlan || n._homePlan.length < 2) return false;
       // Re-sync plan to current position
