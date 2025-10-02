@@ -131,6 +131,19 @@
     if (window.Logger && typeof Logger.init === "function") {
       try { Logger.init(undefined, 80); } catch (e) {}
     }
+    // Capture runtime errors to the on-screen log for easier debugging in preview builds
+    try {
+      window.addEventListener("error", function (e) {
+        var msg = (e && e.message) ? String(e.message) : "Unknown error";
+        try { Logger.log("[JS Error] " + msg, "bad"); } catch (_) {}
+        try { console.error(e.error || e); } catch (_) {}
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        var reason = e && e.reason ? String(e.reason) : "Unhandled rejection";
+        try { Logger.log("[Promise Error] " + reason, "bad"); } catch (_) {}
+        try { console.error(e && e.reason ? e.reason : e); } catch (_) {}
+      });
+    } catch (_) {}
   </script>
   <script src="ui.js"></script>
   <script src="tileset.js"></script>
