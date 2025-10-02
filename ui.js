@@ -391,6 +391,19 @@
         }
       });
 
+      // Fallback keyboard handler to ensure Esc closes panels even if Input.init isn't active
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          if (this.isInventoryOpen()) {
+            this.hideInventory();
+            e.preventDefault();
+          } else if (this.isGodOpen()) {
+            this.hideGod();
+            e.preventDefault();
+          }
+        }
+      });
+
       return true;
     },
 
