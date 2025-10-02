@@ -1823,6 +1823,10 @@
   }
 
   function isFreeTownFloor(x, y) {
+    // Prefer shared Utils module
+    if (window.Utils && typeof Utils.isFreeTownFloor === "function") {
+      return Utils.isFreeTownFloor(getCtx(), x, y);
+    }
     if (!inBounds(x, y)) return false;
     if (map[y][x] !== TILES.FLOOR && map[y][x] !== TILES.DOOR) return false;
     if (x === player.x && y === player.y) return false;
@@ -1831,7 +1835,12 @@
     return true;
   }
 
-  function manhattan(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
+  function manhattan(ax, ay, bx, by) {
+    if (window.Utils && typeof Utils.manhattan === "function") {
+      return Utils.manhattan(ax, ay, bx, by);
+    }
+    return Math.abs(ax - bx) + Math.abs(ay - by);
+  }
 
   function clearAdjacentNPCsAroundPlayer() {
     // Ensure the four cardinal neighbors around the player are not all occupied by NPCs

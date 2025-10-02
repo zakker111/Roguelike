@@ -63,6 +63,9 @@
 
   function spawnEnemyNearby(ctx, count = 1) {
     const isFreeFloor = (x, y) => {
+      if (window.Utils && typeof Utils.isFreeFloor === "function") {
+        return Utils.isFreeFloor(ctx, x, y);
+      }
       if (!ctx.inBounds(x, y)) return false;
       if (ctx.map[y][x] !== ctx.TILES.FLOOR) return false;
       if (ctx.player.x === x && ctx.player.y === y) return false;
