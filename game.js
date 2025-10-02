@@ -46,27 +46,47 @@
   const dungeonStates = Object.create(null);
 
   // Global time-of-day cycle (shared across modes)
-  // We model a 24h day (1440 minutes). One full day spans CYCLE_TURNS turns.
-  const DAY_MINUTES = 24 * 60;    // 1440
-  const CYCLE_TURNS = 360;        // 360 turns per day -> 4 minutes/turn
-  const MINUTES_PER_TURN = DAY_MINUTES / CYCLE_TURNS; // 4.0
+  // Centralized via TimeService to avoid duplication and keep math consistent.
+  const TS = (window.TimeService && typeof TimeService.create === "function")
+    ? TimeService.create({ dayMinutes: 24 * 60, cycleTurns: 360 })
+    : {
+        DAY_MINUTES: 24 * 60,
+        CYCLE_TURNS: 360,
+        MINUTES_PER_TURN: (24 * 60) / 360,
+        getClock: (tc) => {
+          const DAY_MINUTES = 24 * 60;
+          const MINUTES_PER_TURN = DAY_MINUTES / 360;
+          const totalMinutes = Math.floor((tc | 0) * MINUTES_PER_TURN) % DAY_MINUTES;
+          const h = Math.floor(totalMinutes / 60);
+          const m = totalMinutes % 60;
+          const hh = String(h).padStart(2, "0");
+          const mm = String(m).padStart(2, "0");
+          let phase = (h >= 20 || h < 6) ? "night" : (h < 8 ? "dawn" : (h < 18 ? "day" : "dusk"));
+          return { hours: h, minutes: m, hhmm: `${hh}:${mm}`, phase, totalMinutes, minutesPerTurn: MINUTES_PER_TURN, cycleTurns: 360, turnCounter: (tc | 0) };
+        },
+        minutesUntil: (tc, hourTarget, minuteTarget = 0) => {
+          const clock = TS.getClock(tc);
+          const cur = clock.hours * 60 + clock.minutes;
+          const goal = ((hourTarget | 0) * 60 + (minuteTarget | 0) + (24 * 60)) % (24 * 60);
+          let delta = goal - cur;
+          if (delta <= 0) delta += (24 * 60);
+          return delta;
+        },
+        advanceMinutes: (tc, mins) => {
+          const MINUTES_PER_TURN = (24 * 60) / 360;
+          const turns = Math.ceil((mins | 0) / MINUTES_PER_TURN);
+          return (tc | 0) + turns;
+        },
+        tick: (tc) => (tc | 0) + 1,
+      };
+  const DAY_MINUTES = TS.DAY_MINUTES;
+  const CYCLE_TURNS = TS.CYCLE_TURNS;
+  const MINUTES_PER_TURN = TS.MINUTES_PER_TURN;
   let turnCounter = 0;            // total turns elapsed since start
 
-  // Compute in-game clock and phase from turnCounter
+  // Compute in-game clock and phase from turnCounter (delegates to TimeService)
   function getClock() {
-    const totalMinutes = Math.floor(turnCounter * MINUTES_PER_TURN) % DAY_MINUTES;
-    const h = Math.floor(totalMinutes / 60);
-    const m = totalMinutes % 60;
-    const hh = String(h).padStart(2, "0");
-    const mm = String(m).padStart(2, "0");
-    // Day phases (rough cut)
-    // Night: 20:00-05:59, Dawn: 06:00-07:59, Day: 08:00-17:59, Dusk: 18:00-19:59
-    let phase = "day";
-    if (h >= 20 || h < 6) phase = "night";
-    else if (h < 8) phase = "dawn";
-    else if (h < 18) phase = "day";
-    else phase = "dusk";
-    return { hours: h, minutes: m, hhmm: `${hh}:${mm}`, phase, totalMinutes, minutesPerTurn: MINUTES_PER_TURN, cycleTurns: CYCLE_TURNS, turnCounter };
+    return TS.getClock(turnCounter);
   }
 
   
@@ -906,9 +926,10 @@
     return `Opens ${h2(shop.openMin)}:00, closes ${h2(shop.closeMin)}:00`;
   }
   function minutesUntil(hourTarget /*0-23*/, minuteTarget = 0) {
-    const t = getClock();
-    const cur = t.hours * 60 + t.minutes;
-    const goal = (hourTarget * 60 + minuteTarget + DAY_MINUTES) % DAY_MINUTES;
+    return TS.minutesUntil(turnCounter, hourTarget, minuteTarget);
+  }
+  function advanceTimeMinutes(mins) {
+    turnCounter = TSS) % DAY_MINUTES;
     let delta = goal - cur;
     if (delta <= 0) delta += DAY_MINUTES;
     return delta;
@@ -2925,8 +2946,8 @@
   function turn() {
     if (isDead) return;
 
-    // Advance global time
-    turnCounter = (turnCounter + 1) | 0;
+    // Advance global time (centralized via TimeService)
+    turnCounter = TS.tick(turnCounter);
 
     
 
