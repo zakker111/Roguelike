@@ -117,6 +117,11 @@
     return shops.find(s => s.x === x && s.y === y) || null;
   }
 
+  function hasDecalAt(ctx, x, y) {
+    const list = Array.isArray(ctx.decals) ? ctx.decals : [];
+    return list.some(d => d && d.x === x && d.y === y && typeof d.a === "number" && d.a > 0.02);
+  }
+
   function loot(ctx) {
     if (ctx.mode === "town") {
       // If standing on a shop door, show schedule and flavor
@@ -150,6 +155,12 @@
       if (ctx.Town && typeof Town.interactProps === "function") {
         const handled = Town.interactProps(ctx);
         if (handled) return true;
+      }
+      // If standing on a blood decal, describe it
+      if (hasDecalAt(ctx, ctx.player.x, ctx.player.y)) {
+        ctx.log("The floor here is stained with blood.", "info");
+        ctx.requestDraw();
+        return true;
       }
       // Nothing to loot in town
       ctx.log("Nothing to do here.");
@@ -208,6 +219,12 @@
       // Dungeon loot via Loot module
       if (ctx.Loot && typeof Loot.lootHere === "function") {
         Loot.lootHere(ctx);
+        return true;
+      }
+      // If standing on a blood decal, describe it
+      if (hasDecalAt(ctx, ctx.player.x, ctx.player.y)) {
+        ctx.log("The floor here is stained with blood.", "info");
+        ctx.requestDraw();
         return true;
       }
       // Guidance if not at exit
