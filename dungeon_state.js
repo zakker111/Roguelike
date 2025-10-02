@@ -51,6 +51,7 @@
       corpses: Array.isArray(st.corpses)
         ? st.corpses.map(c => ({
             x: c.x, y: c.y,
+            kind: c.kind,           // preserve chest vs corpse
             looted: !!c.looted,
             loot: Array.isArray(c.loot) ? c.loot : []
           }))
