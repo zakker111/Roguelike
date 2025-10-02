@@ -529,14 +529,32 @@
       let path = null;
 
       if (!insideNow) {
-        const door = B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null);
-        if (!door) return null;
-
-        // Stage 1: path to door (outside)
-        const p1 = computePath(ctx, relaxedOcc, n.x, n.y, door.x, door.y, { ignorePlayer: true });
+        // Stage 1: choose the best door among all border doors
+        const doors = candidateDoors(ctx, B);
+        let bestP1 = null;
+        let bestDoor = null;
+        for (const d of doors) {
+          const p = computePath(ctx, relaxedOcc, n.x, n.y, d.x, d.y);
+          if (p && p.length >= 2) {
+            if (!bestP1 || p.length < bestP1.length) {
+              bestP1 = p;
+              bestDoor = d;
+            }
+          }
+        }
+        // If no door path found, still try with the known door as a fallback
+        const door = bestDoor || B.door || null;
+        if (!bestP1 && door) {
+          const p = computePath(ctx, relaxedOcc, n.x, n.y, door.x, door.y);
+          if (p && p.length >= 2) {
+            bestP1 = p;
+            bestDoor = door;
+          }
+        }
+        if (!bestDoor) return null;
 
         // Stage 2: step just inside, then path to targetInterior
-        let inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B);
+        let inSpot = nearestFreeAdjacent(ctx, bestDoor.x, bestDoor.y, B);
         if (!inSpot) {
           // Deterministic fallback: use first free interior spot
           inSpot = (function firstFreeInteriorSpot() {
@@ -550,14 +568,14 @@
             return null;
           })();
         }
-        inSpot = inSpot || targetInside || { x: door.x, y: door.y };
-        const p2 = computePath(ctx, relaxedOcc, inSpot.x, inSpot.y, targetInside.x, targetInside.y, { ignorePlayer: true });
+        inSpot = inSpot || targetInside || { x: bestDoor.x, y: bestDoor.y };
+        const p2 = computePath(ctx, relaxedOcc, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
 
         // Combine; if p1 missing, still try to show interior path
-        path = concatPaths(p1, p2);
+        path = concatPaths(bestP1, p2);
       } else {
         // Already inside: direct interior path
-        path = computePath(ctx, relaxedOcc, n.x, n.y, targetInside.x, targetInside.y, { ignorePlayer: true });
+        path = computePath(ctx, relaxedOcc, n.x, n.y, targetInside.x, targetInside.y);
       }
       return (path && path.length >= 2) ? path : null;
     }
