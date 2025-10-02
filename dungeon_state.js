@@ -37,8 +37,24 @@
       map: st.map,
       seen: st.seen,
       visible: st.visible,
-      enemies: Array.isArray(st.enemies) ? st.enemies.map(e => ({ x: e.x, y: e.y, type: e.type, glyph: e.glyph, hp: e.hp, atk: e.atk, xp: e.xp, level: e.level })) : [],
-      corpses: Array.isArray(st.corpses) ? st.corpses.map(c => ({ x: c.x, y: c.y, looted: !!c.looted, loot: Array.isArray(c.loot) ? c.loot : [] })) : [],
+      enemies: Array.isArray(st.enemies)
+        ? st.enemies.map(e => ({
+            x: e.x, y: e.y,
+            type: e.type, glyph: e.glyph,
+            hp: e.hp, atk: e.atk, xp: e.xp, level: e.level,
+            // optional runtime/status fields we want to preserve
+            immobileTurns: e.immobileTurns,
+            bleedTurns: e.bleedTurns,
+            announced: e.announced
+          }))
+        : [],
+      corpses: Array.isArray(st.corpses)
+        ? st.corpses.map(c => ({
+            x: c.x, y: c.y,
+            looted: !!c.looted,
+            loot: Array.isArray(c.loot) ? c.loot : []
+          }))
+        : [],
       decals: Array.isArray(st.decals) ? st.decals.map(d => ({ x: d.x, y: d.y, a: d.a, r: d.r })) : [],
       dungeonExitAt: st.dungeonExitAt,
       info: st.info,
