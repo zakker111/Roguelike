@@ -69,7 +69,6 @@
   }
 
   
-
   function getAttack(player) {
     let bonus = 0;
     const eq = player.equipment || {};
