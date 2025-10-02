@@ -85,7 +85,8 @@
     fScore.set(startK, h(sx, sy));
     open.push({ x: sx, y: sy, f: fScore.get(startK) });
 
-    const MAX_VISITS = 12000;
+    // Lower visit cap to reduce worst-case CPU in dense towns
+    const MAX_VISITS = 6000;
     const visited = new Set();
 
     function pushOpen(x, y, f) {
@@ -93,7 +94,10 @@
     }
 
     function popOpen() {
-      open.sort((a, b) => a.f - b.f || h(a.x, a.y) - h(b.x, b.y));
+      // Avoid heavy sorts by only partially ordering when queue grows large
+      if (open.length > 24) {
+        open.sort((a, b) => a.f - b.f || h(a.x, a.y) - h(b.x, b.y));
+      }
       return open.shift();
     }
 
@@ -453,6 +457,10 @@
         y: Math.max(1, Math.min(ctx.map.length - 2, townPlaza.y + randInt(ctx, -2, 2))),
       };
     }
+    // Assign a personalized home-depart minute within 18:00-21:00 to stagger returns
+    if (typeof n._homeDepartMin !== "number") {
+      n._homeDepartMin = randInt(ctx, 18 * 60, 21 * 60); // 1080..1260
+    }
   }
 
   function townNPCsAct(ctx) {
@@ -476,6 +484,15 @@
                 : (t && t.phase === "dawn") ? "morning"
                 : (t && t.phase === "dusk") ? "evening"
                 : "day";
+
+    // Staggered home-start window (18:00–21:00)
+    function ensureHomeStart(n) {
+      if (typeof n._homeStartMin !== "number") {
+        const base = 18 * 60;
+        const spread = 3 * 60; // 3 hours
+        n._homeStartMin = base + Math.floor(ctx.rng() * spread);
+      }
+    }
 
     // Build a relaxed occupancy for debug visualization:
     // - Ignore other NPCs and the player so we show the "theoretical" full path
@@ -553,16 +570,34 @@
     // Movement path to home with runtime occupancy; NPC will follow this plan strictly and wait if blocked.
     function ensureHomePlan(ctx, occ, n) {
       if (!n._home || !n._home.building) { n._homePlan = null; n._homePlanGoal = null; return; }
+
+      // Throttle recomputation if we've recently failed or just recomputed
+      if (n._homePlanCooldown && n._homePlanCooldown > 0) {
+        return;
+      }
+
       const B = n._home.building;
       let targetInside = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
       targetInside = adjustInteriorTarget(ctx, B, targetInside);
+
+      // If we already have a plan to the same goal, keep it
+      if (n._homePlan && n._homePlanGoal &&
+          n._homePlanGoal.x === targetInside.x && n._homePlanGoal.y === targetInside.y) {
+        return;
+      }
 
       const insideNow = insideBuilding(B, n.x, n.y);
       let plan = null;
 
       if (!insideNow) {
-        const door = B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null);
-        if (!door) { n._homePlan = null; n._homePlanGoal = null; return; }
+        // Prefer memoized door if present
+        const doorCandidate = (n._homeDoor && typeof n._homeDoor.x === "number") ? n._homeDoor
+                             : (B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null));
+        const door = doorCandidate || null;
+        if (!door) { n._homePlan = null; n._homePlanGoal = null; n._homePlanCooldown = 6; return; }
+        // Memoize door for future calls
+        n._homeDoor = { x: door.x, y: door.y };
+
         const p1 = computePath(ctx, occ, n.x, n.y, door.x, door.y);
         const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B) || targetInside || { x: door.x, y: door.y };
         const p2 = computePath(ctx, occ, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
@@ -575,9 +610,11 @@
         n._homePlan = plan.slice(0);
         n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
         n._homeWait = 0;
+        n._homePlanCooldown = 5; // small cooldown after computing a plan
       } else {
         n._homePlan = null;
         n._homePlanGoal = null;
+        n._homePlanCooldown = 8; // backoff when failing to compute
       }
     }
 
@@ -589,17 +626,19 @@
         if (idx >= 0) {
           n._homePlan = n._homePlan.slice(idx);
         } else {
-          // Lost the plan; recompute once
+          // Lost the plan; recompute once (throttled)
           ensureHomePlan(ctx, occ, n);
         }
       }
       if (!n._homePlan || n._homePlan.length < 2) return false;
       const next = n._homePlan[1];
       const keyNext = `${next.x},${next.y}`;
-      // If next step blocked, wait a bit, then recompute
+      // If next step blocked, wait a bit, then recompute (throttled)
       if (occ.has(keyNext) || !isWalkTown(ctx, next.x, next.y)) {
         n._homeWait = (n._homeWait || 0) + 1;
         if (n._homeWait >= 3) {
+          // Set a cooldown so we don't thrash on recomputation
+          n._homePlanCooldown = Math.max(n._homePlanCooldown || 0, 4);
           ensureHomePlan(ctx, occ, n);
         }
         // Do not move this turn
@@ -722,6 +761,20 @@
       const n = npcs[idx];
       ensureHome(ctx, n);
 
+      // Daily scheduling: reset stagger assignment at dawn, assign in morning if missing
+      if (t && t.phase === "dawn") {
+        n._departAssignedForDay = false;
+      }
+      if (t && t.phase === "morning" && !n._departAssignedForDay) {
+        n._homeDepartMin = randInt(ctx, 18 * 60, 21 * 60); // 18:00..21:00
+        n._departAssignedForDay = true;
+      }
+
+      // Decay any per-NPC cooldown counters each turn
+      if (n._homePlanCooldown && n._homePlanCooldown > 0) {
+        n._homePlanCooldown--;
+      }
+
       // Pets
       if (n.isPet) {
         if (ctx.rng() < 0.6) continue;
@@ -747,15 +800,31 @@
             handled = stepTowards(ctx, occ, n, n._work.x, n._work.y);
           }
         } else if (n._home && n._home.building) {
-          // Off hours: go home strictly along a planned path; wait if blocked
-          const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
-          if (!n._homePlan || !n._homePlanGoal) {
-            ensureHomePlan(ctx, occ, n);
-          }
-          handled = followHomePlan(ctx, occ, n);
-          if (!handled) {
-            // Fallback: route via door
-            handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
+          // Off hours: stagger departure between 18:00-21:00
+          const departReady = typeof n._homeDepartMin === "number" ? (minutes >= n._homeDepartMin) : true;
+          if (!departReady) {
+            // Not yet time: linger around shop door or nearby plaza
+            const linger = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
+            if (linger) {
+              if (n.x === linger.x && n.y === linger.y) {
+                if (ctx.rng() < 0.9) continue;
+                stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+              } else {
+                stepTowards(ctx, occ, n, linger.x, linger.y);
+              }
+              handled = true;
+            }
+          } else {
+            // Go home strictly along a planned path; wait if blocked
+            const sleepTarget = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
+            if (!n._homePlan || !n._homePlanGoal) {
+              ensureHomePlan(ctx, occ, n);
+            }
+            handled = followHomePlan(ctx, occ, n);
+            if (!handled) {
+              // Fallback: route via door
+              handled = routeIntoBuilding(ctx, occ, n, n._home.building, sleepTarget);
+            }
           }
         }
 
@@ -773,7 +842,23 @@
           else continue;
         }
         if (phase === "evening" || eveKickIn) {
-          if (n._home && n._home.building) {
+          // Stagger: only start going home after personal departure minute (18:00..21:00)
+          const departReady = typeof n._homeDepartMin === "number" ? (minutes >= n._homeDepartMin) : true;
+          if (!departReady) {
+            // Not yet time to head home: keep day behavior (work/plaza/idle)
+            const targetLate = n._work || (ctx.townPlaza ? { x: ctx.townPlaza.x, y: ctx.townPlaza.y } : null);
+            if (targetLate) {
+              if (n.x === targetLate.x && n.y === targetLate.y) {
+                if (ctx.rng() < 0.9) continue;
+                stepTowards(ctx, occ, n, n.x + randInt(ctx, -1, 1), n.y + randInt(ctx, -1, 1));
+                continue;
+              }
+              stepTowards(ctx, occ, n, targetLate.x, targetLate.y);
+              continue;
+            }
+            // gentle idle
+            if (ctx.rng() < 0.8) continue;
+          } else if (n._home && n._home.building) {
             const bedSpot = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : null;
             const sleepTarget = bedSpot ? bedSpot : { x: n._home.x, y: n._home.y };
             // If at, or adjacent to, the bed spot (or home spot if no bed), go to sleep
