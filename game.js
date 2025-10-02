@@ -1344,8 +1344,8 @@
         addProp(deskPos.x, deskPos.y, "table", "Bar Counter");
 
         // Define bar area size proportional to building
-        const barW = Math.max(6, Math.min(12, Math.floor(b.w * 0.5)));
-        const barH = Math.max(4, Math.min(8, Math.floor(b.h * 0.4)));
+        const barW = Math.max(8, Math.min(16, Math.floor(b.w * 0.6)));
+        const barH = Math.max(6, Math.min(10, Math.floor(b.h * 0.5)));
         const barX1 = Math.max(innerMinX, Math.min(innerMaxX - barW + 1, deskPos.x - Math.floor(barW / 2)));
         const barY1 = Math.max(innerMinY, Math.min(innerMaxY - barH + 1, deskPos.y - Math.floor(barH / 2)));
         for (let yy = barY1; yy < barY1 + barH; yy++) {
@@ -1431,7 +1431,7 @@
         })();
 
         // Create rooms grid along one side (prefer opposite side from bar)
-        const rooms = randInt(4, 10);
+        const rooms = randInt(6, 12);
         // Choose corridor position and orientation
         const corridorOnTop = (deskPos.y < (b.y + b.h / 2));
         const corrY = corridorOnTop ? innerMinY + 1 : innerMaxY - 2;
@@ -1520,8 +1520,8 @@
       // Use existing buildings first
       for (const b of candidates) {
         if (created >= desiredCount) break;
-        // Skip very tiny interiors; require larger than a typical house
-        if ((b.w * b.h) < 40) continue;
+        // Require larger than a typical house for inns
+        if ((b.w * b.h) < 60) continue;
         // If an inn shop already exists here, skip
         const hasInnShop = shops.some(s => s.name === "Inn" && s.building && s.building.x === b.x && s.building.y === b.y && s.building.w === b.w && s.building.h === b.h);
         if (hasInnShop) continue;
@@ -1542,9 +1542,9 @@
         let placedB = null;
         for (let tries = 0; tries < 80 && !placedB; tries++) {
           const pos = tryPositions[pi++ % tryPositions.length];
-          // Choose a bigger size with at least 6x5 interior
-          const bw = randInt(9, 12);
-          const bh = randInt(7, 10);
+          // Choose a bigger size with at least 8x6 interior
+          const bw = randInt(12, 16);
+          const bh = randInt(10, 14);
           const bx = Math.max(2, Math.min(W - bw - 2, pos.x + randInt(-2, 2)));
           const by = Math.max(2, Math.min(H - bh - 2, pos.y + randInt(-2, 2)));
           // Check area clear (avoid roads/windows/doors)
@@ -2926,11 +2926,11 @@
               let extraLines = [];
               if (res.residents && typeof res.residents.total === "number") {
                 const r = res.residents;
-                extraLines.push(`Residents: ${r.atHome}/${r.total} at home, ${r.atTavern}/${r.total} at tavern.`);
+                extraLines.push(`Residents: ${r.atHome}/${r.total} at home, ${r.atInn}/${r.total} at inn.`);
               }
               // Per-resident list of late-night away residents
               if (Array.isArray(res.residentsAwayLate) && res.residentsAwayLate.length) {
-                extraLines.push(`Late-night (02:00–05:00): ${res.residentsAwayLate.length} resident(s) away from home and tavern:`);
+                extraLines.push(`Late-night (02:00–05:00): ${res.reses.residentsAwayLate.length} resident(s) away from home and tavern:`);
                 res.residentsAwayLate.slice(0, 10).forEach(d => {
                   extraLines.push(`- ${d.name} at (${d.x},${d.y})`);
                 });
@@ -2966,19 +2966,15 @@
           onGodCheckInnTavern: () => {
             const ctx = getCtx();
             if (ctx.mode !== "town") {
-              log("Inn/Tavern check is available in town mode only.", "warn");
+              log("Inn check is available in town mode only.", "warn");
               requestDraw();
               return;
             }
             const list = Array.isArray(shops) ? shops : [];
             const inns = list.filter(s => (s.name || "").toLowerCase().includes("inn"));
-            const taverns = list.filter(s => (s.name || "").toLowerCase().includes("tavern"));
-            const line = `Inn/Tavern: ${taverns.length} tavern(s), ${inns.length} inn(s).`;
-            log(line, (taverns.length || inns.length) ? "info" : "warn");
+            const line = `Inn: ${inns.length} inn(s).`;
+            log(line, inns.length ? "info" : "warn");
             const lines = [];
-            taverns.slice(0, 6).forEach((s, i) => {
-              lines.push(`- Tavern ${i + 1} at door (${s.x},${s.y})`);
-            });
             inns.slice(0, 6).forEach((s, i) => {
               lines.push(`- Inn ${i + 1} at door (${s.x},${s.y})`);
             });
