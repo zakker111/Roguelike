@@ -143,6 +143,25 @@
     return path;
   }
 
+  // ---- Pathfinding budget/throttling ----
+  // Limit the number of A* computations per tick to avoid CPU spikes in dense towns.
+  function initPathBudget(ctx, npcCount) {
+    const defaultBudget = Math.max(1, Math.floor(npcCount * 0.4)); // ~40% of NPCs may compute a new path per tick
+    ctx._townPathBudgetRemaining = (typeof ctx.townPathBudget === "number")
+      ? Math.max(0, ctx.townPathBudget)
+      : defaultBudget;
+  }
+
+  function computePathBudgeted(ctx, occ, sx, sy, tx, ty, opts = {}) {
+    if (typeof ctx._townPathBudgetRemaining !== "number") {
+      // If not initialized, allow one and initialize lazily to a conservative value
+      ctx._townPathBudgetRemaining = 1;
+    }
+    if (ctx._townPathBudgetRemaining <= 0) return null;
+    ctx._townPathBudgetRemaining--;
+    return computePath(ctx, occ, sx, sy, tx, ty, opts);
+  }
+
   function stepTowards(ctx, occ, n, tx, ty) {
     if (typeof tx !== "number" || typeof ty !== "number") return false;
 
@@ -188,8 +207,8 @@
       }
     }
 
-    // No valid plan; compute new plan
-    const full = computePath(ctx, occ, n.x, n.y, tx, ty);
+    // No valid plan; compute new plan (budgeted)
+    const full = computePathBudgeted(ctx, occ, n.x, n.y, tx, ty);
     if (full && full.length >= 2) {
       n._plan = full.slice(0);
       n._planGoal = { x: tx, y: ty };
@@ -478,6 +497,9 @@
       }
     }
 
+    // Initialize per-tick pathfinding budget to avoid heavy recomputation
+    initPathBudget(ctx, npcs.length);
+
     const t = ctx.time;
     const minutes = t ? (t.hours * 60 + t.minutes) : 12 * 60;
     const phase = (t && t.phase === "night") ? "evening"
@@ -598,12 +620,12 @@
         // Memoize door for future calls
         n._homeDoor = { x: door.x, y: door.y };
 
-        const p1 = computePath(ctx, occ, n.x, n.y, door.x, door.y);
+        const p1 = computePathBudgeted(ctx, occ, n.x, n.y, door.x, door.y);
         const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B) || targetInside || { x: door.x, y: door.y };
-        const p2 = computePath(ctx, occ, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
+        const p2 = computePathBudgeted(ctx, occ, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
         plan = concatPaths(p1, p2);
       } else {
-        plan = computePath(ctx, occ, n.x, n.y, targetInside.x, targetInside.y);
+        plan = computePathBudgeted(ctx, occ, n.x, n.y, targetInside.x, targetInside.y);
       }
 
       if (plan && plan.length >= 2) {

@@ -805,7 +805,7 @@
     updateCamera();
     recomputeFOV();
     updateUI();
-    log("You arrive in the overworld. Towns (T) and Dungeons (D): press Enter on T to enter a town, or on D to enter a dungeon.", "notice");
+    log("You arrive in the overworld. Towns: small (t), big (T), cities (C). Dungeons (D). Press Enter on a town/dungeon to enter.", "notice");
     if (window.UI && typeof UI.hideTownExitButton === "function") UI.hideTownExitButton();
     requestDraw();
   }
@@ -901,6 +901,23 @@
 
     const clampXY = (x, y) => ({ x: Math.max(1, Math.min(W - 2, x)), y: Math.max(1, Math.min(H - 2, y)) });
 
+    // Determine current town size from overworld (default 'big')
+    let townSize = "big";
+    try {
+      if (world && Array.isArray(world.towns)) {
+        // Use the last recorded world position when entering a town
+        const wx = (worldReturnPos && typeof worldReturnPos.x === "number") ? worldReturnPos.x : player.x;
+        const wy = (worldReturnPos && typeof worldReturnPos.y === "number") ? worldReturnPos.y : player.y;
+        const info = world.towns.find(t => t.x === wx && t.y === wy);
+        if (info && info.size) townSize = info.size;
+      }
+    } catch (_) {}
+
+    // Target building count ranges
+    const buildingTargetMin = townSize === "small" ? 10 : townSize === "city" ? 60 : 20;
+    const buildingTargetMax = townSize === "small" ? 15 : townSize === "city" ? 100 : 30;
+    const buildingTarget = randInt(buildingTargetMin, buildingTargetMax);
+
     // Town walls (outer perimeter)
     for (let x = 0; x < W; x++) { map[0][x] = TILES.WALL; map[H - 1][x] = TILES.WALL; }
     for (let y = 0; y < H; y++) { map[y][0] = TILES.WALL; map[y][W - 1] = TILES.WALL; }
@@ -985,8 +1002,8 @@
 
     // Iterate grid and try to place buildings in areas not roads
     // Block cell nominal size ~10x8; we inset by 1 for sidewalk, then choose random w/h that fit.
-    for (let by = 2; by < H - 10; by += 8) {
-      for (let bx = 2; bx < W - 12; bx += 10) {
+    for (let by = 2; by < H - 10 && buildings.length < buildingTarget; by += 8) {
+      for (let bx = 2; bx < W - 12 && buildings.length < buildingTarget; bx += 10) {
         // skip if near plaza
         if (Math.abs((bx + 5) - plaza.x) < 9 && Math.abs((by + 4) - plaza.y) < 7) continue;
         // ensure area is floor and not road lines
