@@ -135,7 +135,11 @@
     try {
       window.addEventListener("error", function (e) {
         var msg = (e && e.message) ? String(e.message) : "Unknown error";
-        try { Logger.log("[JS Error] " + msg, "bad"); } catch (_) {}
+        var file = (e && e.filename) ? String(e.filename) : "";
+        var line = (e && typeof e.lineno === "number") ? e.lineno : null;
+        var col = (e && typeof e.colno === "number") ? e.colno : null;
+        var loc = file ? (" @ " + file + (line != null ? (":" + line + (col != null ? (":" + col) : "")) : "")) : "";
+        try { Logger.log("[JS Error] " + msg + loc, "bad"); } catch (_) {}
         try { console.error(e.error || e); } catch (_) {}
       });
       window.addEventListener("unhandledrejection", function (e) {
