@@ -211,6 +211,11 @@
       tavern,
       dungeon: currentDungeon,
       dungeonInfo: currentDungeon,
+      // critical persistence fields
+      _dungeonStates: dungeonStates,
+      worldReturnPos,
+      cameFromWorld,
+      dungeonExitAt,
       time: getClock(),
       requestDraw,
       log,
