@@ -1,5 +1,5 @@
-wn# Game Version History
-Last updated: 2025-10-02 00:00 UTC
+# Game Version History
+Last updated: 2025-10-02 00:20 UTC
 
 This file tracks notable changes to the game across iterations. Versions here reflect functional milestones rather than semantic releases.
 
@@ -9,6 +9,18 @@ Conventions
 - Fixed: bug fixes
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
+
+v1.6 — Town Sizes, Fields, and Pathfinding Budget
+- Added: Town size classification on the overworld
+  - small (t), big (T), city (C) glyphs on the overworld map.
+  - Small towns generate ~10–15 houses; big towns ~20–30; cities ~60–100.
+- Added: Crop fields in towns to fill empty spaces
+  - Non-blocking, decorative field patches: wheat, potato, carrot.
+  - Small rectangles placed mostly on outskirts; do not block player or NPC movement.
+- UI: Overworld message updated to explain town glyphs (t/T/C).
+- Changed: TownAI pathfinding is budgeted per tick
+  - A* computations are throttled via a per-tick budget to reduce CPU spikes in dense towns.
+  - Movement planning falls back to greedy nudges when budget is exhausted; plans are reused when possible.
 
 v1.5 — TownAI Performance, Staggered Departures, and Pathing Fixes
 - Changed: A* pathfinding performance in towns
