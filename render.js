@@ -449,7 +449,9 @@
             return (end > start) ? (m >= start && m < end) : (m >= start || m < end);
           }
           function isOpenAt(shop, minutes, dayMinutes) {
-            if (!shop || typeof shop.openMin !== "number" || typeof shop.closeMin !== "number") return false;
+            if (!shop) return false;
+            if (shop.alwaysOpen) return true;
+            if (typeof shop.openMin !== "number" || typeof shop.closeMin !== "number") return false;
             const o = shop.openMin, c = shop.closeMin;
             if (o === c) return false;
             return inWindow(o, c, minutes, dayMinutes);
