@@ -85,7 +85,8 @@
     fScore.set(startK, h(sx, sy));
     open.push({ x: sx, y: sy, f: fScore.get(startK) });
 
-    const MAX_VISITS = 12000;
+    // Lower visit cap to reduce worst-case CPU in dense towns
+    const MAX_VISITS = 6000;
     const visited = new Set();
 
     function pushOpen(x, y, f) {
@@ -93,7 +94,10 @@
     }
 
     function popOpen() {
-      open.sort((a, b) => a.f - b.f || h(a.x, a.y) - h(b.x, b.y));
+      // Avoid heavy sorts by only partially ordering when queue grows large
+      if (open.length > 24) {
+        open.sort((a, b) => a.f - b.f || h(a.x, a.y) - h(b.x, b.y));
+      }
       return open.shift();
     }
 
@@ -553,16 +557,34 @@
     // Movement path to home with runtime occupancy; NPC will follow this plan strictly and wait if blocked.
     function ensureHomePlan(ctx, occ, n) {
       if (!n._home || !n._home.building) { n._homePlan = null; n._homePlanGoal = null; return; }
+
+      // Throttle recomputation if we've recently failed or just recomputed
+      if (n._homePlanCooldown && n._homePlanCooldown > 0) {
+        return;
+      }
+
       const B = n._home.building;
       let targetInside = n._home.bed ? { x: n._home.bed.x, y: n._home.bed.y } : { x: n._home.x, y: n._home.y };
       targetInside = adjustInteriorTarget(ctx, B, targetInside);
+
+      // If we already have a plan to the same goal, keep it
+      if (n._homePlan && n._homePlanGoal &&
+          n._homePlanGoal.x === targetInside.x && n._homePlanGoal.y === targetInside.y) {
+        return;
+      }
 
       const insideNow = insideBuilding(B, n.x, n.y);
       let plan = null;
 
       if (!insideNow) {
-        const door = B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null);
-        if (!door) { n._homePlan = null; n._homePlanGoal = null; return; }
+        // Prefer memoized door if present
+        const doorCandidate = (n._homeDoor && typeof n._homeDoor.x === "number") ? n._homeDoor
+                             : (B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null));
+        const door = doorCandidate || null;
+        if (!door) { n._homePlan = null; n._homePlanGoal = null; n._homePlanCooldown = 6; return; }
+        // Memoize door for future calls
+        n._homeDoor = { x: door.x, y: door.y };
+
         const p1 = computePath(ctx, occ, n.x, n.y, door.x, door.y);
         const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B) || targetInside || { x: door.x, y: door.y };
         const p2 = computePath(ctx, occ, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
@@ -575,9 +597,11 @@
         n._homePlan = plan.slice(0);
         n._homePlanGoal = { x: targetInside.x, y: targetInside.y };
         n._homeWait = 0;
+        n._homePlanCooldown = 5; // small cooldown after computing a plan
       } else {
         n._homePlan = null;
         n._homePlanGoal = null;
+        n._homePlanCooldown = 8; // backoff when failing to compute
       }
     }
 
@@ -589,17 +613,19 @@
         if (idx >= 0) {
           n._homePlan = n._homePlan.slice(idx);
         } else {
-          // Lost the plan; recompute once
+          // Lost the plan; recompute once (throttled)
           ensureHomePlan(ctx, occ, n);
         }
       }
       if (!n._homePlan || n._homePlan.length < 2) return false;
       const next = n._homePlan[1];
       const keyNext = `${next.x},${next.y}`;
-      // If next step blocked, wait a bit, then recompute
+      // If next step blocked, wait a bit, then recompute (throttled)
       if (occ.has(keyNext) || !isWalkTown(ctx, next.x, next.y)) {
         n._homeWait = (n._homeWait || 0) + 1;
         if (n._homeWait >= 3) {
+          // Set a cooldown so we don't thrash on recomputation
+          n._homePlanCooldown = Math.max(n._homePlanCooldown || 0, 4);
           ensureHomePlan(ctx, occ, n);
         }
         // Do not move this turn
@@ -721,6 +747,11 @@
     for (const idx of order) {
       const n = npcs[idx];
       ensureHome(ctx, n);
+
+      // Decay any per-NPC cooldown counters each turn
+      if (n._homePlanCooldown && n._homePlanCooldown > 0) {
+        n._homePlanCooldown--;
+      }
 
       // Pets
       if (n.isPet) {
