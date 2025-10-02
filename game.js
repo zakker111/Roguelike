@@ -2784,7 +2784,22 @@
     const s = (Number(seedUint32) >>> 0);
     currentSeed = s;
     try { localStorage.setItem("SEED", String(s)); } catch (_) {}
-    rng = mulberry32(s);
+    if (typeof window !== "undefined" && window.RNG && typeof RNG.applySeed === "function") {
+      RNG.applySeed(s);
+      rng = RNG.rng;
+    } else {
+      // fallback
+      function mulberry32(a) {
+        return function() {
+          let t = a += 0x6D2B79F5;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+      const _rng = mulberry32(s);
+      rng = function () { return _rng(); };
+    }
     if (mode === "world") {
       log(`GOD: Applied seed ${s}. Regenerating overworld...`, "notice");
       initWorld();
