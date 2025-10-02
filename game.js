@@ -2206,7 +2206,8 @@
       const nx = player.x + dx;
       const ny = player.y + dy;
       if (!inBounds(nx, ny)) return;
-      if (npcs.some(n => n.x === nx && n.y === ny)) {
+      const npcBlocked = (occupancy && typeof occupancy.hasNPC === "function") ? occupancy.hasNPC(nx, ny) : npcs.some(n => n.x === nx && n.y === ny);
+      if (npcBlocked) {
         // Treat bumping into an NPC as a "hit"/interaction: they respond with a line
         const npc = npcs.find(n => n.x === nx && n.y === ny);
         if (npc) {
@@ -2302,7 +2303,9 @@
       return;
     }
 
-    if (isWalkable(nx, ny) && !enemies.some(e => e.x === nx && e.y === ny)) {
+    // Prefer occupancy grid if available to avoid linear scans
+    const blockedByEnemy = (occupancy && typeof occupancy.hasEnemy === "function") ? occupancy.hasEnemy(nx, ny) : enemies.some(e => e.x === nx && e.y === ny);
+    if (isWalkable(nx, ny) && !blockedByEnemy) {
       player.x = nx;
       player.y = ny;
       updateCamera();
@@ -2929,6 +2932,7 @@
 
     if (mode === "dungeon") {
       enemiesAct();
+      rebuildOccupancy();
       // Status effects tick (bleed, dazed, etc.)
       try {
         if (window.Status && typeof Status.tick === "function") {
@@ -2950,6 +2954,7 @@
     } else if (mode === "town") {
       townTick = (townTick + 1) | 0;
       townNPCsAct();
+      rebuildOccupancy();
     }
 
     recomputeFOV();

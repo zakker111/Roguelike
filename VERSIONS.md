@@ -10,6 +10,14 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
+v1.7 — Mode Managers and Occupancy Grid
+- Added: occupancy_grid.js — shared OccupancyGrid with enemy/NPC/prop sets and isFree(x,y). Exposed via ctx.occupancy.
+- Changed: ai.js — prefers ctx.occupancy when available for fast isFree checks; falls back to per-turn set.
+- Changed: game.js — uses OccupancyGrid in tryMovePlayer (town: NPC blocking, dungeon: enemy blocking) and rebuilds occupancy after enemy/NPC turns.
+- Added: mode_manager.js — pluggable ModeManager skeleton (doAction/tryMove/onTurn) for routing per-mode behaviors.
+- Added: managers/world_manager.js, managers/town_manager.js, managers/dungeon_manager.js — initial facades preparing migration of mode-specific logic out of game.js.
+- Dev: Wiring is incremental to avoid regressions; legacy functions remain while managers are introduced.
+
 v1.6 — Core Services (RNG/Time/Combat/Decay) scaffolding + minimal RNG integration
 - Added: rng_service.js — centralized deterministic RNG helpers over mulberry32 (create/int/float/chance).
 - Added: rng_compat.js — compatibility shim exposing window.RNG (autoInit, rng, int, float, chance, applySeed) using rng_service under the hood.
