@@ -1533,8 +1533,8 @@
       generateTown();
       ensureTownSpawnClear();
       townExitAt = { x: player.x, y: player.y };
-      // Make entry calmer: reduce greeters to avoid surrounding the player
-      spawnGateGreeters(0);
+      // Place a few greeters so NPCs are visible immediately near the gate
+      spawnGateGreeters(4);
 
       // If entering at night, place NPCs at homes; allow a small number in tavern or at plaza
       (function setNightState() {
