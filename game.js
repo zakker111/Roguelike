@@ -935,14 +935,7 @@
     return TS.minutesUntil(turnCounter, hourTarget, minuteTarget);
   }
   function advanceTimeMinutes(mins) {
-    turnCounter = TSS) % DAY_MINUTES;
-    let delta = goal - cur;
-    if (delta <= 0) delta += DAY_MINUTES;
-    return delta;
-  }
-  function advanceTimeMinutes(mins) {
-    const turns = Math.ceil(mins / MINUTES_PER_TURN);
-    turnCounter = (turnCounter + turns) | 0;
+    turnCounter = TS.advanceMinutes(turnCounter, mins);
   }
   function restUntilMorning(healFraction = 0.25) {
     const mins = minutesUntil(6, 0); // rest until 06:00 dawn
