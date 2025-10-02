@@ -671,10 +671,17 @@
 
   // --------- Dungeon persistence helpers ---------
   function dungeonKeyFromWorldPos(x, y) {
+    if (window.DungeonState && typeof DungeonState.key === "function") {
+      return DungeonState.key(x, y);
+    }
     return `${x},${y}`;
   }
 
   function saveCurrentDungeonState() {
+    if (window.DungeonState && typeof DungeonState.save === "function") {
+      DungeonState.save(getCtx());
+      return;
+    }
     if (mode !== "dungeon" || !currentDungeon || !dungeonExitAt) return;
     const key = dungeonKeyFromWorldPos(currentDungeon.x, currentDungeon.y);
     dungeonStates[key] = {
@@ -691,6 +698,9 @@
   }
 
   function loadDungeonStateFor(x, y) {
+    if (window.DungeonState && typeof DungeonState.load === "function") {
+      return DungeonState.load(getCtx(), x, y);
+    }
     const key = dungeonKeyFromWorldPos(x, y);
     const st = dungeonStates[key];
     if (!st) return false;
@@ -958,6 +968,21 @@
   }
 
   function generateTown() {
+    // Prefer Town module (facade). If it handled generation, sync references and return.
+    if (window.Town && typeof Town.generate === "function") {
+      const ctx = getCtx();
+      const handled = Town.generate(ctx);
+      if (handled) {
+        map = ctx.map; seen = ctx.seen; visible = ctx.visible;
+        enemies = ctx.enemies; corpses = ctx.corpses; decals = ctx.decals || [];
+        npcs = ctx.npcs || npcs; shops = ctx.shops || shops;
+        townProps = ctx.townProps || townProps; townBuildings = ctx.townBuildings || townBuildings;
+        townPlaza = ctx.townPlaza || townPlaza; tavern = ctx.tavern || tavern;
+        townExitAt = ctx.townExitAt || townExitAt; townName = ctx.townName || townName;
+        updateCamera(); recomputeFOV(); updateUI(); requestDraw();
+        return;
+      }
+    }
     // Structured town: walls with a gate, main road to a central plaza, secondary roads, buildings aligned to blocks, shops near plaza
 
     // Determine current town size from overworld (default 'big')
@@ -1759,6 +1784,10 @@
   }
 
   function ensureTownSpawnClear() {
+    if (window.Town && typeof Town.ensureSpawnClear === "function") {
+      const handled = Town.ensureSpawnClear(getCtx());
+      if (handled) return;
+    }
     // Make sure the player isn't inside a building (WALL).
     // If current tile is not walkable, move to the nearest FLOOR/DOOR tile.
     const H = map.length;
@@ -1822,6 +1851,10 @@
   }
 
   function spawnGateGreeters(count = 4) {
+    if (window.Town && typeof Town.spawnGateGreeters === "function") {
+      const handled = Town.spawnGateGreeters(getCtx(), count);
+      if (handled) return;
+    }
     if (!townExitAt) return;
     const dirs = [
       { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
@@ -2078,6 +2111,9 @@
   }
 
   function returnToWorldIfAtExit() {
+    if (window.DungeonState && typeof DungeonState.returnToWorldIfAtExit === "function") {
+      return DungeonState.returnToWorldIfAtExit(getCtx());
+    }
     if (mode !== "dungeon" || !cameFromWorld || !world) return false;
     if (floor !== 1) return false;
     if (dungeonExitAt && player.x === dungeonExitAt.x && player.y === dungeonExitAt.y) {
@@ -2086,7 +2122,6 @@
       corpses = [];
       decals = [];
       map = world.map;
-      // restore world position (either returnPos or keep)
       if (worldReturnPos) {
         player.x = worldReturnPos.x;
         player.y = worldReturnPos.y;
@@ -2105,9 +2140,13 @@
   // Context-sensitive action button (G): enter/exit/interact depending on mode/state
   function doAction() {
     hideLootPanel();
+    // Prefer module
+    if (window.Actions && typeof Actions.doAction === "function") {
+      const handled = Actions.doAction(getCtx());
+      if (handled) return;
+    }
 
     if (mode === "world") {
-      // Try entering town first, else dungeon
       if (!enterTownIfOnTile()) {
         enterDungeonIfOnEntrance();
       }
@@ -2115,38 +2154,33 @@
     }
 
     if (mode === "town") {
-      // Exit town if at gate; otherwise interact/talk/shop
       if (returnToWorldFromTown()) return;
-      // fall back to town interactions
-      lootCorpse(); // already handles shop/props/NPC talk
+      lootCorpse();
       return;
     }
 
     if (mode === "dungeon") {
-      // If at entrance hole, leave to overworld; else loot/interact here
-      lootCorpse(); // already handles exit on hole and normal looting
+      lootCorpse();
       return;
     }
 
-    // Fallback
     lootCorpse();
   }
 
   function descendIfPossible() {
-    // Keep Enter/N behavior, but delegate to doAction for world/town, and show hint in dungeon
+    if (window.Actions && typeof Actions.descend === "function") {
+      const handled = Actions.descend(getCtx());
+      if (handled) return;
+    }
     if (mode === "world" || mode === "town") {
       doAction();
       return;
     }
-
     if (mode === "dungeon") {
-      // No multi-level dungeons anymore
       log("This dungeon has no deeper levels. Return to the entrance (the hole '>') and press G to leave.", "info");
       return;
     }
-
     const here = map[player.y][player.x];
-    // Restrict descending to STAIRS tile only for clarity (world-only use removed)
     if (here === TILES.STAIRS) {
       log("There is nowhere to go down from here.", "info");
     } else {
@@ -2187,17 +2221,20 @@
   
   // Visual: add or strengthen a blood decal at tile (x,y)
   function addBloodDecal(x, y, mult = 1.0) {
+    // Prefer Decals module
+    if (window.Decals && typeof Decals.add === "function") {
+      Decals.add(getCtx(), x, y, mult);
+      return;
+    }
     if (!inBounds(x, y)) return;
-    // Merge on same tile
     const d = decals.find(d => d.x === x && d.y === y);
-    const baseA = 0.16 + rng() * 0.18; // 0.16..0.34
-    const baseR = Math.floor(TILE * (0.32 + rng() * 0.20)); // radius px
+    const baseA = 0.16 + rng() * 0.18;
+    const baseR = Math.floor(TILE * (0.32 + rng() * 0.20));
     if (d) {
       d.a = Math.min(0.9, d.a + baseA * mult);
       d.r = Math.max(d.r, baseR);
     } else {
       decals.push({ x, y, a: Math.min(0.9, baseA * mult), r: baseR });
-      // Cap total decals to avoid unbounded growth
       if (decals.length > 240) decals.splice(0, decals.length - 240);
     }
   }
@@ -2343,6 +2380,10 @@
 
   
   function interactTownProps() {
+    if (window.Town && typeof Town.interactProps === "function") {
+      const handled = Town.interactProps(getCtx());
+      if (handled) return true;
+    }
     if (mode !== "town") return false;
     const candidates = [];
     const coords = [
@@ -2544,6 +2585,7 @@
 
   // GOD mode actions
   function godHeal() {
+    if (window.God && typeof God.heal === "function") { God.heal(getCtx()); return; }
     const prev = player.hp;
     player.hp = player.maxHp;
     if (player.hp > prev) {
@@ -2556,6 +2598,7 @@
   }
 
   function godSpawnStairsHere() {
+    if (window.God && typeof God.spawnStairsHere === "function") { God.spawnStairsHere(getCtx()); return; }
     if (!inBounds(player.x, player.y)) {
       log("GOD: Cannot place stairs out of bounds.", "warn");
       return;
@@ -2568,15 +2611,14 @@
   }
 
   function godSpawnItems(count = 3) {
+    if (window.God && typeof God.spawnItems === "function") { God.spawnItems(getCtx(), count); return; }
     const created = [];
     for (let i = 0; i < count; i++) {
       let it = null;
-      
       if (window.Items && typeof Items.createEquipment === "function") {
         const tier = Math.min(3, Math.max(1, Math.floor((floor + 1) / 2)));
         it = Items.createEquipment(tier, rng);
       } else if (window.DungeonItems && DungeonItems.lootFactories && typeof DungeonItems.lootFactories === "object") {
-        
         const keys = Object.keys(DungeonItems.lootFactories);
         if (keys.length > 0) {
           const k = keys[randInt(0, keys.length - 1)];
@@ -2584,7 +2626,6 @@
         }
       }
       if (!it) {
-        
         if (rng() < 0.5) it = { kind: "equip", slot: "hand", name: "debug sword", atk: 1.5, tier: 2, decay: initialDecay(2) };
         else it = { kind: "equip", slot: "torso", name: "debug armor", def: 1.0, tier: 2, decay: initialDecay(2) };
       }
@@ -2607,6 +2648,7 @@
    * - Applies small randomized jitters to hp/atk for variety (deterministic via rng).
    */
   function godSpawnEnemyNearby(count = 1) {
+    if (window.God && typeof God.spawnEnemyNearby === "function") { God.spawnEnemyNearby(getCtx(), count); return; }
     const isFreeFloor = (x, y) => {
       if (!inBounds(x, y)) return false;
       if (map[y][x] !== TILES.FLOOR) return false;
@@ -2624,7 +2666,6 @@
         const y = player.y + dy;
         if (isFreeFloor(x, y)) return { x, y };
       }
-      // fallback: any free floor
       const free = [];
       for (let y = 0; y < map.length; y++) {
         for (let x = 0; x < (map[0] ? map[0].length : 0); x++) {
@@ -2643,9 +2684,8 @@
       const makeEnemy = (ctx.enemyFactory || ((x, y, depth) => createEnemyAt(x, y, depth)));
       const e = makeEnemy(spot.x, spot.y, floor);
 
-      // Jitter stats a bit for flavor
       if (typeof e.hp === "number" && rng() < 0.7) {
-        const mult = 0.85 + rng() * 0.5; // 0.85..1.35
+        const mult = 0.85 + rng() * 0.5;
         e.hp = Math.max(1, Math.round(e.hp * mult));
       }
       if (typeof e.atk === "number" && rng() < 0.7) {
@@ -2790,13 +2830,13 @@
 
   // GOD: always-crit toggle
   function setAlwaysCrit(v) {
+    if (window.God && typeof God.setAlwaysCrit === "function") { God.setAlwaysCrit(getCtx(), v); return; }
     alwaysCrit = !!v;
     try { window.ALWAYS_CRIT = alwaysCrit; localStorage.setItem("ALWAYS_CRIT", alwaysCrit ? "1" : "0"); } catch (_) {}
-    log(`GOD: Always Crit ${alwaysCrit ? "enabled" : "disabled"}.`, alwaysCrit ? "good" : "warn");
-  }
 
   // GOD: set forced crit body part for player attacks
   function setCritPart(part) {
+    if (window.God && typeof God.setCritPart === "function") { God.setCritPart(getCtx(), part); return; }
     const valid = new Set(["torso","head","hands","legs",""]);
     const p = valid.has(part) ? part : "";
     forcedCritPart = p;
@@ -2811,6 +2851,7 @@
 
   // GOD: apply a deterministic RNG seed and regenerate current map
   function applySeed(seedUint32) {
+    if (window.God && typeof God.applySeed === "function") { God.applySeed(getCtx(), seedUint32); return; }
     const s = (Number(seedUint32) >>> 0);
     currentSeed = s;
     try { localStorage.setItem("SEED", String(s)); } catch (_) {}
@@ -2818,7 +2859,6 @@
       RNG.applySeed(s);
       rng = RNG.rng;
     } else {
-      // fallback
       function mulberry32(a) {
         return function() {
           let t = a += 0x6D2B79F5;
@@ -2839,18 +2879,16 @@
     }
     requestDraw();
     try {
-      if (window.UI && typeof UI.updateStats === "function" && typeof UI.init === "function") {
-        // Update the GOD seed UI helper text
-        const el = document.getElementById("god-seed-help");
-        if (el) el.textContent = `Current seed: ${s}`;
-        const input = document.getElementById("god-seed-input");
-        if (input) input.value = String(s);
-      }
+      const el = document.getElementById("god-seed-help");
+      if (el) el.textContent = `Current seed: ${s}`;
+      const input = document.getElementById("god-seed-input");
+      if (input) input.value = String(s);
     } catch (_) {}
   }
 
   // GOD: reroll seed using current time
   function rerollSeed() {
+    if (window.God && typeof God.rerollSeed === "function") { God.rerollSeed(getCtx()); return; }
     const s = (Date.now() % 0xffffffff) >>> 0;
     applySeed(s);
   }
@@ -2959,10 +2997,12 @@
           Status.tick(getCtx());
         }
       } catch (_) {}
-      // Visual: decals fade each turn (keep deterministic, no randomness here)
-      if (decals && decals.length) {
+      // Visual: decals fade each turn
+      if (window.Decals && typeof Decals.tick === "function") {
+        Decals.tick(getCtx());
+      } else if (decals && decals.length) {
         for (let i = 0; i < decals.length; i++) {
-          decals[i].a *= 0.92; // exponential fade
+          decals[i].a *= 0.92;
         }
         decals = decals.filter(d => d.a > 0.04);
       }
