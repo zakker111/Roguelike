@@ -122,6 +122,71 @@
     return list.some(d => d && d.x === x && d.y === y && typeof d.a === "number" && d.a > 0.02);
   }
 
+  function propAt(ctx, x, y) {
+    const props = Array.isArray(ctx.townProps) ? ctx.townProps : [];
+    return props.find(p => p && p.x === x && p.y === y) || null;
+  }
+
+  function describeProp(ctx, p) {
+    if (!p) return false;
+    const name = p.name || p.type || "prop";
+    switch (p.type) {
+      case "bed":
+        ctx.log("You stand on a mattress.", "info"); return true;
+      case "barrel":
+        ctx.log("You stand next to a barrel.", "info"); return true;
+      case "crate":
+        ctx.log("You stand next to a crate.", "info"); return true;
+      case "chest":
+        ctx.log("You stand next to a chest.", "info"); return true;
+      case "table":
+        ctx.log("You stand next to a table.", "info"); return true;
+      case "chair":
+        ctx.log("You stand next to a chair.", "info"); return true;
+      case "fireplace":
+        ctx.log("You stand by a fireplace.", "info"); return true;
+      case "rug":
+        ctx.log("You stand on a rug.", "info"); return true;
+      case "plant":
+        ctx.log("You stand next to a potted plant.", "info"); return true;
+      case "lamp":
+        ctx.log("You stand by a lamp post.", "info"); return true;
+      case "stall":
+        ctx.log("You stand beside a market stall.", "info"); return true;
+      case "well":
+        ctx.log("You stand beside the town well.", "info"); return true;
+      case "fountain":
+        ctx.log("You stand near a fountain.", "info"); return true;
+      case "shelf":
+        ctx.log("You stand next to a shelf.", "info"); return true;
+      case "sign": {
+        // If this sign is next to a shop, show its schedule; else show name
+        const near = [
+          { x: p.x, y: p.y },
+          { x: p.x + 1, y: p.y },
+          { x: p.x - 1, y: p.y },
+          { x: p.x, y: p.y + 1 },
+          { x: p.x, y: p.y - 1 },
+        ];
+        let shop = null;
+        for (const c of near) {
+          const s = shopAt(ctx, c.x, c.y);
+          if (s) { shop = s; break; }
+        }
+        if (shop) {
+          const openNow = isShopOpenNow(ctx, shop);
+          const sched = shopScheduleStr(ctx, shop);
+          ctx.log(`Sign: ${(p.name || "Sign")}. ${sched} — ${openNow ? "Open now." : "Closed now."}`, openNow ? "good" : "warn");
+        } else {
+          ctx.log(`Sign: ${(p.name || "Sign")}`, "info");
+        }
+        return true;
+      }
+      default:
+        ctx.log(`You stand on ${name}.`, "info"); return true;
+    }
+  }
+
   function loot(ctx) {
     if (ctx.mode === "town") {
       // If standing on a shop door, show schedule and flavor
@@ -151,10 +216,16 @@
         ctx.requestDraw();
         return true;
       }
-      // Prefer props interaction then talk; delegate to Town.interactProps
+      // Prefer props interaction; if not handled, describe underfoot prop explicitly.
       if (ctx.Town && typeof Town.interactProps === "function") {
         const handled = Town.interactProps(ctx);
         if (handled) return true;
+      }
+      const p = propAt(ctx, ctx.player.x, ctx.player.y);
+      if (p) {
+        describeProp(ctx, p);
+        ctx.requestDraw();
+        return true;
       }
       // If standing on a blood decal, describe it
       if (hasDecalAt(ctx, ctx.player.x, ctx.player.y)) {
