@@ -1152,7 +1152,29 @@
     // Store buildings globally with their doors for NPC homes/routines
     townBuildings = buildings.map(b => {
       const door = getExistingDoor(b);
-      return { x: b.x, y: b.y, w: b.w, h: b.h, door };
+      // Reserve a guaranteed free interior tile per building for NPC home targets
+      function inside(x, y) { return x > b.x && x < b.x + b.w - 1 && y > b.y && y < b.y + b.h - 1; }
+      function propBlocks(type) { return !(type === "sign" || type === "rug"); }
+      function isFreeInterior(x, y) {
+        if (!inside(x, y)) return false;
+        if (map[y][x] !== TILES.FLOOR) return false;
+        if (townProps.some(p => p.x === x && p.y === y && propBlocks(p.type))) return false;
+        return true;
+      }
+      // Prefer geometric center if free, else scan for first free interior spot
+      const cx = Math.max(b.x + 1, Math.min(b.x + b.w - 2, Math.floor(b.x + b.w / 2)));
+      const cy = Math.max(b.y + 1, Math.min(b.y + b.h - 2, Math.floor(b.y + b.h / 2)));
+      let homeSpot = null;
+      if (isFreeInterior(cx, cy)) {
+        homeSpot = { x: cx, y: cy };
+      } else {
+        for (let yy = b.y + 1; yy < b.y + b.h - 1 && !homeSpot; yy++) {
+          for (let xx = b.x + 1; xx < b.x + b.w - 1 && !homeSpot; xx++) {
+            if (isFreeInterior(xx, yy)) homeSpot = { x: xx, y: yy };
+          }
+        }
+      }
+      return { x: b.x, y: b.y, w: b.w, h: b.h, door, homeSpot };
     });
 
     // Props in plaza and parks + building interiors

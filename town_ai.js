@@ -63,8 +63,17 @@
     if (!target || !building) return target;
     // If target is already free, keep it
     if (isFreeTile(ctx, target.x, target.y) && insideBuilding(building, target.x, target.y)) return target;
+    // Try adjacent free tile near the intended target
     const alt = nearestFreeAdjacent(ctx, target.x, target.y, building);
-    return alt || target;
+    if (alt) return alt;
+    // Fall back to a reserved interior home spot for the building, if defined
+    const hs = building.homeSpot;
+    if (hs && insideBuilding(building, hs.x, hs.y)) {
+      if (isFreeTile(ctx, hs.x, hs.y)) return { x: hs.x, y: hs.y };
+      const altHs = nearestFreeAdjacent(ctx, hs.x, hs.y, building);
+      if (altHs) return altHs;
+    }
+    return target;
   }
 
   // Pre-planning A* used for path debug and stable routing
@@ -371,7 +380,8 @@
         let created = 0;
         let tries = 0;
         while (created < residentCount && tries++ < 200) {
-          const pos = randomInteriorSpot(ctx, b) || firstFreeInteriorSpot(ctx, b) || { x: b.door.x, y: b.door.y };
+          const reserved = (b.homeSpot && !npcs.some(n => n.x === b.homeSpot.x && n.y === b.homeSpot.y)) ? { x: b.homeSpot.x, y: b.homeSpot.y } : null;
+          const pos = reserved || randomInteriorSpot(ctx, b) || firstFreeInteriorSpot(ctx, b) || { x: b.door.x, y: b.door.y };
           if (!pos) break;
           if (npcs.some(n => n.x === pos.x && n.y === pos.y)) continue;
           let errand = null;
@@ -442,7 +452,8 @@
     const { townBuildings, shops, townPlaza } = ctx;
     if (!Array.isArray(townBuildings) || townBuildings.length === 0) return;
     const b = townBuildings[randInt(ctx, 0, townBuildings.length - 1)];
-    const pos = randomInteriorSpot(ctx, b) || { x: b.door.x, y: b.door.y };
+    const preferred = b.homeSpot ? { x: b.homeSpot.x, y: b.homeSpot.y } : null;
+    const pos = preferred || randomInteriorSpot(ctx, b) || { x: b.door.x, y: b.door.y };
     n._home = { building: b, x: pos.x, y: pos.y, door: { x: b.door.x, y: b.door.y } };
     if (shops && shops.length && ctx.rng() < 0.6) {
       const s = shops[randInt(ctx, 0, shops.length - 1)];
@@ -564,7 +575,12 @@
         const door = B.door || nearestFreeAdjacent(ctx, B.x + ((B.w / 2) | 0), B.y, null);
         if (!door) { n._homePlan = null; n._homePlanGoal = null; return; }
         const p1 = computePath(ctx, occ, n.x, n.y, door.x, door.y);
-        const inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B) || targetInside || { x: door.x, y: door.y };
+        let inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B);
+        if (!inSpot && B.homeSpot) {
+          if (isFreeTile(ctx, B.homeSpot.x, B.homeSpot.y)) inSpot = { x: B.homeSpot.x, y: B.homeSpot.y };
+          else inSpot = nearestFreeAdjacent(ctx, B.homeSpot.x, B.homeSpot.y, B);
+        }
+        inSpot = inSpot || targetInside || { x: door.x, y: door.y };
         const p2 = computePath(ctx, occ, inSpot.x, inSpot.y, targetInside.x, targetInside.y);
         plan = concatPaths(p1, p2);
       } else {
