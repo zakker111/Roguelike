@@ -1,5 +1,5 @@
 # Game Version History
-Last updated: 2025-10-02 01:25 UTC
+Last updated: 2025-10-02 02:05 UTC
 
 This file tracks notable changes to the game across iterations. Versions here reflect functional milestones rather than semantic releases.
 
@@ -10,7 +10,23 @@ Conventions
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
 
-
+v1.8 — Modular Town/Actions, Interiors, Exit Logic, and Underfoot Feedback
+- Added: town_gen.js — Town.generate/ensureSpawnClear/spawnGateGreeters/interactProps now implemented and mutate ctx.
+  - Structured town: walls, nearest gate, main/secondary roads, plaza.
+  - Buildings (hollow) with guaranteed doors, windows placed and spaced.
+  - Furnished interiors: beds, tables, chairs, fireplaces, shelves, chests/crates/barrels, plants, rugs.
+  - Plaza fixtures and “Welcome” sign; TownAI.populateTown used when available.
+- Added: actions.js — Actions.doAction/loot/descend implemented using ctx and modules.
+  - Robust dungeon exit on G: works on entrance “>” or STAIRS tile; saves state; returns to exact overworld x,y.
+  - In town: shop schedule messaging, Inn rest to morning, Tavern flavor, and prop/sign reading.
+  - Underfoot feedback: pressing G logs what you are standing on (e.g., mattress/bed, barrel, crate, sign details, “blood-stained floor”).
+- Changed: game.js — when Actions/Town handle an action:
+  - Syncs mutated ctx back to local state (mode, map, seen/visible, enemies/corpses/decals, anchors, floor) and recomputes FOV/UI.
+  - Exposes initWorld/generateLevel on ctx for GOD tools.
+- Fixed: ai.js movement bugs and occupancy integration:
+  - Introduced occClearEnemy/occSetEnemy helpers; corrected corrupted calls that prevented enemy movement.
+- Changed: utils.js usage — manhattan and free-floor helpers preferred where available.
+- Dev: Kept legacy fallbacks while modules take over; prepared for removing fallbacks once verified.
 
 v1.7 — Mode Managers and Occupancy Grid
 - Added: occupancy_grid.js — shared OccupancyGrid with enemy/NPC/prop sets and isFree(x,y). Exposed via ctx.occupancy.
