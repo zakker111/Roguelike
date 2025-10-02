@@ -626,9 +626,27 @@
         return true;
       }
 
-      // If next step blocked, wait a bit, then recompute
+      // If next step blocked, wait a bit, then recompute or warp just inside the door if stuck nearby
       if (occ.has(keyNext) || !isWalkTown(ctx, next.x, next.y)) {
         n._homeWait = (n._homeWait || 0) + 1;
+
+        // If stuck at or next to the home door, warp one tile inside to clear congestion
+        const B = (n._home && n._home.building) ? n._home.building : null;
+        const door = (B && B.door) ? B.door : null;
+        if (B && door && manhattan(n.x, n.y, door.x, door.y) <= 1 && n._homeWait >= 2) {
+          let inSpot = nearestFreeAdjacent(ctx, door.x, door.y, B);
+          if (!inSpot && B.homeSpot) {
+            if (isFreeTile(ctx, B.homeSpot.x, B.homeSpot.y)) inSpot = { x: B.homeSpot.x, y: B.homeSpot.y };
+            else inSpot = nearestFreeAdjacent(ctx, B.homeSpot.x, B.homeSpot.y, B);
+          }
+          if (inSpot) {
+            occ.delete(`${n.x},${n.y}`); n.x = inSpot.x; n.y = inSpot.y; occ.add(`${n.x},${n.y}`);
+            n._homePlan = null; n._homePlanGoal = null;
+            n._homeWait = 0;
+            return true;
+          }
+        }
+
         if (n._homeWait >= 3) {
           ensureHomePlan(ctx, occ, n);
         }
