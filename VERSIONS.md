@@ -1,5 +1,5 @@
 # Game Version History
-Last updated: 2025-10-02 02:05 UTC
+Last updated: 2025-10-03 00:00 UTC
 
 This file tracks notable changes to the game across iterations. Versions here reflect functional milestones rather than semantic releases.
 
@@ -9,6 +9,19 @@ Conventions
 - Fixed: bug fixes
 - UI: user interface-only changes
 - Dev: refactors, tooling, or internal changes
+
+v1.9 — Cleanup: remove unused files; keep dungeon modules intact
+- Removed: root-level game.js (duplicate of core/game.js; not loaded by index.html).
+- Removed: rng_compat.js (unused; core/rng_service.js is the RNG source used by the game).
+- Removed: managers/ (dungeon_manager.js, world_manager.js, town_manager.js) — never referenced by index.html nor code.
+- Removed: mode_manager.js — not wired anywhere.
+- Removed: combat_engine.js — not referenced; functionality remains in combat.js/core/game.js fallbacks.
+- Notes:
+  - Dungeon pipeline unchanged. Active modules: dungeon.js, dungeon_items.js, dungeon_state.js.
+  - Optional services present but not yet included by default:
+    - time_service.js (core/game.js already prefers it if present).
+    - occupancy_grid.js (core/game.js can use it when included).
+- Dev: No gameplay or runtime behavior changes from this cleanup.
 
 v1.8 — Modular Town/Actions, Interiors, Exit Logic, and Underfoot Feedback
 - Added: town_gen.js — Town.generate/ensureSpawnClear/spawnGateGreeters/interactProps now implemented and mutate ctx.
