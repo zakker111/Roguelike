@@ -234,3 +234,4 @@ Bugs
 - inns dont have invidual rooms and not enought beds
 - some npc stay at their homes at day time 
 - some npc dont sleep in theid beds
+- Dungeons bugged out they spawn enemies every time you decend to dungeon and corpses dont stay and crate always spawns items this needs to be fixed
