@@ -80,7 +80,8 @@
       info: ctx.dungeonInfo,
       level: ctx.floor
     };
-    ctx._dungeonStates[k] = snapshot;
+    // Store a cloned, JSON-safe copy in memory to avoid aliasing/mutation issues
+    ctx._dungeonStates[k] = cloneForStorage(snapshot);
 
     // Also persist to localStorage so dungeons remain identical on re-entry and across refreshes
     const ls = readLS();
