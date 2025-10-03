@@ -848,18 +848,36 @@
 
     // corpses and chests
     for (const c of corpses) {
-      if (!visible[c.y] || !visible[c.y][c.x]) continue;
       if (c.x < startX || c.x > endX || c.y < startY || c.y > endY) continue;
+      const everSeen = !!(seen[c.y] && seen[c.y][c.x]);
+      const visNow = !!(visible[c.y] && visible[c.y][c.x]);
+      if (!everSeen) continue; // don't reveal unexplored tiles
       const screenX = (c.x - startX) * TILE - tileOffsetX;
       const screenY = (c.y - startY) * TILE - tileOffsetY;
-      if (tilesetReady && TS.draw(ctx2d, c.kind === "chest" ? "chest" : "corpse", screenX, screenY, TILE)) {
-        // drawn from tileset
-      } else {
+
+      // Draw with dim alpha when tile is only seen (not currently visible)
+      const drawCorpseOrChest = () => {
+        if (tilesetReady && TS.draw(ctx2d, c.kind === "chest" ? "chest" : "corpse", screenX, screenY, TILE)) {
+          return;
+        }
         if (c.kind === "chest") {
           drawGlyphScreen(ctx2d, screenX, screenY, "▯", c.looted ? "#8b7355" : "#d7ba7d", TILE);
+        } else if (c.kind === "crate") {
+          drawGlyphScreen(ctx2d, screenX, screenY, "▢", "#b59b6a", TILE);
+        } else if (c.kind === "barrel") {
+          drawGlyphScreen(ctx2d, screenX, screenY, "◍", "#a07c4b", TILE);
         } else {
           drawGlyphScreen(ctx2d, screenX, screenY, "%", c.looted ? COLORS.corpseEmpty : COLORS.corpse, TILE);
         }
+      };
+
+      if (visNow) {
+        drawCorpseOrChest();
+      } else {
+        ctx2d.save();
+        ctx2d.globalAlpha = 0.55; // dim when out of FOV but previously seen
+        drawCorpseOrChest();
+        ctx2d.restore();
       }
     }
 

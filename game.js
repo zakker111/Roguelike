@@ -211,6 +211,11 @@
       tavern,
       dungeon: currentDungeon,
       dungeonInfo: currentDungeon,
+      // critical persistence fields
+      _dungeonStates: dungeonStates,
+      worldReturnPos,
+      cameFromWorld,
+      dungeonExitAt,
       time: getClock(),
       requestDraw,
       log,
@@ -681,8 +686,25 @@
   }
 
   function saveCurrentDungeonState() {
+    const ctx = getCtx();
     if (window.DungeonState && typeof DungeonState.save === "function") {
-      DungeonState.save(getCtx());
+      // Persist via module (in-memory and localStorage)
+      DungeonState.save(ctx);
+      // Also persist to local in-memory store for redundancy
+      if (mode === "dungeon" && currentDungeon && dungeonExitAt) {
+        const key = dungeonKeyFromWorldPos(currentDungeon.x, currentDungeon.y);
+        dungeonStates[key] = {
+          map,
+          seen,
+          visible,
+          enemies,
+          corpses,
+          decals,
+          dungeonExitAt: { x: dungeonExitAt.x, y: dungeonExitAt.y },
+          info: currentDungeon,
+          level: floor
+        };
+      }
       return;
     }
     if (mode !== "dungeon" || !currentDungeon || !dungeonExitAt) return;
@@ -701,11 +723,48 @@
   }
 
   function loadDungeonStateFor(x, y) {
+    // Try module first
     if (window.DungeonState && typeof DungeonState.load === "function") {
-      return DungeonState.load(getCtx(), x, y);
+      const ctx = getCtx();
+      const handled = DungeonState.load(ctx, x, y);
+      if (handled) {
+        // Sync mutated ctx back into local state
+        mode = ctx.mode || mode;
+        map = ctx.map || map;
+        seen = ctx.seen || seen;
+        visible = ctx.visible || visible;
+        enemies = Array.isArray(ctx.enemies) ? ctx.enemies : enemies;
+        corpses = Array.isArray(ctx.corpses) ? ctx.corpses : corpses;
+        decals = Array.isArray(ctx.decals) ? ctx.decals : decals;
+        dungeonExitAt = ctx.dungeonExitAt || dungeonExitAt;
+        currentDungeon = ctx.dungeonInfo || currentDungeon;
+        if (typeof ctx.floor === "number") { floor = ctx.floor | 0; window.floor = floor; }
+        updateCamera();
+        recomputeFOV();
+        updateUI();
+        requestDraw();
+        return true;
+      }
+      // fall through to local memory/LS
     }
+
+    // In-memory fallback
     const key = dungeonKeyFromWorldPos(x, y);
-    const st = dungeonStates[key];
+    let st = dungeonStates[key];
+
+    // LocalStorage fallback (in case module not present or in-memory cleared)
+    if (!st) {
+      try {
+        const raw = localStorage.getItem("DUNGEON_STATES_V1");
+        if (raw) {
+          const obj = JSON.parse(raw);
+          const ls = (obj && typeof obj === "object") ? obj : {};
+          st = ls[key] || null;
+        }
+      } catch (_) {
+        st = null;
+      }
+    }
     if (!st) return false;
 
     mode = "dungeon";
@@ -716,9 +775,9 @@
     map = st.map;
     seen = st.seen;
     visible = st.visible;
-    enemies = st.enemies;
-    corpses = st.corpses;
-    decals = st.decals || [];
+    enemies = Array.isArray(st.enemies) ? st.enemies : [];
+    corpses = Array.isArray(st.corpses) ? st.corpses : [];
+    decals = Array.isArray(st.decals) ? st.decals : [];
     dungeonExitAt = st.dungeonExitAt || { x, y };
 
     // Place player at the entrance hole
